@@ -2,3 +2,9 @@
 .vscode/
 __pycache__/
 *.pyc
+
+# 本地回归装置临时产物（_shot.py / _v2.py 会把注入探针的页面写进站点根目录，
+# 中途被 Ctrl-C / 超时中断就会残留），绝不能跟着推上去
+_shot_*.html
+_probe_*.html
+*.probe.html
