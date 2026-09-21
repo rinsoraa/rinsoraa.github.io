@@ -43,21 +43,9 @@
       <h1>罐头商铺<span class="brand-sub">——世界里小小的一隅</span></h1>
       <p class="welcome-bio">一个喜欢折腾各种奇奇怪怪没啥用小项目的人。<br>这里是我的个人小窝，欢迎进来坐坐 ♡</p>
 
-      <div class="landing-player" id="landingPlayer">
-        <div class="player-left">
-          <button class="play-btn" id="landingPlay" aria-label="播放 / 暂停">▶</button>
-          <div class="track-meta">
-            <strong id="landingTitle">欢迎来到空凛的小窝</strong>
-            <span id="landingArtist">Rinsora · Original Demo</span>
-          </div>
-        </div>
-        <div class="player-right">
-          <span id="landingTime">00:00 / 00:12</span>
-          <button class="lyrics-toggle" data-target="landingLyrics">歌词</button>
-        </div>
-        <div class="progress-track"><div class="progress-fill" id="landingProgress"></div></div>
-        <div class="lyrics-panel" id="landingLyrics" aria-live="polite"></div>
-      </div>
+      <!-- 欢迎页的音乐播放器：内容由 music.js 渲染。
+           收起时只是一张会自转的封面唱片，鼠标移上去才平滑展开完整详情。 -->
+      <div id="landingPlayer"></div>
 
       <button class="enter-btn" id="enterBtn">
         <span>进入小窝</span>
@@ -147,27 +135,18 @@
       </div>
     </section>
 
-    <!-- 常驻音乐播放器 -->
-    <aside class="floating-player" id="floatingPlayer">
-      <div class="float-head">
-        <div class="vinyl" id="vinyl"><span></span></div>
-        <div class="track-meta"><strong id="floatTitle">欢迎来到空凛的小窝</strong><span id="floatArtist">Rinsora · Original Demo</span></div>
-        <button class="mini-play" id="floatPlay" aria-label="播放 / 暂停">▶</button>
-      </div>
-      <div class="float-progress"><div id="floatProgress"></div></div>
-      <div class="float-time"><span id="floatTime">00:00</span><span>歌词同步</span></div>
-      <div class="float-lyric" id="floatLyric">♪ 欢迎来到空凛的小窝 ♪</div>
-      <div class="float-actions">
-        <button id="floatLyricsToggle">展开歌词</button>
-        <label class="upload-btn" title="加载本地音乐">＋ 音乐<input id="audioFile" type="file" accept="audio/*"></label>
-        <label class="upload-btn" title="加载 LRC 歌词">＋ LRC<input id="lrcFile" type="file" accept=".lrc,text/plain"></label>
-      </div>
-      <div class="float-lyrics-panel" id="floatLyricsPanel"></div>
-    </aside>
+    <!-- 常驻音乐播放器：同样由 music.js 渲染 -->
+    <aside id="floatingPlayer"></aside>
   </div>
 
-  <audio id="audio" preload="metadata" src="music/demo.wav"></audio>
+  <audio id="audio" preload="metadata"></audio>
+
+  <!-- 音乐：先数据、再播放器、最后添加音乐面板，顺序不能反 -->
   <script src="gh-api.js"></script>
+  <script src="music-data.js"></script>
+  <script src="music.js"></script>
+  <script src="music-upload.js"></script>
+
   <script src="projects-data.js"></script>
   <script src="projects.js"></script>
   <script src="blog-admin.js"></script>
