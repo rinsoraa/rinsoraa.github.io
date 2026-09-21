@@ -12,6 +12,10 @@
      · 播放时，页面正下方常驻一条歌词栏，当前句居中 + 卡拉OK式擦除高亮
      · 配过 Token 时，右下角出现「＋」-> 打开添加音乐面板（见 music-upload.js）
 
+   播放列表的展开状态是**每个播放器各自独立**的（不是共用一个开关）：
+   否则在欢迎页点开列表、再进入小窝，常驻播放器会白捡一个"已展开"的列表，
+   看起来就是右下角那个播放器显示错乱。点播放器以外的任何地方都会收起列表。
+
    数据：music-data.js 的 window.RINSORA_MUSIC = {version, tracks[]}
    ============================================================ */
 (function (w, d) {
@@ -23,7 +27,39 @@
   var TRACK_ORDER = ['id', 'title', 'artist', 'cover', 'src', 'lrc', 'date'];
   var MODES = ['order', 'shuffle', 'loop'];
   var MODE_LABEL = { order: '顺序播放', shuffle: '随机播放', loop: '单曲循环' };
-  var MODE_ICON = { order: '\u21bb', shuffle: '\ud83d\udd00', loop: '\ud83d\udd02' };
+
+  /* ------------------------------------------------------------
+     图标：全部用同一族内联 SVG
+     文字符号（↻ / 🔀 / 🔁 / ⏮ / ▶）在不同系统上有的走彩色 emoji 字体、
+     有的走文字字体，粗细和颜色都对不齐，所以统一换成描边 SVG，
+     颜色跟随 currentColor，缩放到任何尺寸都保持一致的风格。
+     ------------------------------------------------------------ */
+  var OUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
+  var SOLID = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" ' +
+    'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">';
+  var CLOSE = '</svg>';
+
+  var ICON = {
+    prev: SOLID + '<polygon points="19 20 9 12 19 4 19 20"/><path d="M5 19V5"/>' + CLOSE,
+    next: SOLID + '<polygon points="5 4 15 12 5 20 5 4"/><path d="M19 5v14"/>' + CLOSE,
+    play: SOLID + '<polygon points="6 3 20 12 6 21 6 3"/>' + CLOSE,
+    pause: SOLID + '<rect x="6" y="4" width="4" height="16" rx="1.4"/>' +
+      '<rect x="14" y="4" width="4" height="16" rx="1.4"/>' + CLOSE,
+    list: OUT + '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/>' +
+      '<path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>' + CLOSE,
+    /* 顺序播放：列表首尾相接的循环箭头 */
+    order: OUT + '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/>' +
+      '<path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>' + CLOSE,
+    /* 随机播放：两条交叉的箭头 */
+    shuffle: OUT + '<path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.8-1.1 2-1.7 3.3-1.7H22"/>' +
+      '<path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/>' +
+      '<path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/>' + CLOSE,
+    /* 单曲循环：同样两条循环箭头，中间多一个「1」 */
+    loop: OUT + '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/>' +
+      '<path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>' +
+      '<path d="M11 10h1.1v4"/>' + CLOSE
+  };
 
   /* 序列化时重建的文件头（和 music-data.js 里那段注释保持一致） */
   var HEADER = [
@@ -228,12 +264,16 @@
           '</div>' +
           '<div class="mp-times"><span class="mp-cur">00:00</span><span class="mp-dur">00:00</span></div>' +
           '<div class="mp-ctrl">' +
-            '<button type="button" class="mp-btn" data-act="prev" title="上一首">\u23ee</button>' +
-            '<button type="button" class="mp-btn mp-main" data-act="play" title="播放 / 暂停">\u25b6</button>' +
-            '<button type="button" class="mp-btn" data-act="next" title="下一首">\u23ed</button>' +
-            '<button type="button" class="mp-btn mp-modebtn" data-act="mode" title="播放模式">' +
-              MODE_ICON[state.mode] + '</button>' +
-            '<button type="button" class="mp-btn mp-listbtn" data-act="list" title="播放列表">\u2630</button>' +
+            '<button type="button" class="mp-btn" data-act="prev" title="上一首" aria-label="上一首">' +
+              ICON.prev + '</button>' +
+            '<button type="button" class="mp-btn mp-main" data-act="play" data-state="paused" ' +
+              'title="播放 / 暂停" aria-label="播放">' + ICON.play + '</button>' +
+            '<button type="button" class="mp-btn" data-act="next" title="下一首" aria-label="下一首">' +
+              ICON.next + '</button>' +
+            '<button type="button" class="mp-btn mp-modebtn" data-act="mode" data-mode="' + state.mode +
+              '" title="播放模式">' + ICON[state.mode] + '</button>' +
+            '<button type="button" class="mp-btn mp-listbtn" data-act="list" ' +
+              'title="播放列表" aria-label="播放列表">' + ICON.list + '</button>' +
           '</div>' +
           '<div class="mp-playlist"><div class="mp-pl"></div></div>' +
         '</div>' +
@@ -287,12 +327,18 @@
       if (!audio.paused) audio.play().catch(function () {});   // 单曲循环切进去立即生效
     });
 
-    /* ---- 播放列表：展开时把播放器钉住，不然鼠标一移开就收起来了 ---- */
+    /* ---- 播放列表：开列表时把这个播放器钉住，免得鼠标一移开就收起来 ----
+       注意 plist-open 只加在「被点的那个播放器」上。如果两个播放器共用一个
+       开关，在欢迎页点开列表再进入小窝时，常驻播放器会白捡一个已展开的列表。 */
     p.listBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       var open = !root.classList.contains('plist-open');
-      players.forEach(function (q) { q.root.classList.toggle('plist-open', open); });
-      if (open) root.classList.add('pinned');
+      if (open) {
+        closePlaylists(root);                      // 先把它自己的列表收起来
+        root.classList.add('plist-open', 'pinned'); // 再展开 + 钉住
+      } else {
+        closePlaylists(null);                      // 关掉时连「钉住」一起解除
+      }
     });
     p.playlist.addEventListener('click', function (e) { e.stopPropagation(); });
 
@@ -312,7 +358,7 @@
       p.disc.addEventListener('click', function () { root.classList.toggle('pinned'); });
     }
 
-    /* ---- 鼠标移开后如果列表是开的，收起列表并解除钉住 ---- */
+    /* ---- 鼠标移开后如果列表没开着，就解除钉住 ---- */
     root.addEventListener('mouseleave', function () {
       if (!root.classList.contains('plist-open')) root.classList.remove('pinned');
     });
@@ -331,6 +377,16 @@
     });
 
     return p;
+  }
+
+  /* 收起所有播放列表；keep 传某个 root 时保留那一个（点它自己的列表按钮时用）。
+     pin=false 表示连「钉住」一起解除。 */
+  function closePlaylists(keep, pin) {
+    players.forEach(function (p) {
+      if (p.root === keep) return;
+      p.root.classList.remove('plist-open');
+      if (pin !== true) p.root.classList.remove('pinned');
+    });
   }
 
   /* 曲目列表（两个播放器共用一份 DOM 内容，各自渲染） */
@@ -358,9 +414,18 @@
 
   function updateModeBtn() {
     players.forEach(function (p) {
-      p.modeBtn.textContent = MODE_ICON[state.mode];
+      p.modeBtn.innerHTML = ICON[state.mode];
       p.modeBtn.title = '播放模式：' + MODE_LABEL[state.mode] + '（点一下换一个）';
-      p.modeBtn.dataset.mode = state.mode;
+      p.modeBtn.setAttribute('data-mode', state.mode);
+      p.modeBtn.setAttribute('aria-label', '播放模式：' + MODE_LABEL[state.mode]);
+    });
+  }
+
+  function setPlayingUi(playing) {
+    players.forEach(function (p) {
+      p.play.innerHTML = playing ? ICON.pause : ICON.play;
+      p.play.setAttribute('data-state', playing ? 'playing' : 'paused');
+      p.play.setAttribute('aria-label', playing ? '暂停' : '播放');
     });
   }
 
@@ -429,6 +494,9 @@
     scroll.style.setProperty('--n', Math.max(0, state.lines.length - 1));
     scroll.innerHTML = state.lines.map(function (l, i) {
       if (i === state.active && !state.plain) {
+        /* 当前句两层文字完全重叠：底下 lb-base 是暗色，上面 lb-fill 是渐变，
+           靠 clip-path 从左往右擦开做卡拉OK。两层字体、字号、字距必须一致，
+           否则会错位成"重影"。 */
         return '<div class="lb-line active" data-i="' + i + '">' +
           '<span class="lb-wrap">' +
             '<span class="lb-base">' + esc(l.text) + '</span>' +
@@ -473,7 +541,9 @@
   }
 
   /* timeupdate 只有 ~4Hz，擦除进度靠它驱动会一顿一顿的，
-     所以播放期间再开一个 requestAnimationFrame 循环专门刷这一条。 */
+     所以播放期间再开一个 requestAnimationFrame 循环专门刷这一条。
+     （--p 每帧直接写，不要再给 clip-path 加 transition —— 那会让擦除边缘
+     一直滞后几帧，看起来像拖了一条影子。） */
   var rafId = null;
   function tickWipe() {
     if (!audio || audio.paused) { rafId = null; return; }
@@ -582,18 +652,18 @@
     audio.addEventListener('play', function () {
       d.body.classList.add('mp-playing');
       if (!state.started) { state.started = true; d.body.classList.add('lyrics-on'); }
-      players.forEach(function (p) { p.play.textContent = '\u275a\u275a'; });
+      setPlayingUi(true);
       startWipe();
     });
     audio.addEventListener('pause', function () {
       d.body.classList.remove('mp-playing');
-      players.forEach(function (p) { p.play.textContent = '\u25b6'; });
+      setPlayingUi(false);
       stopWipe();
       if (state.started) syncLyrics();
     });
     audio.addEventListener('ended', function () {
       d.body.classList.remove('mp-playing');
-      players.forEach(function (p) { p.play.textContent = '\u25b6'; });
+      setPlayingUi(false);
       stopWipe();
       autoNext();
     });
@@ -615,12 +685,17 @@
   function wireLyricToggle() {
     var btn = $('#miniLyricsBtn');
     if (!btn) return;
+    var sync = function () {
+      btn.classList.toggle('off', state.lyricsHidden);
+      btn.setAttribute('aria-pressed', state.lyricsHidden ? 'false' : 'true');
+      btn.title = state.lyricsHidden ? '显示底部歌词' : '隐藏底部歌词';
+    };
     btn.addEventListener('click', function () {
       state.lyricsHidden = !state.lyricsHidden;
       d.body.classList.toggle('lyrics-hidden', state.lyricsHidden);
-      btn.classList.toggle('off', state.lyricsHidden);
-      btn.title = state.lyricsHidden ? '显示底部歌词' : '隐藏底部歌词';
+      sync();
     });
+    sync();
   }
 
   function mount() {
@@ -647,6 +722,7 @@
     if (t) audio.src = t.src;
     buildLines();
     renderAll();
+    setPlayingUi(false);
 
     /* 「＋ 添加音乐」只有配过 Token 才挂载 —— 普通访客看不到，也点不出写操作。
        面板本身在 music-upload.js 里，这里只负责把按钮插到右下角并召唤它。 */
@@ -658,6 +734,7 @@
         add.className = 'mp-btn mp-addbtn';
         add.dataset.act = 'add';
         add.title = '添加音乐';
+        add.setAttribute('aria-label', '添加音乐');
         add.textContent = '\uff0b';
         add.addEventListener('click', function (e) {
           e.stopPropagation();
@@ -667,17 +744,25 @@
       });
     }
 
+    /* 点播放器以外的任何地方：收起所有播放列表，顺带解除钉住。
+       播放器内部的按钮都 stopPropagation 了，所以这里的 e.target
+       一定是「外面」的东西。 */
+    d.addEventListener('click', function (e) {
+      var inside = e.target && e.target.closest && e.target.closest('.mplayer');
+      if (!inside) closePlaylists(null);
+    }, true);
+
     /* 首次进入站点时给个提示（只在真的没配 Token 时，且只提示一次） */
     if (!admin && !tracks().length) toast('播放列表是空的 —— 配好 Token 后就能在播放器右下角 ＋ 添加');
   }
 
-  /* 供 music-upload.js 用 */
+  /* 供 music-upload.js / script.js 用 */
   w.RinsoraMusic = {
     DATA_PATH: DATA_PATH,
     HEADER: HEADER,
     MODES: MODES,
     MODE_LABEL: MODE_LABEL,
-    MODE_ICON: MODE_ICON,
+    ICON: ICON,
     TRACK_ORDER: TRACK_ORDER,
     parse: parse,
     serialize: serialize,
@@ -694,6 +779,8 @@
     reload: reloadFromDisk,
     refresh: function () { buildLines(); renderAll(); },
     playIndex: function (i) { setIndex(i, true); },
+    /* 进入小窝时把两个播放器都收回收起态，免得上一个页面的列表状态漏过去 */
+    collapse: function () { closePlaylists(null); },
     /* 上传 / 删除完就地换掉内存里的曲库，播放器立刻能看到变化，不用刷新页面 */
     setData: function (data) {
       var list = (data && data.tracks) || [];

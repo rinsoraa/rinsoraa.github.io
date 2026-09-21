@@ -28,6 +28,9 @@
     <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
   </div>
 
+  <!-- 磨砂玻璃层：盖在装饰色块上，把背景糊成柔和的色雾 -->
+  <div class="bg-frost" aria-hidden="true"></div>
+
   <div class="screen-grain" aria-hidden="true"></div>
 
   <!-- 欢迎页 -->
@@ -64,7 +67,7 @@
           <img class="avatar avatar-sidebar" src="assets/avatar.png" alt="空凛">
         </button>
         <nav class="radial-nav" id="radialNav" aria-label="主导航">
-          <button class="radial-item active" data-target="about" style="--i:0"><span>♡</span><b>个人简介</b></button>
+          <button class="radial-item active" data-target="about" style="--i:0"><span>♡</span><b>主页</b></button>
           <button class="radial-item" data-target="blog" style="--i:1"><span>✎</span><b>博客</b></button>
           <button class="radial-item" data-target="projects" style="--i:2"><span>✦</span><b>项目展示</b></button>
         </nav>
@@ -79,9 +82,19 @@
           <p class="eyebrow">MY LITTLE SPACE</p>
           <h2 id="sectionTitle">关于我</h2>
         </div>
+        <!-- 桌面端会由 CSS 挪到页面左下角（手机端留在原位），
+             收起时是一枚纯图标圆钮，悬停展开文字说明 -->
         <div class="top-actions">
-          <button class="soft-btn" id="themeBtn" title="切换夜间模式">☾</button>
-          <button class="soft-btn" id="miniLyricsBtn">♫ 歌词</button>
+          <button class="soft-btn dock-btn" id="themeBtn" type="button"
+                  title="切换夜间模式" aria-label="切换夜间模式">
+            <span class="dock-ic" aria-hidden="true"><svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 13.1A8.6 8.6 0 1 1 10.9 3.2a6.7 6.7 0 0 0 9.9 9.9Z"/></svg><svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.1"/><path d="M12 2.3v2.1"/><path d="M12 19.6v2.1"/><path d="m4.3 4.3 1.5 1.5"/><path d="m18.2 18.2 1.5 1.5"/><path d="M2.3 12h2.1"/><path d="M19.6 12h2.1"/><path d="m4.3 19.7 1.5-1.5"/><path d="m18.2 5.8 1.5-1.5"/></svg></span>
+            <span class="dock-label" id="themeLabel">夜间模式</span>
+          </button>
+          <button class="soft-btn dock-btn" id="miniLyricsBtn" type="button"
+                  title="隐藏底部歌词" aria-label="显示或隐藏底部歌词" aria-pressed="true">
+            <span class="dock-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.1V5.3l10-2v12.5"/><circle cx="6.4" cy="18.1" r="2.6"/><circle cx="16.4" cy="15.8" r="2.6"/></svg></span>
+            <span class="dock-label">歌词</span>
+          </button>
         </div>
       </header>
 
@@ -108,6 +121,10 @@
               <div class="quote">“记录一些喜欢的东西，也记录正在成为的自己。”</div>
             </aside>
           </div>
+
+          <!-- 最近发布的博客 / 项目：内容由 script.js 从下面的博客区
+               与 projects-data.js 里取最新的几条渲染，没有就整块不显示 -->
+          <div id="recentFeed"></div>
 
           <div class="section-heading"><span>✦</span><h3>最近在做什么</h3><span class="line"></span></div>
           <div class="now-grid">

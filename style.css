@@ -13,6 +13,10 @@
   --shadow:0 22px 60px rgba(180,120,160,.18);
   --radius:28px;
   --ease:cubic-bezier(.2,.8,.2,1);
+  /* 布局变量：歌词栏要跟内容区对齐，所以两侧留白和内容区共用同一套数字 */
+  --rail:220px;          /* 左侧导航栏宽度（内容区 margin-left） */
+  --cpad:50px;           /* 内容区左右内边距 */
+  --bar-h:96px;          /* 底部歌词栏高度 */
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -22,6 +26,15 @@ button{border:0;color:inherit;cursor:pointer}
 body.night{--ink:#f4eaf3;--muted:#c3b3c7;--white:rgba(42,30,54,.70);--white2:rgba(42,30,54,.48);background:linear-gradient(135deg,#21192b,#30273c 50%,#1d2934)}
 .screen-grain{position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:20;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E")}
 .bg-decor{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+/* 盖在装饰色块之上的一层磨砂玻璃：把背景那几团渐晕糊成柔和的色雾，
+   页面整体就有了"隔着毛玻璃看背景"的质感。内容层在 z-index 2 以上，不受影响。 */
+.bg-frost{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:rgba(255,255,255,.06);
+  backdrop-filter:blur(34px) saturate(1.2);
+  -webkit-backdrop-filter:blur(34px) saturate(1.2);
+}
+body.night .bg-frost{background:rgba(18,12,26,.14)}
 .blob{position:absolute;border-radius:50%;filter:blur(10px);opacity:.48;animation:float 11s ease-in-out infinite alternate}
 .blob-a{width:360px;height:360px;left:-100px;top:-100px;background:radial-gradient(circle at 40% 35%,#ffd0e6,#ffc0a8 70%,transparent 72%)}
 .blob-b{width:420px;height:420px;right:-120px;top:14%;background:radial-gradient(circle at 50% 40%,#ffeaa0,#dac8ff 72%,transparent 74%);animation-delay:-3s}
@@ -30,7 +43,7 @@ body.night{--ink:#f4eaf3;--muted:#c3b3c7;--white:rgba(42,30,54,.70);--white2:rgb
 .s1{left:10%;top:24%}.s2{right:16%;top:30%;animation-delay:1s}.s3{left:32%;top:12%;animation-delay:2s}.s4{right:34%;bottom:16%;animation-delay:.5s}
 @keyframes float{to{transform:translate3d(0,28px,0) scale(1.04)}}
 @keyframes twinkle{0%,100%{transform:scale(.8) rotate(0deg);opacity:.35}50%{transform:scale(1.15) rotate(12deg);opacity:1}}
-.glass,.card{background:var(--white);border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.glass,.card{background:var(--white);border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow);backdrop-filter:blur(26px) saturate(1.12);-webkit-backdrop-filter:blur(26px) saturate(1.12)}
 .welcome-screen{position:relative;z-index:30;min-height:100vh;display:grid;place-items:center;padding:28px;transition:opacity .7s var(--ease),transform .9s var(--ease),visibility .7s}
 .welcome-screen.hidden{position:fixed;inset:0;opacity:0;transform:scale(1.03) translateY(-30px);visibility:hidden;pointer-events:none}
 .welcome-card{width:min(760px,100%);padding:48px 54px 42px;border-radius:42px;text-align:center;position:relative;overflow:hidden}
@@ -347,6 +360,17 @@ body.mp-playing .mp-disc{animation-play-state:running}
   cursor:pointer;transition:transform .2s var(--ease),background .2s,color .2s,box-shadow .2s;
 }
 .mp-btn:hover{transform:scale(1.1);background:#fff;color:#d97ba8;box-shadow:0 8px 18px rgba(226,140,180,.22)}
+/* 控件图标统一用内联 SVG，颜色跟 currentColor 走，换主题不用改图标 */
+.mp-btn svg{width:15px;height:15px;display:block}
+.mp-btn.mp-main svg{width:17px;height:17px}
+.mp-btn.mp-modebtn svg{width:16px;height:16px}
+/* 不是默认的「顺序播放」时，模式按钮给一点颜色提示 */
+.mp-btn.mp-modebtn[data-mode="shuffle"],
+.mp-btn.mp-modebtn[data-mode="loop"]{
+  color:#d0608f;border-color:rgba(238,134,173,.55);background:rgba(255,244,249,.96);
+}
+.mp-btn.mp-modebtn[data-mode="shuffle"]:hover,
+.mp-btn.mp-modebtn[data-mode="loop"]:hover{background:#fff;color:#c9618f}
 .mp-btn.mp-main{
   width:38px;height:38px;font-size:13px;color:#fff;border-color:transparent;
   background:linear-gradient(135deg,var(--pink),#ff7fb3);box-shadow:0 10px 22px rgba(255,127,179,.3);
@@ -411,14 +435,17 @@ body.night .mp-track-del:hover{background:rgba(255,255,255,.2)}
    底部常驻歌词栏
    ============================================================ */
 .lyricbar{
-  position:fixed;left:0;right:0;bottom:0;z-index:11;
+  /* 不再从左到右占满整个底部：紧贴左侧导航栏外侧开始，
+     宽度与内容区（.content）对齐，右上角收个圆角当成一块玻璃托盘 */
+  position:fixed;left:var(--rail);bottom:0;z-index:11;
+  width:min(1320px,calc(100% - var(--rail)));
   height:0;opacity:0;pointer-events:none;overflow:hidden;
-  border-top:1px solid transparent;
+  border-top:1px solid transparent;border-radius:0 24px 0 0;
   background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,251,253,.84) 34%,rgba(255,250,252,.95) 100%);
   backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   transition:height .55s var(--ease),opacity .5s var(--ease),border-color .5s var(--ease);
 }
-body.lyrics-on .lyricbar{height:106px;opacity:1;pointer-events:auto;border-top-color:rgba(255,255,255,.75)}
+body.lyrics-on .lyricbar{height:var(--bar-h);opacity:1;pointer-events:auto;border-top-color:rgba(255,255,255,.75)}
 /* 顶栏那个「♫ 歌词」可以把它收起来（这条要放在上面那条后面才生效） */
 body.lyrics-hidden .lyricbar{height:0;opacity:0;pointer-events:none;border-top-color:transparent}
 body.night .lyricbar{
@@ -426,9 +453,9 @@ body.night .lyricbar{
   border-top-color:rgba(255,255,255,.1);
 }
 
-.lb-inner{position:relative;height:106px;display:flex;align-items:center}
+.lb-inner{position:relative;height:var(--bar-h);padding:0 var(--cpad);display:flex;align-items:center}
 .lb-side{
-  position:absolute;left:28px;top:50%;transform:translateY(-50%);
+  position:absolute;left:14px;top:50%;transform:translateY(-50%);
   display:flex;align-items:center;gap:9px;max-width:min(230px,24vw);
 }
 .lb-eq{height:13px}
@@ -437,13 +464,14 @@ body.night .lyricbar{
 body.night .lb-now{color:#c9b2c4}
 
 .lb-view{
-  flex:1;height:106px;overflow:hidden;position:relative;
+  flex:1;height:var(--bar-h);overflow:hidden;position:relative;
   -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%);
   mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%);
 }
 .lb-scroll{
   width:100%;padding:0 26px;box-sizing:border-box;will-change:transform;
-  transform:translateY(calc(36px - var(--i,0) * 34px));
+  /* 让第 --i 行正好落在可视区中间：(高/2) - (行高/2) - i*行高 */
+  transform:translateY(calc(var(--bar-h) / 2 - 17px - var(--i,0) * 34px));
   transition:transform .62s cubic-bezier(.22,.85,.24,1);
 }
 
@@ -457,21 +485,17 @@ body.night .lb-now{color:#c9b2c4}
 .lb-line.far{opacity:.14;filter:blur(1.4px)}
 .lb-line.active{
   font-size:19px;opacity:1;color:#7d6680;filter:none;
-  animation:lbIn .52s var(--ease);
+  animation:lbIn .5s var(--ease);
 }
-@keyframes lbIn{from{opacity:.15;transform:scale(.94)}to{opacity:1;transform:none}}
+/* 只淡入，不做缩放 —— 缩放时新旧两句会同时以不同大小叠在一起，就是"重影" */
+@keyframes lbIn{from{opacity:0}to{opacity:1}}
 body.night .lb-line{color:#a8979f}
 body.night .lb-line.active{color:#f2dbe8}
 
 /* 当前句：底下是暗色文字，上面盖一层渐变文字，宽度随播放进度从左往右擦开 */
-.lb-wrap{
-  position:relative;display:inline-block;max-width:100%;
-  animation:lbGlow 2.6s ease-in-out infinite;
-}
-@keyframes lbGlow{
-  0%,100%{filter:drop-shadow(0 3px 12px rgba(229,124,168,.26))}
-  50%{filter:drop-shadow(0 3px 18px rgba(255,171,94,.44))}
-}
+/* 这里以前挂了 drop-shadow 发光动画，但 0 3px 的偏移会在文字下方
+   投出一层模糊的影子，正文字看起来就是双影。去掉，改用渐变本身的高光。 */
+.lb-wrap{position:relative;display:inline-block;max-width:100%}
 .lb-base{white-space:nowrap}
 .lb-fill{
   position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;
@@ -479,7 +503,8 @@ body.night .lb-line.active{color:#f2dbe8}
   -webkit-background-clip:text;background-clip:text;
   color:transparent;-webkit-text-fill-color:transparent;
   clip-path:inset(0 calc(100% - var(--p,0%)) 0 0);
-  transition:clip-path .08s linear;
+  /* 进度由 requestAnimationFrame 每帧直接写，不能再给 clip-path 加 transition：
+     那会让擦除边缘永远滞后几帧，拖出一条像残影的高亮。 */
 }
 
 /* 顶栏「♫ 歌词」被关掉时的样子 */
@@ -590,4 +615,191 @@ body.night .mm-btn.mm-primary{background:linear-gradient(100deg,#ff94bc,#ffc46b)
   .mm-card{padding:20px 18px 16px;border-radius:24px}
   .mm-body{grid-template-columns:1fr}
   .mm-coverbox{width:118px;height:118px;margin:0 auto}
+}
+
+/* ============================================================
+   响应式布局变量（歌词栏宽度 / 内容留白跟着内容区一起变）
+   ============================================================ */
+@media (max-width:1050px){:root{--rail:175px;--cpad:28px}}
+@media (max-width:760px){
+  :root{--rail:0px;--cpad:0px}
+  /* 手机端歌词栏本来就不该有左缩进和圆角，恢复整条贴底 */
+  .lyricbar{left:0;width:100%;border-radius:0}
+}
+
+
+/* ============================================================
+   左下角「歌词 / 夜间模式」按钮组
+   ------------------------------------------------------------
+   DOM 上它们还待在顶栏里（手机端就在原位不动），
+   桌面端用 fixed 把它们挪到页面左下角，独立成一枚玻璃按钮组。
+   ============================================================ */
+@media (min-width:761px){
+  .top-actions{
+    position:fixed;left:26px;bottom:26px;z-index:14;
+    flex-direction:column-reverse;gap:9px;align-items:flex-start;
+  }
+}
+.dock-btn{
+  display:inline-flex;align-items:center;gap:0;
+  height:42px;min-width:42px;padding:0 12px;border-radius:999px;
+  background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);
+  color:#b083a3;font-size:12px;font-weight:900;
+  box-shadow:0 12px 28px rgba(176,120,150,.16);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  transition:transform .3s var(--ease),background .25s,color .25s,
+             box-shadow .3s var(--ease),border-color .25s;
+}
+.dock-btn:hover{transform:translateY(-3px) scale(1.05);background:#fff;color:#d97ba8;
+  box-shadow:0 18px 38px rgba(226,140,180,.3);border-color:#fff}
+.dock-btn:active{transform:translateY(-1px) scale(.96)}
+.dock-btn:focus-visible{outline:2px solid rgba(238,134,173,.7);outline-offset:2px}
+
+/* 图标：日 / 月两个 SVG 叠在一起，靠类名切换透明度 + 旋转做换挡动画 */
+.dock-btn .dock-ic{
+  position:relative;width:18px;height:18px;flex:0 0 auto;display:block;
+}
+.dock-btn .dock-ic svg{
+  position:absolute;inset:0;width:18px;height:18px;display:block;
+  transition:opacity .42s var(--ease),transform .5s var(--ease);
+}
+.dock-btn .ic-sun{opacity:0;transform:rotate(-110deg) scale(.35)}
+.dock-btn .ic-moon{opacity:1;transform:none}
+body.night .dock-btn .ic-sun{opacity:1;transform:none}
+body.night .dock-btn .ic-moon{opacity:0;transform:rotate(110deg) scale(.35)}
+
+/* 悬停时展开一小段文字说明，收起态就是一枚纯图标圆钮 */
+.dock-btn .dock-label{
+  max-width:0;opacity:0;overflow:hidden;white-space:nowrap;
+  transition:max-width .38s var(--ease),opacity .3s var(--ease),margin-left .38s var(--ease);
+}
+.dock-btn:hover .dock-label,.dock-btn:focus-visible .dock-label{
+  max-width:96px;opacity:1;margin-left:8px;
+}
+
+body.night .dock-btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:#d7c0ce}
+body.night .dock-btn:hover{background:rgba(255,255,255,.2);color:#f7b8d4;border-color:rgba(255,255,255,.28)}
+.dock-btn.off{opacity:.55}
+
+
+/* ============================================================
+   夜间模式的左侧导航栏
+   （之前只做了内容区的夜间配色，左上角那套导航还是白天的白底，
+     夜里看就特别扎眼）
+   ============================================================ */
+body.night .radial-item{
+  background:rgba(52,40,64,.92);color:#f0e2ec;
+  box-shadow:0 10px 26px rgba(8,4,14,.45);
+}
+body.night .radial-item span{color:#f7a8c9}
+body.night .radial-item.active{
+  background:linear-gradient(135deg,rgba(96,62,92,.96),rgba(64,50,76,.96));
+}
+body.night .avatar-hint{background:rgba(52,40,64,.86);color:#cbb6c4}
+body.night .side-name{color:#f6eef7}
+body.night .side-name small{color:#b79fb4}
+body.night .side-status{color:#b09cb2}
+body.night .sticker{background:#6d5540;color:#ffe6b8}
+@media (max-width:760px){
+  body.night .side-rail{background:rgba(30,22,40,.62)}
+}
+
+
+/* ============================================================
+   导航栏：点击头像挂起 / 再次点击收起 / 点空白处也收起
+   ------------------------------------------------------------
+   原来只有 :hover 和 .open 两个开闸条件。加一个 nav-closed 抑制类：
+   显式收起后，就算鼠标还停在头像上也保持关闭，鼠标移开自动复位。
+   这些规则必须放在 :hover / .open 那几条后面才压得住（同权重靠先后）。
+   ============================================================ */
+.avatar-nav-wrap.nav-closed .radial-item{opacity:0;pointer-events:none}
+.avatar-nav-wrap.nav-closed .radial-item:nth-child(1){transform:translateX(-10px) rotate(0deg) scale(.72)}
+.avatar-nav-wrap.nav-closed .radial-item:nth-child(2){transform:translateX(-10px) rotate(0deg) scale(.72)}
+.avatar-nav-wrap.nav-closed .radial-item:nth-child(3){transform:translateX(-10px) rotate(0deg) scale(.72)}
+
+
+/* ============================================================
+   鼠标点击涟漪
+   ============================================================ */
+.click-ripple{
+  position:fixed;z-index:9998;pointer-events:none;
+  width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+  border:1.5px solid rgba(238,134,173,.6);
+  background:radial-gradient(circle,rgba(255,157,198,.42),rgba(255,157,198,0) 68%);
+  animation:clickPop .6s cubic-bezier(.2,.8,.2,1) forwards;
+}
+@keyframes clickPop{
+  from{transform:scale(.25);opacity:.95}
+  to{transform:scale(3.6);opacity:0}
+}
+body.night .click-ripple{
+  border-color:rgba(243,166,197,.65);
+  background:radial-gradient(circle,rgba(243,166,197,.38),rgba(243,166,197,0) 68%);
+}
+@media (prefers-reduced-motion:reduce){.click-ripple{display:none}}
+
+
+/* ============================================================
+   主页的「最近发布」区（最近博客 + 最近项目）
+   ============================================================ */
+.recent-block{margin-top:6px}
+.recent-sub{
+  display:flex;align-items:center;gap:8px;margin:0 0 10px;
+  font-size:11px;font-weight:900;letter-spacing:.14em;color:#c48aa8;
+}
+.recent-sub i{width:6px;height:6px;border-radius:50%;background:#ffb0cf;flex:0 0 auto}
+.recent-sub .rt-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(199,163,184,.42),transparent)}
+.recent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.recent-card{
+  display:block;position:relative;text-decoration:none;color:inherit;
+  border-radius:22px;padding:17px 18px 15px;
+  background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.86);
+  box-shadow:0 12px 30px rgba(180,120,160,.1);
+  transition:transform .3s var(--ease),box-shadow .3s var(--ease),background .25s;
+}
+.recent-card:hover{transform:translateY(-4px);background:#fff;box-shadow:0 24px 52px rgba(180,120,160,.24)}
+.rc-kind{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:9px;font-weight:900;letter-spacing:.14em;
+  padding:5px 9px;border-radius:999px;background:#ffedf5;color:#c9618f;
+}
+.rc-kind.k-proj{background:#ebe5ff;color:#7d6bb8}
+.rc-title{display:block;margin:11px 0 7px;font-size:15px;font-weight:900;line-height:1.52;
+  word-break:break-word}
+.rc-desc{
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  font-size:12px;line-height:1.75;color:var(--muted);
+}
+.rc-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:11px}
+.rc-date{font-size:10px;color:#b49ab0;letter-spacing:.02em}
+.recent-more{
+  margin-left:2px;font-size:10.5px;font-weight:900;color:#df75a5;white-space:nowrap;
+  transition:letter-spacing .25s var(--ease);
+}
+.recent-card:hover .recent-more{letter-spacing:.06em}
+body.night .recent-card{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+body.night .recent-card:hover{background:rgba(255,255,255,.13)}
+body.night .rc-kind{background:rgba(243,166,197,.18);color:#f7b8d4}
+body.night .rc-kind.k-proj{background:rgba(164,148,255,.2);color:#c8bcff}
+body.night .rc-title{color:#fff4fb}
+body.night .recent-more{color:#f3a6c5}
+body.night .recent-sub{color:#dba8c2}
+@media (max-width:1050px){.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.recent-grid{grid-template-columns:1fr}}
+
+/* 「最近发布」里两个分组之间的间距 */
+.recent-block + .recent-block{margin-top:16px}
+
+/* ============================================================
+   夜间模式切换：View Transitions
+   ------------------------------------------------------------
+   两个快照默认会交叉淡入叠在一起，这里关掉自带动画，
+   改成由 JS 在 ::view-transition-new(root) 上跑一个从按钮位置扩散的圆形 clip-path。
+   ============================================================ */
+::view-transition-old(root),
+::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-old(root){z-index:1}
+::view-transition-new(root){z-index:2}
+@media (prefers-reduced-motion:reduce){
+  ::view-transition-old(root),::view-transition-new(root){animation:none}
 }
