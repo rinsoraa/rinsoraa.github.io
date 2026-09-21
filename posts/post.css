@@ -1,0 +1,126 @@
+/* ============================================================
+   文章页排版 — 复用 style.css 的 :root 变量与 .glass / .bg-decor 等基础样式
+   ============================================================ */
+
+.post-wrap{
+  position:relative;z-index:30;min-height:100vh;
+  padding:56px 28px 90px;display:flex;justify-content:center;
+}
+
+.post-card{
+  width:min(820px,100%);padding:50px 56px 44px;border-radius:36px;position:relative;
+}
+
+/* 顶栏：返回 + 站点名 */
+.post-top{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin:-6px 0 30px;font-size:11px;
+}
+.post-back{
+  display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+  padding:7px 13px;border-radius:999px;font-weight:800;color:#d97ba8;
+  background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.84);
+  transition:transform .22s var(--ease),background .22s;
+}
+.post-back:hover{transform:translateX(-3px);background:rgba(255,255,255,.9)}
+.post-brand{font-weight:900;letter-spacing:.16em;color:#c99ab4;text-transform:uppercase}
+
+/* 标题区 */
+.post-kicker{letter-spacing:.16em;font-size:11px;font-weight:800;color:#d987a8;margin:0 0 12px}
+.post-title{
+  font-size:clamp(27px,4.4vw,40px);line-height:1.28;letter-spacing:-.035em;
+  margin:0 0 16px;color:#5a465f;
+}
+.post-meta{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:11px;color:var(--muted);margin:0 0 28px;
+}
+.post-meta .date{
+  display:inline-flex;padding:6px 10px;border-radius:999px;background:#fff0a9;
+  font-size:10px;font-weight:900;color:#826848;
+}
+.post-meta .dot{width:3px;height:3px;border-radius:50%;background:rgba(177,145,163,.6)}
+
+.post-divider{
+  height:1px;border:0;margin:0 0 30px;
+  background:linear-gradient(90deg,rgba(221,179,198,.55),rgba(255,229,141,.35),transparent);
+}
+
+/* 正文 */
+.post-body{font-size:15px;line-height:2.05;color:var(--ink)}
+.post-body>*:first-child{margin-top:0}
+.post-body p{margin:0 0 20px;color:var(--ink)}
+.post-body h2{
+  font-size:19px;letter-spacing:-.02em;margin:38px 0 14px;
+  display:flex;align-items:center;gap:9px;color:#5a465f;
+}
+.post-body h2:before{content:"✿";color:#ee86ad;font-size:15px}
+.post-body h3{font-size:16px;margin:26px 0 10px;color:#5a465f}
+.post-body ul,.post-body ol{margin:0 0 20px;padding-left:22px}
+.post-body li{margin:0 0 9px;color:var(--ink)}
+.post-body li::marker{color:#ee86ad}
+.post-body strong{color:#c9608f}
+.post-body a{color:#df75a5;font-weight:800;text-decoration:none;border-bottom:1px dashed rgba(223,117,165,.5)}
+.post-body a:hover{border-bottom-style:solid}
+
+.post-body blockquote{
+  margin:22px 0;padding:16px 20px 16px 22px;border-radius:18px;
+  background:linear-gradient(135deg,rgba(255,227,239,.66),rgba(255,243,194,.55));
+  border-left:3px solid rgba(255,157,198,.62);
+  font-size:14px;line-height:1.95;color:#8c6f80;
+}
+.post-body blockquote p{margin:0}
+.post-body blockquote p+p{margin-top:10px}
+
+.post-body code{
+  font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  font-size:.88em;padding:2px 6px;border-radius:7px;
+  background:rgba(255,214,230,.5);color:#b5567f;
+}
+.post-body pre{
+  margin:22px 0;padding:18px 20px;border-radius:18px;overflow-x:auto;
+  background:rgba(93,75,102,.06);border:1px solid rgba(177,145,163,.18);
+}
+.post-body pre code{background:none;padding:0;color:#5d4b66;font-size:12.5px;line-height:1.75}
+
+/* 分隔线与正文配图（Markdown 的 --- 和 ![]() ） */
+.post-body hr{
+  border:0;height:1px;margin:32px 0;
+  background:linear-gradient(90deg,transparent,rgba(221,179,198,.65),transparent);
+}
+.post-body img{max-width:100%;height:auto;border-radius:18px;margin:10px 0;display:block}
+
+/* 结尾 */
+.post-footer{
+  margin-top:38px;padding-top:26px;border-top:1px dashed rgba(177,145,163,.3);
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+}
+.post-footer .enter-btn{text-decoration:none;margin-top:0}
+.post-tags{display:flex;gap:7px;flex-wrap:wrap}
+.post-tags span{
+  font-size:10px;background:rgba(255,255,255,.64);border:1px solid rgba(255,255,255,.8);
+  padding:6px 9px;border-radius:999px;color:#96788f;
+}
+
+/* 夜间模式微调 */
+body.night .post-title,body.night .post-body,body.night .post-body p,
+body.night .post-body li,body.night .post-body h2,body.night .post-body h3{color:#f4eaf3}
+body.night .post-back{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16);color:#f3a6c5}
+body.night .post-back:hover{background:rgba(255,255,255,.2)}
+body.night .post-brand{color:#c9a8bf}
+body.night .post-body a{color:#f3a6c5;border-bottom-color:rgba(243,166,197,.45)}
+body.night .post-body strong{color:#f7b8d4}
+body.night .post-body blockquote{background:linear-gradient(135deg,rgba(255,157,198,.16),rgba(255,229,141,.12));border-left-color:rgba(243,166,197,.5);color:#dcc7d6}
+body.night .post-body code{background:rgba(255,157,198,.18);color:#ffc0dc}
+body.night .post-body pre{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.1)}
+body.night .post-body pre code{color:#efe2f0}
+body.night .post-tags span{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);color:#cbb6c4}
+
+@media (max-width:760px){
+  .post-wrap{padding:26px 16px 70px}
+  .post-card{padding:30px 20px 28px;border-radius:26px}
+  .post-top{margin-bottom:22px}
+  .post-brand{display:none}
+  .post-body{font-size:14.5px;line-height:2}
+  .post-footer{flex-direction:column;align-items:flex-start}
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffb6d5">
+  <title>把 AI 工具变成日常工作流 · 空凛 · Rinsora 的小窝</title>
+  <meta name="description" content="一些正在尝试的自动化思路、工具组合和踩坑记录。">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="post.css">
+</head>
+<body>
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+
+  <main class="post-wrap">
+    <article class="post-card glass">
+      <div class="post-top">
+        <a class="post-back" href="../index.html#blog">← 回到博客列表</a>
+        <span class="post-brand">Rinsora</span>
+      </div>
+
+      <p class="post-kicker">✿ BLOG / 工作流</p>
+      <h1 class="post-title">把 AI 工具变成日常工作流</h1>
+      <p class="post-meta">
+        <span class="date">2026.09.18</span>
+        <span class="dot"></span><span>空凛 / Rinsora</span>
+        <span class="dot"></span><span>约 4 分钟</span>
+      </p>
+      <hr class="post-divider">
+
+      <div class="post-body">
+        <p>最开始用 AI，我的用法大概和所有人一样：遇到问题就开个对话，问一句、等答案、关掉。用了半年，回头一看，效率几乎没有变化——因为每次都要重新描述背景、重新解释需求，光是“把它说明白”就已经把省下的时间吃回去了。</p>
+        <p>真正的转折点，是我不再把它当“搜索引擎”，而是把它塞进固定的流程里。</p>
+
+        <h2>一、给它一个固定的入口</h2>
+        <p>零散的对话不会积累任何东西。现在我把常用的几件事都固定了下来：写脚本文案、拆解竞品页面、整理分析结论、给项目写说明文档。每一类都有固定的输入格式和输出格式。</p>
+        <p>好处是显而易见的：上下文可以复用，输出格式稳定，我不需要每次都重新教它一遍。这跟写脚本其实是一个思路——<strong>只做一次的事不值得自动化，反复做的事才值得。</strong></p>
+
+        <h2>二、让它做“判断”，而不是“生成”</h2>
+        <p>这是我踩过最大的一个坑。一开始我总让它“帮我写一个 XXX”，结果拿到的东西看着完整，实际上每句话都要我重新核对一遍，反而更累。</p>
+        <p>后来我把任务换了个方向：</p>
+        <ul>
+          <li>不再让它从零创作，而是让它<strong>在我给的素材上做分类、对比、归纳</strong>；</li>
+          <li>不再问“你觉得怎么样”，而是问“按这三个维度，哪一项不达标”；</li>
+          <li>让它输出<strong>结构化的结果</strong>（表格、清单、固定字段），而不是大段的散文。</li>
+        </ul>
+        <p>判断类任务的容错率高得多——它给错了，我一眼就能看出来；它给对了，我直接就能用。</p>
+
+        <h2>三、成本要算，但不是省在刀刃上</h2>
+        <p>因为用量比较密，我确实在模型选择上花过心思，最后得出的结论是：<strong>大部分日常任务用便宜的轻量模型就够了。</strong></p>
+        <p>整理格式、提取信息、写初稿这类活儿，快模型和旗舰模型的差距远小于价格差距；真正需要旗舰模型的，往往是那种“想不清楚就全错”的推理任务，一天也用不了几次。所以我的做法是——</p>
+        <blockquote>
+          <p>默认走轻量模型，只在真正卡住的时候手动切到强模型。<br>把预算花在“难题”上，而不是花在“格式整理”上。</p>
+        </blockquote>
+
+        <h2>四、有一件事不能省</h2>
+        <p>不管流程多顺，最后一步永远是人工复核。AI 最危险的地方不是它错得离谱，而是它错得很像对的——语句通顺、格式工整、逻辑看着也自洽，只有真的去核对事实的时候才发现不对。</p>
+        <p>所以我现在的原则是：<strong>凡是会对外发出去的内容，最后一遍必须我自己看。</strong>AI 负责把 0 变成 80，我负责把 80 变成 100，顺便把里面掺的沙子挑出来。</p>
+
+        <h2>小结</h2>
+        <p>把 AI 变成工作流，本质上不是学一个新工具，而是重新拆一遍自己的工作：哪些环节可以标准化、哪些判断可以量化、哪些步骤必须由人来兜底。想清楚这些之后，工具本身用哪个反而没那么重要了。</p>
+      </div>
+
+      <div class="post-footer">
+        <div class="post-tags"><span>AI</span><span>自动化</span><span>工作流</span></div>
+        <a class="enter-btn" href="../index.html#blog"><span>看更多文章</span><span class="enter-arrow">→</span></a>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

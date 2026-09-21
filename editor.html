@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffb6d5">
+  <meta name="robots" content="noindex,nofollow">
+  <title>写作台 · 空凛 · Rinsora 的小窝</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body class="editor-page">
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+
+  <main class="editor-shell">
+
+    <header class="editor-top glass">
+      <a class="editor-back" href="index.html#blog">← 返回博客</a>
+      <div class="editor-title"><span>✿</span> Rinsora 写作台</div>
+      <div class="editor-actions">
+        <button class="soft-btn" id="btnNew" type="button" title="写一篇新的">＋ 新文章</button>
+        <button class="soft-btn" id="btnSetup" type="button" title="仓库与 Token 设置">⚙ 设置</button>
+      </div>
+    </header>
+
+    <!-- 连接设置 -->
+    <section class="editor-setup glass" id="setupPanel" hidden>
+      <h3><span>⚙</span> 连接你的 GitHub 仓库</h3>
+      <p class="hint">
+        网页要往仓库里写文件，得借你的 Token。建议去
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained token 页面</a>
+        新建一个：<b>Repository access</b> 只勾这一仓库，<b>Permissions → Contents</b> 选 <code>Read and write</code>，
+        有效期按需（可以设 1 年）。生成后粘到下面。
+        <br>
+        它只存在你这台浏览器的 localStorage 里，只会发给 <code>api.github.com</code>。别在公共电脑上配置。
+      </p>
+      <div class="setup-grid">
+        <label class="field"><span>用户名 / 组织</span><input id="cfgOwner" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>仓库名</span><input id="cfgRepo" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>分支</span><input id="cfgBranch" autocomplete="off" spellcheck="false"></label>
+        <label class="field full"><span>Personal Access Token</span><input id="cfgToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_… 或 ghp_…"></label>
+      </div>
+      <div class="pane-foot">
+        <button class="btn-primary" id="btnSaveCfg" type="button">保存并测试连接</button>
+        <button class="btn-ghost danger" id="btnForget" type="button">清除 Token</button>
+        <span class="pane-status" id="cfgStatus"></span>
+      </div>
+    </section>
+
+    <div class="editor-main">
+
+      <!-- 左侧：已发布文章 -->
+      <aside class="editor-side glass">
+        <div class="side-head"><span>已发布</span><span id="postCount">–</span></div>
+        <ul class="post-list" id="postList"></ul>
+      </aside>
+
+      <!-- 右侧：编辑区 -->
+      <section class="editor-pane glass">
+        <div class="pane-head">
+          <span class="pane-badge" id="modeBadge">新建</span>
+          <div class="pane-tabs">
+            <button class="tab active" type="button" data-tab="write">写</button>
+            <button class="tab" type="button" data-tab="preview">预览</button>
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <label class="field full"><span>标题</span><input id="fTitle" placeholder="这篇文章叫什么"></label>
+          <label class="field"><span>文件名（英文）</span><input id="fSlug" spellcheck="false" placeholder="my-post"></label>
+          <label class="field"><span>日期</span><input id="fDate" placeholder="2026.09.21"></label>
+          <label class="field"><span>小标题</span><input id="fKicker" placeholder="BLOG / 随笔"></label>
+          <label class="field full"><span>摘要</span><input id="fSummary" placeholder="留空就从正文自动截一句"></label>
+          <label class="field full"><span>标签（逗号分隔）</span><input id="fTags" placeholder="随笔, 折腾"></label>
+        </div>
+
+        <div class="md-toolbar">
+          <button type="button" data-md="h2" title="二级标题">H2</button>
+          <button type="button" data-md="h3" title="三级标题">H3</button>
+          <button type="button" data-md="b" title="粗体"><b>B</b></button>
+          <button type="button" data-md="i" title="斜体"><i>I</i></button>
+          <button type="button" data-md="ul" title="无序列表">• 列表</button>
+          <button type="button" data-md="quote" title="引用">❝ 引用</button>
+          <button type="button" data-md="code" title="行内代码">&lt;/&gt;</button>
+          <button type="button" data-md="pre" title="代码块">代码块</button>
+          <button type="button" data-md="link" title="链接">链接</button>
+          <button type="button" data-md="hr" title="分隔线">—</button>
+          <span class="sep"></span>
+          <label class="upload-btn" title="上传图片并插入">＋ 图片<input type="file" id="imgFile" accept="image/*" multiple></label>
+        </div>
+
+        <textarea class="md-input" id="fBody" spellcheck="false"
+          placeholder="正文用 Markdown 写。空行分段，## 是小标题，- 是列表，> 是引用。图片可以点上面「＋ 图片」上传，也可以直接把图片拖进这个框。"></textarea>
+        <div class="md-preview" id="previewBox" hidden></div>
+
+        <div class="pane-foot">
+          <button class="btn-primary" id="btnSave" type="button">保存并发布</button>
+          <button class="btn-ghost" id="btnReset" type="button">清空</button>
+          <button class="btn-ghost danger" id="btnDelete" type="button" hidden>删除这篇</button>
+          <span class="pane-status" id="saveStatus"></span>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div class="editor-toast" id="toast"></div>
+
+  <script src="gh-api.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>

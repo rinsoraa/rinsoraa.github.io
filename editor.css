@@ -1,0 +1,235 @@
+/* ============================================================
+   写作台 editor.css —— 复用 style.css 的 :root 变量与 .glass
+   ============================================================ */
+
+.editor-shell{
+  position:relative;z-index:30;
+  max-width:1300px;margin:0 auto;padding:24px 22px 80px;
+  display:flex;flex-direction:column;gap:16px;min-height:100vh;
+}
+
+/* ---------------------------------------------------------- 顶栏 ---- */
+.editor-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;border-radius:22px}
+.editor-back{
+  display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+  padding:8px 14px;border-radius:999px;font-size:12px;font-weight:800;color:#d97ba8;
+  background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.84);
+  transition:transform .22s var(--ease),background .22s;
+}
+.editor-back:hover{transform:translateX(-3px);background:rgba(255,255,255,.92)}
+.editor-title{font-size:15px;font-weight:900;color:#5a465f;display:flex;align-items:center;gap:8px}
+.editor-title span{color:#ee86ad}
+.editor-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ------------------------------------------------------ 设置面板 ---- */
+.editor-setup{padding:22px 24px;border-radius:24px}
+.editor-setup h3{margin:0 0 8px;font-size:16px;color:#5a465f;display:flex;align-items:center;gap:8px}
+.editor-setup h3 span{color:#ee86ad}
+.editor-setup .hint{font-size:12px;line-height:1.95;color:var(--muted);margin:0 0 18px;max-width:74ch}
+.editor-setup .hint a{color:#df75a5;font-weight:800}
+.editor-setup .hint code{
+  font-family:Consolas,monospace;font-size:.92em;padding:1px 6px;border-radius:6px;
+  background:rgba(255,214,230,.45);color:#b5567f;
+}
+
+/* -------------------------------------------------------- 表单 ---- */
+.field-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.field-grid .full{grid-column:1/-1}
+.setup-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.setup-grid .full{grid-column:1/-1}
+
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field>span{font-size:11px;font-weight:800;letter-spacing:.07em;color:#b083a3}
+.field input,.field textarea,.field select{
+  font:inherit;font-size:13px;padding:10px 12px;border-radius:12px;width:100%;box-sizing:border-box;
+  border:1px solid rgba(198,160,190,.35);background:rgba(255,255,255,.78);
+  color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.field input:focus,.field textarea:focus,.field select:focus{
+  border-color:rgba(238,134,173,.7);box-shadow:0 0 0 3px rgba(255,182,213,.22);
+}
+.field small{font-size:10.5px;color:var(--muted);line-height:1.6}
+
+/* -------------------------------------------------------- 主区 ---- */
+.editor-main{display:grid;grid-template-columns:270px minmax(0,1fr);gap:16px;align-items:start;flex:1}
+
+/* 左侧文章列表 */
+.editor-side{
+  padding:16px;border-radius:24px;position:sticky;top:20px;
+  max-height:calc(100vh - 40px);display:flex;flex-direction:column;
+}
+.side-head{
+  font-size:11px;font-weight:900;letter-spacing:.1em;color:#b083a3;
+  margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;
+}
+.post-list{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:5px}
+.post-item{
+  padding:9px 11px;border-radius:13px;cursor:pointer;
+  border:1px solid transparent;transition:background .2s,border-color .2s,transform .2s;
+}
+.post-item:hover{background:rgba(255,255,255,.7);transform:translateX(2px)}
+.post-item.active{background:rgba(255,214,230,.6);border-color:rgba(238,134,173,.4)}
+.post-item .pi-title{
+  display:block;font-size:12.5px;font-weight:800;color:var(--ink);line-height:1.55;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.post-item .pi-date{font-size:10px;color:var(--muted)}
+.side-empty{font-size:12px;color:var(--muted);padding:10px 4px;line-height:1.85}
+
+/* 右侧编辑区 */
+.editor-pane{padding:18px 20px 20px;border-radius:24px;display:flex;flex-direction:column;gap:14px}
+.pane-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.pane-badge{
+  font-size:10px;font-weight:900;letter-spacing:.1em;
+  padding:5px 11px;border-radius:999px;background:#fff0a9;color:#826848;
+}
+.pane-badge.edit{background:rgba(255,214,230,.75);color:#b5567f}
+.pane-tabs{
+  margin-left:auto;display:flex;gap:4px;padding:3px;border-radius:999px;
+  background:rgba(255,255,255,.6);border:1px solid rgba(198,160,190,.25);
+}
+.pane-tabs .tab{
+  border:0;background:none;font:inherit;font-size:11px;font-weight:800;
+  padding:6px 15px;border-radius:999px;cursor:pointer;color:#96788f;
+  transition:background .2s,color .2s;
+}
+.pane-tabs .tab.active{background:#fff;color:#d97ba8;box-shadow:0 4px 12px rgba(180,120,160,.16)}
+
+/* Markdown 工具条 */
+.md-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.md-toolbar button,.md-toolbar .upload-btn{
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  border:1px solid rgba(198,160,190,.3);background:rgba(255,255,255,.7);
+  font:inherit;font-size:11px;font-weight:800;color:#96788f;
+  padding:6px 11px;border-radius:10px;transition:background .2s,color .2s,transform .2s;
+}
+.md-toolbar button:hover,.md-toolbar .upload-btn:hover{background:#fff;color:#d97ba8;transform:translateY(-1px)}
+.md-toolbar input[type=file]{display:none}
+.md-toolbar .sep{width:1px;height:16px;background:rgba(198,160,190,.35);margin:0 2px}
+
+/* 编辑区 / 预览区 */
+.md-input{
+  font:13px/1.95 "JetBrains Mono","Cascadia Code",Consolas,monospace;
+  min-height:430px;resize:vertical;padding:16px;border-radius:16px;box-sizing:border-box;
+  border:1px solid rgba(198,160,190,.3);background:rgba(255,255,255,.8);
+  color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s;
+}
+.md-input:focus{border-color:rgba(238,134,173,.7);box-shadow:0 0 0 3px rgba(255,182,213,.2)}
+
+.md-preview{
+  min-height:430px;padding:16px 18px;border-radius:16px;box-sizing:border-box;
+  border:1px dashed rgba(198,160,190,.42);background:rgba(255,255,255,.55);
+  font-size:14px;line-height:2;color:var(--ink);overflow-wrap:break-word;
+}
+.md-preview>*:first-child{margin-top:0}
+.md-preview h1,.md-preview h2{font-size:18px;margin:26px 0 12px;color:#5a465f;display:flex;align-items:center;gap:8px}
+.md-preview h1:before,.md-preview h2:before{content:"\2728";color:#ee86ad;font-size:13px}
+.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6{font-size:15px;margin:20px 0 9px;color:#5a465f}
+.md-preview p{margin:0 0 15px}
+.md-preview ul,.md-preview ol{margin:0 0 15px;padding-left:21px}
+.md-preview li{margin-bottom:7px}
+.md-preview li::marker{color:#ee86ad}
+.md-preview strong{color:#c9608f}
+.md-preview em{font-style:italic}
+.md-preview a{color:#df75a5;font-weight:800;text-decoration:none;border-bottom:1px dashed rgba(223,117,165,.5)}
+.md-preview blockquote{
+  margin:17px 0;padding:14px 18px;border-radius:16px;font-size:13.5px;color:#8c6f80;
+  background:linear-gradient(135deg,rgba(255,227,239,.6),rgba(255,243,194,.5));
+  border-left:3px solid rgba(255,157,198,.62);
+}
+.md-preview blockquote p{margin:0}
+.md-preview code{
+  font-family:Consolas,monospace;font-size:.88em;padding:2px 6px;border-radius:6px;
+  background:rgba(255,214,230,.5);color:#b5567f;
+}
+.md-preview pre{
+  margin:17px 0;padding:14px 16px;border-radius:14px;overflow-x:auto;
+  background:rgba(93,75,102,.07);border:1px solid rgba(177,145,163,.16);
+}
+.md-preview pre code{background:none;padding:0;color:#5d4b66;font-size:12.5px;line-height:1.72}
+.md-preview img{max-width:100%;height:auto;border-radius:14px;display:block;margin:8px 0}
+.md-preview hr{
+  border:0;height:1px;margin:26px 0;
+  background:linear-gradient(90deg,transparent,rgba(221,179,198,.65),transparent);
+}
+.md-preview .md-empty{color:var(--muted);font-size:13px}
+
+/* -------------------------------------------------------- 底部 ---- */
+.pane-foot{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:2px;padding-top:15px;border-top:1px dashed rgba(177,145,163,.25);
+}
+.btn-primary{
+  border:0;font:inherit;font-size:13px;font-weight:900;color:#fff;cursor:pointer;
+  padding:11px 23px;border-radius:999px;
+  background:linear-gradient(120deg,#ffb6d5,#ffd98e);
+  box-shadow:0 12px 28px rgba(226,140,180,.28);
+  transition:transform .22s var(--ease),box-shadow .22s;
+}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 16px 34px rgba(226,140,180,.34)}
+.btn-primary:disabled{opacity:.55;cursor:default}
+.btn-ghost{
+  border:1px solid rgba(198,160,190,.35);background:rgba(255,255,255,.66);
+  font:inherit;font-size:12px;font-weight:800;color:#96788f;cursor:pointer;
+  padding:10px 18px;border-radius:999px;transition:background .2s,color .2s;
+}
+.btn-ghost:hover:not(:disabled){background:#fff;color:#d97ba8}
+.btn-ghost.danger:hover:not(:disabled){color:#c9536a}
+.btn-ghost:disabled{opacity:.5;cursor:default}
+.pane-status{font-size:11.5px;color:var(--muted);line-height:1.65;flex:1;min-width:150px}
+.pane-status.ok{color:#3f9a6e}
+.pane-status.err{color:#c9536a}
+.pane-status.busy{color:#b58aa4}
+
+/* --------------------------------------------------------- 提示 ---- */
+.editor-toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,22px);
+  max-width:min(580px,calc(100vw - 40px));
+  padding:12px 19px;border-radius:16px;font-size:12.5px;line-height:1.75;
+  background:rgba(70,52,80,.93);color:#fff;box-shadow:0 18px 44px rgba(90,60,90,.32);
+  opacity:0;pointer-events:none;transition:opacity .3s,transform .35s var(--ease);z-index:9999;
+}
+.editor-toast.show{opacity:1;transform:translate(-50%,0)}
+.editor-toast.t-err{background:rgba(154,52,72,.95)}
+.editor-toast.t-ok{background:rgba(56,124,90,.95)}
+
+/* ----------------------------------------------------- 夜间模式 ---- */
+body.night .editor-back{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16);color:#f3a6c5}
+body.night .editor-back:hover{background:rgba(255,255,255,.2)}
+body.night .editor-title,body.night .editor-setup h3{color:#f4eaf3}
+body.night .field input,body.night .field textarea,body.night .field select{
+  background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#f4eaf3;
+}
+body.night .pane-tabs{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12)}
+body.night .pane-tabs .tab{color:#cbb6c4}
+body.night .pane-tabs .tab.active{background:rgba(255,255,255,.16);color:#f7b8d4;box-shadow:none}
+body.night .md-toolbar button,body.night .md-toolbar .upload-btn,
+body.night .btn-ghost{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#cbb6c4}
+body.night .md-toolbar button:hover,body.night .md-toolbar .upload-btn:hover,
+body.night .btn-ghost:hover:not(:disabled){background:rgba(255,255,255,.16);color:#f7b8d4}
+body.night .md-input{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#f4eaf3}
+body.night .md-preview{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:#f4eaf3}
+body.night .md-preview h1,body.night .md-preview h2,
+body.night .md-preview h3,body.night .md-preview h4{color:#f4eaf3}
+body.night .md-preview blockquote{
+  background:linear-gradient(135deg,rgba(255,157,198,.16),rgba(255,229,141,.12));
+  border-left-color:rgba(243,166,197,.5);color:#dcc7d6;
+}
+body.night .md-preview code{background:rgba(255,157,198,.18);color:#ffc0dc}
+body.night .md-preview pre{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.1)}
+body.night .md-preview pre code{color:#efe2f0}
+body.night .md-preview strong{color:#f7b8d4}
+body.night .md-preview a{color:#f3a6c5;border-bottom-color:rgba(243,166,197,.45)}
+body.night .post-item:hover{background:rgba(255,255,255,.08)}
+body.night .post-item.active{background:rgba(255,157,198,.2);border-color:rgba(243,166,197,.35)}
+body.night .pane-badge{background:rgba(255,229,141,.2);color:#f0d79b}
+body.night .pane-badge.edit{background:rgba(255,157,198,.2);color:#f7b8d4}
+
+/* ------------------------------------------------------- 响应式 ---- */
+@media (max-width:900px){
+  .editor-shell{padding:16px 14px 60px}
+  .editor-main{grid-template-columns:1fr}
+  .editor-side{position:static;max-height:270px}
+  .editor-actions{margin-left:0;width:100%}
+  .md-input,.md-preview{min-height:320px}
+}

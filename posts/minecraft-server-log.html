@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffb6d5">
+  <title>Minecraft 服务器折腾日志 · 空凛 · Rinsora 的小窝</title>
+  <meta name="description" content="整合包、联机、端口、Mod……总会有下一件要修的事。">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="post.css">
+</head>
+<body>
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+
+  <main class="post-wrap">
+    <article class="post-card glass">
+      <div class="post-top">
+        <a class="post-back" href="../index.html#blog">← 回到博客列表</a>
+        <span class="post-brand">Rinsora</span>
+      </div>
+
+      <p class="post-kicker">✿ BLOG / 捣鼓日志</p>
+      <h1 class="post-title">Minecraft 服务器折腾日志</h1>
+      <p class="post-meta">
+        <span class="date">2026.09.10</span>
+        <span class="dot"></span><span>空凛 / Rinsora</span>
+        <span class="dot"></span><span>约 4 分钟</span>
+      </p>
+      <hr class="post-divider">
+
+      <div class="post-body">
+        <p>开服务器的动力往往很简单：想和朋友一起玩，又不想忍受公共服务器里那些莫名其妙的规矩。于是就有了这个“本来只想玩两天”的坑。</p>
+        <p>这篇是给自己看的流水账，顺手记一下这一轮遇到的几个问题。</p>
+
+        <h2>选整合包：先想清楚要玩什么</h2>
+        <p>第一步就卡了很久。整合包大致分两类，选错了后面全是事：</p>
+        <ul>
+          <li><strong>轻量科技类</strong>——流程清晰、进度可控，适合几个人分工协作，但玩到中后期容易变成“打卡上班”。</li>
+          <li><strong>魔改生存类</strong>——探索感和意外多，但节奏非常依赖前期资源，人多了容易抢。</li>
+        </ul>
+        <p>最后按“每周能在线几次”这个现实条件来选，而不是按“哪个更好玩”。这一点比什么都重要。</p>
+
+        <h2>联机：端口和内网穿透</h2>
+        <p>如果是自己的机器开服，绕不开的就是网络。整理了三条路径，按难度排序：</p>
+        <ol>
+          <li><strong>局域网直连。</strong>最省事，但只限同一个路由器下，异地朋友用不了。</li>
+          <li><strong>端口映射。</strong>需要在路由器上做转发，还要注意运营商是否给了公网 IP。很多家宽其实是 NAT 后的，怎么映射都不通。</li>
+          <li><strong>内网穿透 / 虚拟组网。</strong>不用碰路由器，代价是多一层中转，延迟取决于线路质量。</li>
+        </ol>
+        <p>我的建议是先用最简单的方式把“能一起玩”这件事跑通，别一上来就追求最优架构——大概率你会在调网络的过程中失去所有兴趣。</p>
+
+        <blockquote>
+          <p>先能玩，再优化。这句话在 Minecraft 服务器上比在任何地方都成立。</p>
+        </blockquote>
+
+        <h2>Mod 冲突：九成的问题都在这里</h2>
+        <p>服务端和客户端报错，绝大多数不是配置写错了，而是版本没对齐。我现在的检查顺序是：</p>
+        <ul>
+          <li>游戏版本 → 加载器版本 → Mod 版本，<strong>三层必须全部对上</strong>；</li>
+          <li>先跑原版 + 加载器，确认没问题，再一批一批地加 Mod；</li>
+          <li>报错先看日志的最后一段，别从头读，前面绝大多数是无害的警告。</li>
+        </ul>
+        <p>另外，服务端的 Mod 和客户端的 Mod 经常不是同一套。服务端装了但不该在客户端装的东西，会让玩家一进服就崩，而且报错信息往往完全指不到真正的原因。</p>
+
+        <h2>备份：唯一不嫌麻烦的事</h2>
+        <p>这一轮最大的教训来自一次地图损坏。<code>world</code> 目录、配置文件、Mod 列表，反正整个服务端目录一起打包，定时备份。</p>
+        <p>备份的价值不在于“会不会用到”，而在于有了它之后，你敢放心大胆地折腾。</p>
+
+        <h2>写在最后</h2>
+        <p>服务器搭好之后，真正一起在线的时间可能远少于折腾它的时间。但说实话，折腾本身也挺好玩的——把一堆东西拼起来、跑通、然后看着朋友进来说一句“能连上了”，那种满足感大概就是这个坑一直填不平的原因。</p>
+      </div>
+
+      <div class="post-footer">
+        <div class="post-tags"><span>Minecraft</span><span>服务器</span><span>Mod</span></div>
+        <a class="enter-btn" href="../index.html#blog"><span>看更多文章</span><span class="enter-arrow">→</span></a>
+      </div>
+    </article>
+  </main>
+</body>
+</html>
