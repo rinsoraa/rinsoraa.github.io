@@ -61,7 +61,7 @@ window.RINSORA_PROJECTS = {
         "GitHub",
         "rinsoraa"
       ],
-      "icon": "✦",
+      "icon": "📦",
       "date": "2026.09.21"
     }
   ]
