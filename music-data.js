@@ -37,6 +37,15 @@ window.RINSORA_MUSIC = {
       "src": "assets/music/shelter.mp3",
       "lrc": "",
       "date": "2026-09-21"
+    },
+    {
+      "id": "m-muashb2d",
+      "title": "欢迎来到空凛的小窝~",
+      "artist": "Rinsora",
+      "cover": "assets/music/m-muashb2d-cover.png",
+      "src": "assets/music/m-muashb2d.ogg",
+      "lrc": "",
+      "date": "2026-09-21"
     }
   ]
 };
