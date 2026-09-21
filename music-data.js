@@ -37,6 +37,15 @@ window.RINSORA_MUSIC = {
       "src": "assets/music/shelter.mp3",
       "lrc": "",
       "date": "2026-09-21"
+    },
+    {
+      "id": "i-love-you-so",
+      "title": "I Love You So",
+      "artist": "The Walters",
+      "cover": "assets/music/i-love-you-so-cover.png",
+      "src": "assets/music/i-love-you-so.mp3",
+      "lrc": "[00:00.00]I Love You So - The Walters\n[00:13.65]I just need someone in my life to give it structure\n[00:19.55]To handle all the selfish ways I'd spend my time without her\n[00:26.07]You're everything I want but I can't deal with all your lovers\n[00:32.19]You're saying I'm the one but it's your actions that speak louder\n[00:38.69]Giving me love when you are down and need another\n[00:44.83]I've got to get away and let you go I've got to get over\n[00:51.21]But I love you so\n[00:57.81]I love you so\n[01:04.03]I love you so\n[01:10.45]I love you so\n[01:14.61]I'm gonna pack my things and leave you behind\n[01:21.02]This feeling's old and I know that I've made up my mind\n[01:27.32]I hope you feel what I felt when you shattered my soul\n[01:33.56]'Cause you were cruel and I'm a fool\n[01:37.19]So please let me go\n[01:41.88]But I love you so\n[01:45.45]Please let me go\n[01:48.43]I love you so\n[01:51.40]Please let me go\n[01:54.55]I love you so\n[01:58.06]Please let me go\n[02:00.91]I love you so",
+      "date": "2026-09-21"
     }
   ]
 };
