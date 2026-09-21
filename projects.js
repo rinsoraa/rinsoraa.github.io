@@ -161,11 +161,29 @@
       '</li>';
   }
 
+  /* -------------------------------------------------- 排序规则 ---
+     全站统一的「最新在前」：
+       ① 先比 date（YYYY.MM.DD 是定宽写法，直接字符串倒排就等于按时间倒排）
+       ② 日期一样就看它在 items 数组里靠不靠后 —— 编辑台新增项目是 push 追加的，
+          所以数组里越靠后的越新
+     首页的「最新项目」和项目展示页都调这个函数，别在两处各写一份排序。
+     不直接改 items 的顺序：数据文件保持追加顺序，排序只在渲染时发生。 */
+  function newestFirst(list) {
+    return (list || [])
+      .map(function (it, i) { return { it: it, i: i }; })
+      .sort(function (a, b) {
+        var d = String(b.it.date || '').localeCompare(String(a.it.date || ''));
+        return d !== 0 ? d : (b.i - a.i);
+      })
+      .map(function (x) { return x.it; });
+  }
+
   w.RinsoraProjects = {
     DATA_PATH: DATA_PATH, HEADER: HEADER, DEFAULT_ICON: DEFAULT_ICON,
     esc: esc, today: today,
     parse: parse, serialize: serialize, cleanItem: cleanItem,
-    slugId: slugId, read: read, itemHtml: itemHtml
+    slugId: slugId, read: read, itemHtml: itemHtml,
+    newestFirst: newestFirst
   };
 
   /* ================================================== 首页部分 ====
@@ -193,7 +211,8 @@
     return data.categories.map(function (name) {
       return {
         name: name,
-        items: data.items.filter(function (it) { return it.category === name; })
+        /* 分类内部再按「最新在前」排一遍：最近上传的项目排在这个分类的最上面 */
+        items: newestFirst(data.items.filter(function (it) { return it.category === name; }))
       };
     }).filter(function (g) { return g.items.length > 0; });   /* 空分类不显示 */
   }

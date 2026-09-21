@@ -13,17 +13,39 @@
   --shadow:0 22px 60px rgba(180,120,160,.18);
   --radius:28px;
   --ease:cubic-bezier(.2,.8,.2,1);
+
+  /* ------------------------------ 亚克力（Acrylic）材质 ----
+     参考 www.xinghuisama.top 的玻璃卡片做法，四个要素缺一不可：
+       ① 不透明度压得很低的底色（.46 左右，才能透出背景那几团色雾）
+       ② backdrop-filter 把背后的东西真正糊掉（不是单纯半透明）
+       ③ 1px 亮边 + 顶部内高光 —— 这道高光是"亚克力"和"普通半透明块"的分水岭
+       ④ 柔和外投影，让卡片从背景上"浮"起来
+     底色刻意比方块实心的做法浅，所以文字对比度靠卡片下方的背景够亮来兜底。 */
+  --acr:rgba(255,255,255,.46);        /* 卡片主体 */
+  --acr-2:rgba(255,255,255,.32);      /* 卡片里的小块（项目行 / 标签） */
+  --acr-h:rgba(255,255,255,.70);      /* 悬停态底色 */
+  --acr-float:rgba(255,255,255,.76);  /* 浮在内容上的小件（导航项 / 提示） */
+  --acr-solid:rgba(255,255,255,.82);  /* 需要看清文字的浮层（弹窗） */
+  --acr-bd:rgba(255,255,255,.62);     /* 主边 */
+  --acr-bd2:rgba(255,255,255,.40);    /* 次级元素的边 */
+  --acr-hi:rgba(255,255,255,.58);     /* 顶部内高光 */
+  --acr-blur:22px;
+  --acr-sat:1.5;
+  --acr-sh:0 18px 44px rgba(180,120,160,.16);
+
   /* 布局变量：歌词栏要跟内容区对齐，所以两侧留白和内容区共用同一套数字 */
   --rail:220px;          /* 左侧导航栏宽度（内容区 margin-left） */
   --cpad:50px;           /* 内容区左右内边距 */
   --bar-h:96px;          /* 底部歌词栏高度 */
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
+/* html 也铺一层底色：切换主题时视口边缘（回弹、超宽屏）不会漏出白底 */
+html{scroll-behavior:smooth;background:#fff7fb}
+html.night{background:#241c2f}
 body{margin:0;min-height:100vh;color:var(--ink);font-family:"HarmonyOS Sans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:linear-gradient(135deg,#fff7fb 0%,#fff3dd 48%,#f5eeff 100%);overflow-x:hidden}
 button,input{font:inherit}
 button{border:0;color:inherit;cursor:pointer}
-body.night{--ink:#f4eaf3;--muted:#c3b3c7;--white:rgba(42,30,54,.70);--white2:rgba(42,30,54,.48);background:linear-gradient(135deg,#21192b,#30273c 50%,#1d2934)}
+body.night{--ink:#f4eaf3;--muted:#c3b3c7;--white:rgba(42,30,54,.70);--white2:rgba(42,30,54,.48);background:linear-gradient(135deg,#21192b,#30273c 50%,#1d2934);--acr:rgba(40,31,52,.50);--acr-2:rgba(255,255,255,.07);--acr-h:rgba(255,255,255,.13);--acr-float:rgba(52,40,64,.80);--acr-solid:rgba(38,29,48,.88);--acr-bd:rgba(255,255,255,.13);--acr-bd2:rgba(255,255,255,.08);--acr-hi:rgba(255,255,255,.10);--acr-blur:24px;--acr-sat:1.25;--acr-sh:0 20px 48px rgba(8,4,16,.44)}
 .screen-grain{position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:20;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E")}
 .bg-decor{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
 /* 盖在装饰色块之上的一层磨砂玻璃：把背景那几团渐晕糊成柔和的色雾，
@@ -31,10 +53,29 @@ body.night{--ink:#f4eaf3;--muted:#c3b3c7;--white:rgba(42,30,54,.70);--white2:rgb
 .bg-frost{
   position:fixed;inset:0;z-index:1;pointer-events:none;
   background:rgba(255,255,255,.06);
-  backdrop-filter:blur(34px) saturate(1.2);
-  -webkit-backdrop-filter:blur(34px) saturate(1.2);
+  backdrop-filter:blur(34px) saturate(1.25);
+  -webkit-backdrop-filter:blur(34px) saturate(1.25);
+  /* ★ 修「切主题时毛玻璃短暂失效」的关键一行：
+     不加这句的话，Chromium 会在重绘时把这个模糊层丢掉再重建，
+     于是看起来就是「毛玻璃先消失 → 切成夜间 → 毛玻璃再回来」。
+     参考站也是给所有 backdrop-blur-* 元素挂了 will-change 才稳的。 */
+  will-change:backdrop-filter;
 }
 body.night .bg-frost{background:rgba(18,12,26,.14)}
+
+/* 所有挂了 backdrop-filter 的表面都提前声明 will-change，
+   让浏览器常驻一个合成层，切主题 / 滚动时不会掉模糊（见上面 .bg-frost 的说明）。 */
+.bg-frost,.card,.glass,.pt-group,.pt-link,.recent-card,.mp-shell,.mm-card,.mm-mask,
+.dock-btn,.radial-item,.lyricbar,.side-rail{will-change:backdrop-filter}
+
+/* 老浏览器（不支持 backdrop-filter）把亚克力退回实底，别让文字糊在背景上 */
+@supports not ((backdrop-filter:blur(4px)) or (-webkit-backdrop-filter:blur(4px))){
+  .card,.glass,.pt-link,.recent-card,.dock-btn,.radial-item,.mm-card,.pt-group{
+    background:rgba(255,255,255,.9)
+  }
+  body.night .card,body.night .glass,body.night .pt-link,body.night .recent-card,
+  body.night .mm-card,body.night .pt-group{background:rgba(38,29,48,.92)}
+}
 .blob{position:absolute;border-radius:50%;filter:blur(10px);opacity:.48;animation:float 11s ease-in-out infinite alternate}
 .blob-a{width:360px;height:360px;left:-100px;top:-100px;background:radial-gradient(circle at 40% 35%,#ffd0e6,#ffc0a8 70%,transparent 72%)}
 .blob-b{width:420px;height:420px;right:-120px;top:14%;background:radial-gradient(circle at 50% 40%,#ffeaa0,#dac8ff 72%,transparent 74%);animation-delay:-3s}
@@ -43,7 +84,14 @@ body.night .bg-frost{background:rgba(18,12,26,.14)}
 .s1{left:10%;top:24%}.s2{right:16%;top:30%;animation-delay:1s}.s3{left:32%;top:12%;animation-delay:2s}.s4{right:34%;bottom:16%;animation-delay:.5s}
 @keyframes float{to{transform:translate3d(0,28px,0) scale(1.04)}}
 @keyframes twinkle{0%,100%{transform:scale(.8) rotate(0deg);opacity:.35}50%{transform:scale(1.15) rotate(12deg);opacity:1}}
-.glass,.card{background:var(--white);border:1px solid rgba(255,255,255,.75);box-shadow:var(--shadow);backdrop-filter:blur(26px) saturate(1.12);-webkit-backdrop-filter:blur(26px) saturate(1.12)}
+/* 卡片 = 亚克力：底色 + 真模糊 + 1px 亮边 + 顶部内高光（那两道 inset 就是"玻璃厚度"） */
+.glass,.card{
+  background:var(--acr);
+  border:1px solid var(--acr-bd);
+  box-shadow:var(--acr-sh),inset 0 1px 0 var(--acr-hi),inset 0 -1px 0 rgba(255,255,255,.10);
+  backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
+}
 .welcome-screen{position:relative;z-index:30;min-height:100vh;display:grid;place-items:center;padding:28px;transition:opacity .7s var(--ease),transform .9s var(--ease),visibility .7s}
 .welcome-screen.hidden{position:fixed;inset:0;opacity:0;transform:scale(1.03) translateY(-30px);visibility:hidden;pointer-events:none}
 .welcome-card{width:min(760px,100%);padding:48px 54px 42px;border-radius:42px;text-align:center;position:relative;overflow:hidden}
@@ -70,9 +118,9 @@ h1 span{display:block;font-size:.4em;line-height:1.25;color:#ef87ad;letter-spaci
 .content{margin-left:220px;padding:50px 50px 180px;max-width:1320px}.topbar{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px}.topbar h2{font-size:36px;margin:0;letter-spacing:-.04em}.top-actions{display:flex;gap:8px}.soft-btn{min-height:34px;cursor:pointer}.section-stack{position:relative}.page-section{display:none;animation:sectionIn .55s var(--ease)}.page-section.active{display:block}@keyframes sectionIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 .hero-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,.8fr);gap:18px}.card{border-radius:var(--radius);padding:26px;position:relative}.intro-card{min-height:310px}.intro-card h3{font-size:30px;margin:0 0 16px;letter-spacing:-.03em}.intro-card h3 span{color:#ed85ae}.intro-card p:not(.section-kicker){line-height:1.9;font-size:14px;color:var(--muted);max-width:690px}.intro-card .lead{font-size:17px!important;color:var(--ink)!important}.sticker{position:absolute;right:20px;top:18px;transform:rotate(8deg);background:#ffe48a;color:#7c5a4a;padding:7px 10px;border-radius:10px;font-size:10px;font-weight:1000;box-shadow:0 7px 14px rgba(208,157,70,.18)}.tag-row,.project-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:20px}.tag-row span,.project-tags span{font-size:10px;background:rgba(255,255,255,.64);border:1px solid rgba(255,255,255,.8);padding:6px 9px;border-radius:999px;color:#96788f}.mini-card{display:flex;flex-direction:column;gap:18px}.profile-chip{display:inline-flex;gap:8px;align-items:center;font-weight:900;font-size:12px}.chip-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:10px;background:#ffd6e6;color:#ec86ad}.mini-card dl{margin:0;display:grid;gap:12px}.mini-card dl div{display:flex;justify-content:space-between;gap:12px;font-size:12px;border-bottom:1px dashed rgba(177,145,163,.25);padding-bottom:10px}.mini-card dt{font-size:9px;letter-spacing:.15em;color:#ac93a8}.mini-card dd{margin:0;text-align:right;color:var(--muted)}.online-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#8bddaa;margin-right:4px}.quote{margin-top:auto;border-radius:16px;padding:12px 14px;background:linear-gradient(135deg,rgba(255,227,239,.7),rgba(255,243,194,.58));font-size:11px;line-height:1.8;color:#8c6f80}.section-heading{display:flex;align-items:center;gap:10px;margin:28px 0 14px}.section-heading>span:first-child{color:#ee86ad}.section-heading h3{margin:0;font-size:18px}.section-heading .line{height:1px;flex:1;background:linear-gradient(90deg,rgba(221,179,198,.4),transparent)}.now-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.now-card{padding:20px;min-height:130px;display:flex;flex-direction:column;position:relative}.now-card b{font-size:14px}.now-card span{font-size:11px;color:var(--muted);margin-top:9px;max-width:70%;line-height:1.6}.now-card i{position:absolute;right:18px;bottom:16px;font-style:normal;font-size:32px;filter:drop-shadow(0 6px 8px rgba(130,100,120,.15))}
 .blog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.blog-card{min-height:230px}.date{display:inline-flex;padding:6px 9px;border-radius:999px;background:#fff0a9;font-size:9px;font-weight:900;color:#826848}.blog-card h4{font-size:19px;line-height:1.45;margin:18px 0 10px}.blog-card p{font-size:12px;color:var(--muted);line-height:1.8}.blog-card a{display:inline-block;margin-top:8px;color:#df75a5;font-size:10px;font-weight:900;text-decoration:none}
-body.night .card,body.night .glass{border-color:rgba(255,255,255,.08)}
+/* 卡片夜间的底色 / 边 / 阴影已经跟着 --acr-* 变量走了（见 :root 与 body.night），这里不再重复覆盖 */
 @media (max-width:1050px){.side-rail{width:175px}.content{margin-left:175px;padding:38px 28px 180px}.hero-grid{grid-template-columns:1fr}.now-grid,.blog-grid{grid-template-columns:1fr 1fr}}
-@media (max-width:760px){.welcome-card{padding:34px 18px 30px;border-radius:30px}.welcome-bio{font-size:13px}.side-rail{position:sticky;top:0;bottom:auto;width:100%;height:auto;padding:12px 18px;flex-direction:row;align-items:center;justify-content:space-between;background:rgba(255,255,255,.48);backdrop-filter:blur(14px)}.avatar-nav-wrap{width:64px;height:64px}.avatar-hint,.side-name small,.side-status{display:none}.avatar-sidebar{width:56px;height:56px}.radial-nav{left:24px;top:18px;width:300px;height:140px}.avatar-nav-wrap:hover .radial-item:nth-child(1),.avatar-nav-wrap.open .radial-item:nth-child(1){transform:translate(8px,-8px) scale(.92)}.avatar-nav-wrap:hover .radial-item:nth-child(2),.avatar-nav-wrap.open .radial-item:nth-child(2){transform:translate(78px,36px) scale(.92)}.avatar-nav-wrap:hover .radial-item:nth-child(3),.avatar-nav-wrap.open .radial-item:nth-child(3){transform:translate(150px,-8px) scale(.92)}.radial-item{width:90px;height:48px}.side-name{font-size:17px;margin:0}.content{margin-left:0;padding:24px 18px 180px}.topbar h2{font-size:28px}.hero-grid,.now-grid,.blog-grid{grid-template-columns:1fr}}
+@media (max-width:760px){.welcome-card{padding:34px 18px 30px;border-radius:30px}.welcome-bio{font-size:13px}.side-rail{position:sticky;top:0;bottom:auto;width:100%;height:auto;padding:12px 18px;flex-direction:row;align-items:center;justify-content:space-between;background:var(--acr);border-bottom:1px solid var(--acr-bd2);backdrop-filter:blur(18px) saturate(var(--acr-sat));-webkit-backdrop-filter:blur(18px) saturate(var(--acr-sat))}.avatar-nav-wrap{width:64px;height:64px}.avatar-hint,.side-name small,.side-status{display:none}.avatar-sidebar{width:56px;height:56px}.radial-nav{left:24px;top:18px;width:300px;height:140px}.avatar-nav-wrap:hover .radial-item:nth-child(1),.avatar-nav-wrap.open .radial-item:nth-child(1){transform:translate(8px,-8px) scale(.92)}.avatar-nav-wrap:hover .radial-item:nth-child(2),.avatar-nav-wrap.open .radial-item:nth-child(2){transform:translate(78px,36px) scale(.92)}.avatar-nav-wrap:hover .radial-item:nth-child(3),.avatar-nav-wrap.open .radial-item:nth-child(3){transform:translate(150px,-8px) scale(.92)}.radial-item{width:90px;height:48px}.side-name{font-size:17px;margin:0}.content{margin-left:0;padding:24px 18px 180px}.topbar h2{font-size:28px}.hero-grid,.now-grid,.blog-grid{grid-template-columns:1fr}}
 
 /* 博客卡片：整卡可点 + 悬停反馈 */
 .blog-card{transition:transform .3s var(--ease),box-shadow .3s var(--ease)}
@@ -166,17 +214,22 @@ body.night .card-tool:hover{background:rgba(72,54,84,.97);color:#f7b8d4}
   background:rgba(255,255,255,.5);border:1px dashed rgba(199,163,184,.42);
 }
 
-/* --- 分类组 --- */
+/* --- 分类组：亚克力卡片，每个大分类只换一点色相（--tint），
+       底色和模糊统一走 --acr，这样夜间模式不用再单独写一套背景 --- */
 .pt-group{
+  --tint:rgba(255,208,226,.20);
   border-radius:var(--radius);padding:16px 20px 18px;
-  background:linear-gradient(120deg,rgba(255,235,243,.74),rgba(255,255,255,.6));
-  border:1px solid rgba(255,255,255,.8);
+  background:linear-gradient(120deg,var(--tint),var(--acr));
+  border:1px solid var(--acr-bd);
+  box-shadow:var(--acr-sh),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
   transition:box-shadow .3s var(--ease);
 }
-.pt-group.pt-cat-1{background:linear-gradient(120deg,rgba(255,248,215,.8),rgba(255,255,255,.6))}
-.pt-group.pt-cat-2{background:linear-gradient(120deg,rgba(237,232,255,.8),rgba(255,255,255,.6))}
-.pt-group.pt-cat-3{background:linear-gradient(120deg,rgba(226,246,238,.8),rgba(255,255,255,.6))}
-.pt-group:hover{box-shadow:0 20px 44px rgba(180,120,160,.14)}
+.pt-group.pt-cat-1{--tint:rgba(255,229,141,.24)}
+.pt-group.pt-cat-2{--tint:rgba(205,191,255,.24)}
+.pt-group.pt-cat-3{--tint:rgba(188,239,227,.24)}
+.pt-group:hover{box-shadow:0 24px 52px rgba(180,120,160,.18),inset 0 1px 0 var(--acr-hi)}
 
 /* --- 分类标题（点一下折叠 / 展开） --- */
 .pt-head{
@@ -213,12 +266,18 @@ body.night .card-tool:hover{background:rgba(72,54,84,.97);color:#f7b8d4}
 .pt-link{
   display:flex;gap:13px;align-items:flex-start;
   padding:12px 14px;border-radius:18px;
-  background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.86);
+  background:var(--acr-2);border:1px solid var(--acr-bd2);
+  box-shadow:inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(calc(var(--acr-blur) - 8px)) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(calc(var(--acr-blur) - 8px)) saturate(var(--acr-sat));
   color:inherit;text-decoration:none;position:relative;
   transition:transform .26s var(--ease),box-shadow .26s var(--ease),background .22s;
 }
 a.pt-link{cursor:pointer}
-.pt-link:hover{transform:translateX(4px);background:#fff;box-shadow:0 16px 34px rgba(180,120,160,.18)}
+.pt-link:hover{
+  transform:translateX(4px);background:var(--acr-h);
+  box-shadow:0 16px 34px rgba(180,120,160,.18),inset 0 1px 0 var(--acr-hi);
+}
 .pt-icon{
   width:36px;height:36px;flex:0 0 auto;border-radius:13px;display:grid;place-items:center;
   font-size:17px;line-height:1;background:rgba(255,255,255,.82);
@@ -236,11 +295,15 @@ a.pt-link{cursor:pointer}
 
 /* 夜间模式 */
 body.night .pt-empty{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.16)}
-body.night .pt-group{background:rgba(38,29,48,.72);border-color:rgba(255,255,255,.08)}
+/* 分类组夜里只把色相压下去，底色交给 --acr（所以这里不再写 background 的实底） */
+body.night .pt-group{--tint:rgba(255,255,255,.05)}
+body.night .pt-group.pt-cat-1{--tint:rgba(255,229,141,.07)}
+body.night .pt-group.pt-cat-2{--tint:rgba(205,191,255,.09)}
+body.night .pt-group.pt-cat-3{--tint:rgba(188,239,227,.07)}
 body.night .pt-title,body.night .pt-name{color:#fff4fb}
 body.night .pt-count,body.night .pt-icon{background:rgba(255,255,255,.1);color:#e9cede}
-body.night .pt-link{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
-body.night .pt-link:hover{background:rgba(255,255,255,.13)}
+body.night .pt-link{background:var(--acr-2);border-color:var(--acr-bd2)}
+body.night .pt-link:hover{background:var(--acr-h)}
 body.night .pt-tags span{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.12);color:#dcc0d2}
 
 /* 窄屏 */
@@ -295,13 +358,15 @@ body.lyrics-on .mplayer-float{bottom:124px}
 .mplayer:focus-within .mp-shell,
 .mplayer.pinned .mp-shell{
   width:100%;padding:15px 15px 13px;border-radius:24px;
-  background:rgba(255,255,255,.8);border-color:rgba(255,255,255,.88);
-  box-shadow:0 20px 55px rgba(162,114,152,.2);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  background:var(--acr);border-color:var(--acr-bd);
+  box-shadow:0 20px 55px rgba(162,114,152,.2),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
 }
+/* 播放器里是一串歌名，底色比普通卡片再实一点，晚上才看得清 */
 body.night .mplayer:hover .mp-shell,
 body.night .mplayer:focus-within .mp-shell,
-body.night .mplayer.pinned .mp-shell{background:rgba(31,24,41,.84);border-color:rgba(255,255,255,.12)}
+body.night .mplayer.pinned .mp-shell{background:rgba(38,29,50,.66);border-color:var(--acr-bd)}
 body.night .mp-shell{box-shadow:0 10px 24px rgba(10,6,14,.4)}
 
 /* ---------- 封面唱片（播放时自转） ---------- */
@@ -436,13 +501,16 @@ body.night .mp-track-del:hover{background:rgba(255,255,255,.2)}
    ============================================================ */
 .lyricbar{
   /* 不再从左到右占满整个底部：紧贴左侧导航栏外侧开始，
-     宽度与内容区（.content）对齐，右上角收个圆角当成一块玻璃托盘 */
+     宽度与内容区（.content）对齐，两个上角都收圆角当成一块玻璃托盘。
+     （底边贴着视口，下圆角看不见，所以写 0） */
   position:fixed;left:var(--rail);bottom:0;z-index:11;
   width:min(1320px,calc(100% - var(--rail)));
   height:0;opacity:0;pointer-events:none;overflow:hidden;
-  border-top:1px solid transparent;border-radius:0 24px 0 0;
-  background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,251,253,.84) 34%,rgba(255,250,252,.95) 100%);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid transparent;border-radius:24px 24px 0 0;
+  background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,251,253,.74) 34%,rgba(255,250,252,.92) 100%);
+  backdrop-filter:blur(18px) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(18px) saturate(var(--acr-sat));
+  will-change:backdrop-filter;
   transition:height .55s var(--ease),opacity .5s var(--ease),border-color .5s var(--ease);
 }
 body.lyrics-on .lyricbar{height:var(--bar-h);opacity:1;pointer-events:auto;border-top-color:rgba(255,255,255,.75)}
@@ -523,13 +591,15 @@ body.night .lb-line.active{color:#f2dbe8}
 .mm-card{
   width:min(620px,100%);max-height:calc(100vh - 48px);overflow:auto;
   padding:24px 26px 20px;border-radius:30px;
-  background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.9);
-  box-shadow:0 32px 80px rgba(120,80,120,.28);
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  /* 弹窗里全是输入框，底色用 --acr-solid（比普通卡片实），但依然是同一种亚克力 */
+  background:var(--acr-solid);border:1px solid var(--acr-bd);
+  box-shadow:0 32px 80px rgba(120,80,120,.28),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(26px) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(26px) saturate(var(--acr-sat));
   transform:translateY(26px) scale(.97);transition:transform .42s var(--ease);
 }
 .mm-mask.open .mm-card{transform:none}
-body.night .mm-card{background:rgba(38,29,48,.95);border-color:rgba(255,255,255,.12)}
+body.night .mm-card{background:var(--acr-solid);border-color:var(--acr-bd)}
 
 .mm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
 .mm-kicker{margin:0 0 5px;font-size:10px;font-weight:900;letter-spacing:.18em;color:#d987a8}
@@ -623,8 +693,8 @@ body.night .mm-btn.mm-primary{background:linear-gradient(100deg,#ff94bc,#ffc46b)
 @media (max-width:1050px){:root{--rail:175px;--cpad:28px}}
 @media (max-width:760px){
   :root{--rail:0px;--cpad:0px}
-  /* 手机端歌词栏本来就不该有左缩进和圆角，恢复整条贴底 */
-  .lyricbar{left:0;width:100%;border-radius:0}
+  /* 手机端歌词栏整条贴底，不再有左缩进（上沿两个圆角保留，和托盘造型一致） */
+  .lyricbar{left:0;width:100%;border-radius:20px 20px 0 0}
 }
 
 
@@ -643,15 +713,16 @@ body.night .mm-btn.mm-primary{background:linear-gradient(100deg,#ff94bc,#ffc46b)
 .dock-btn{
   display:inline-flex;align-items:center;gap:0;
   height:42px;min-width:42px;padding:0 12px;border-radius:999px;
-  background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9);
+  background:var(--acr);border:1px solid var(--acr-bd);
   color:#b083a3;font-size:12px;font-weight:900;
-  box-shadow:0 12px 28px rgba(176,120,150,.16);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  box-shadow:var(--acr-sh),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(18px) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(18px) saturate(var(--acr-sat));
   transition:transform .3s var(--ease),background .25s,color .25s,
              box-shadow .3s var(--ease),border-color .25s;
 }
-.dock-btn:hover{transform:translateY(-3px) scale(1.05);background:#fff;color:#d97ba8;
-  box-shadow:0 18px 38px rgba(226,140,180,.3);border-color:#fff}
+.dock-btn:hover{transform:translateY(-3px) scale(1.05);background:var(--acr-h);color:#d97ba8;
+  box-shadow:0 18px 38px rgba(226,140,180,.3),inset 0 1px 0 var(--acr-hi);border-color:rgba(255,255,255,.9)}
 .dock-btn:active{transform:translateY(-1px) scale(.96)}
 .dock-btn:focus-visible{outline:2px solid rgba(238,134,173,.7);outline-offset:2px}
 
@@ -677,19 +748,32 @@ body.night .dock-btn .ic-moon{opacity:0;transform:rotate(110deg) scale(.35)}
   max-width:96px;opacity:1;margin-left:8px;
 }
 
-body.night .dock-btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:#d7c0ce}
-body.night .dock-btn:hover{background:rgba(255,255,255,.2);color:#f7b8d4;border-color:rgba(255,255,255,.28)}
+body.night .dock-btn{background:var(--acr);border-color:var(--acr-bd);color:#d7c0ce}
+body.night .dock-btn:hover{background:var(--acr-h);color:#f7b8d4;border-color:rgba(255,255,255,.28)}
 .dock-btn.off{opacity:.55}
 
 
 /* ============================================================
-   夜间模式的左侧导航栏
-   （之前只做了内容区的夜间配色，左上角那套导航还是白天的白底，
-     夜里看就特别扎眼）
+   左侧导航栏（含夜间配色）
+   ------------------------------------------------------------
+   导航项是浮在内容上的小件，用 --acr-float（比普通卡片实一档）
+   保住 11px 小字的可读性；底色 / 亮边 / 顶部高光仍来自同一套亚克力变量。
+   注意 .active 要在后面重新声明一次 —— 否则会被上面的 .radial-item 盖掉渐变。
    ============================================================ */
+.radial-item{
+  background:var(--acr-float);border:1px solid var(--acr-bd2);
+  box-shadow:0 10px 25px rgba(176,120,150,.16),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(16px) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(16px) saturate(var(--acr-sat));
+}
+.radial-item.active{
+  background:linear-gradient(135deg,rgba(255,244,248,.92),rgba(255,247,222,.92));
+  border-color:var(--acr-bd);
+}
 body.night .radial-item{
-  background:rgba(52,40,64,.92);color:#f0e2ec;
-  box-shadow:0 10px 26px rgba(8,4,14,.45);
+  background:var(--acr-float);color:#f0e2ec;
+  border-color:var(--acr-bd2);
+  box-shadow:0 10px 26px rgba(8,4,14,.45),inset 0 1px 0 var(--acr-hi);
 }
 body.night .radial-item span{color:#f7a8c9}
 body.night .radial-item.active{
@@ -701,7 +785,7 @@ body.night .side-name small{color:#b79fb4}
 body.night .side-status{color:#b09cb2}
 body.night .sticker{background:#6d5540;color:#ffe6b8}
 @media (max-width:760px){
-  body.night .side-rail{background:rgba(30,22,40,.62)}
+  body.night .side-rail{background:rgba(30,22,40,.70);border-bottom-color:var(--acr-bd2)}
 }
 
 
@@ -753,11 +837,16 @@ body.night .click-ripple{
 .recent-card{
   display:block;position:relative;text-decoration:none;color:inherit;
   border-radius:22px;padding:17px 18px 15px;
-  background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.86);
-  box-shadow:0 12px 30px rgba(180,120,160,.1);
+  background:var(--acr);border:1px solid var(--acr-bd);
+  box-shadow:var(--acr-sh),inset 0 1px 0 var(--acr-hi);
+  backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
+  -webkit-backdrop-filter:blur(var(--acr-blur)) saturate(var(--acr-sat));
   transition:transform .3s var(--ease),box-shadow .3s var(--ease),background .25s;
 }
-.recent-card:hover{transform:translateY(-4px);background:#fff;box-shadow:0 24px 52px rgba(180,120,160,.24)}
+.recent-card:hover{
+  transform:translateY(-4px);background:var(--acr-h);
+  box-shadow:0 24px 52px rgba(180,120,160,.24),inset 0 1px 0 var(--acr-hi);
+}
 .rc-kind{
   display:inline-flex;align-items:center;gap:5px;
   font-size:9px;font-weight:900;letter-spacing:.14em;
@@ -777,8 +866,8 @@ body.night .click-ripple{
   transition:letter-spacing .25s var(--ease);
 }
 .recent-card:hover .recent-more{letter-spacing:.06em}
-body.night .recent-card{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
-body.night .recent-card:hover{background:rgba(255,255,255,.13)}
+body.night .recent-card{background:var(--acr);border-color:var(--acr-bd)}
+body.night .recent-card:hover{background:var(--acr-h)}
 body.night .rc-kind{background:rgba(243,166,197,.18);color:#f7b8d4}
 body.night .rc-kind.k-proj{background:rgba(164,148,255,.2);color:#c8bcff}
 body.night .rc-title{color:#fff4fb}

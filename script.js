@@ -104,6 +104,9 @@ try { reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches; } c
 
 function applyTheme(night,persist){
   document.body.classList.toggle('night',night);
+  /* html 上也挂一份：html 的底色只是给视口边缘（超宽屏、橡皮筋回弹）兜底的，
+     不跟着一起切的话，夜里会在边缘漏出一条白边 */
+  document.documentElement.classList.toggle('night',night);
   if(themeLabel) themeLabel.textContent = night ? '日间模式' : '夜间模式';
   if(themeBtn) themeBtn.title = night ? '切换日间模式' : '切换夜间模式';
   if(persist){ try{ localStorage.setItem('rinsora-theme',night?'night':'light'); }catch(e){} }
@@ -113,12 +116,35 @@ function toggleTheme(){
   const next = !document.body.classList.contains('night');
   if(!document.startViewTransition || reduceMotion){ applyTheme(next,true); return; }
 
+  /* 主题切换只允许落一次（正常路径走过渡回调，兜底路径走定时器） */
+  let applied = false;
+  const applyOnce = ()=>{ if(applied) return; applied = true; applyTheme(next,true); };
+
   const r = themeBtn.getBoundingClientRect();
   const x = r.left + r.width/2, y = r.top + r.height/2;
   /* 半径取到最远的那个角，保证圆能盖住整屏 */
   const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 28;
 
-  const vt = document.startViewTransition(()=>applyTheme(next,true));
+  /* ★ 更新回调里等两帧再 resolve。
+     浏览器是等这个回调 resolve 之后才去拍「新」快照的；如果一改完类名就返回，
+     快照会拍到「毛玻璃层还没按新配色重新合成」的那一帧 —— 表现出来就是
+     「毛玻璃先消失 → 切成夜间 → 毛玻璃再回来」。
+     等两帧 = 等它重新合成完，新快照里的毛玻璃就是连续的，不再有中断。
+     （CSS 里给这些层加的 will-change:backdrop-filter 是第二道保险；rAF 万一被
+      节流，就用一个定时器兜底放行，绝不让过渡永远卡在半路。） */
+  const vt = document.startViewTransition(()=>new Promise(done=>{
+    applyOnce();
+    let fin = false;
+    const end = ()=>{ if(!fin){ fin = true; done(); } };
+    requestAnimationFrame(()=>requestAnimationFrame(end));
+    setTimeout(end,150);
+  }));
+
+  /* ★ 兜底：某些环境（无头浏览器、虚拟时间）里视图过渡的回调压根不会执行，
+     那样"点一下夜间按钮"就会毫无反应。所以再挂一个定时器，最迟 130ms 一定切过去。
+     正常浏览器里回调远早于此，这一下是空操作。 */
+  setTimeout(applyOnce,130);
+
   vt.ready.then(()=>{
     document.documentElement.animate(
       { clipPath: [
@@ -157,9 +183,14 @@ function readRecentPosts(limit){
 function readRecentProjects(limit){
   const raw = window.RINSORA_PROJECTS || {};
   const items = Array.isArray(raw.items) ? raw.items.slice() : [];
-  /* 日期是 YYYY.MM.DD 的定宽写法，直接按字符串倒排就是最新的在前 */
-  items.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  return items.slice(0,limit);
+  /* 排序规则统一放在 projects.js 里（window.RinsoraProjects.newestFirst）：
+     按 date 倒排，日期相同就看它在 items 里靠不靠后 —— 编辑台新增是 push 追加的，
+     所以数组里越靠后越新。首页「最新项目」和项目展示页必须共用同一套，别各写一份。
+     万一 projects.js 没加载成功，退回一个只比日期的简单排序兜底。 */
+  const newestFirst = (window.RinsoraProjects && window.RinsoraProjects.newestFirst) ||
+    ((list)=>list.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))));
+  /* 返回顺序 = 渲染顺序 = 从左往右，所以最新的排最左 */
+  return newestFirst(items).slice(0,limit);
 }
 
 function buildRecent(){

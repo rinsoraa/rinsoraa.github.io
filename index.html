@@ -23,6 +23,8 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- 主题先于首屏绘制落类，避免夜间用户刷新时闪一下白底（html 那份是给视口边缘兜底的） -->
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</script>
   <div class="bg-decor" aria-hidden="true">
     <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
     <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
