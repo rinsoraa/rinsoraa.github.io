@@ -95,8 +95,12 @@ html.pal-mint,body.pal-mint{
     linear-gradient(135deg,#f5fffb,#fff9ea 50%,#eef6ff);
 }
 
-/* --- 夜间：只换变量，不换结构 --- */
-body.night{
+/* --- 夜间：只换变量，不换结构 ---
+   ⚠️ 必须同时挂 html.night：`html{background:var(--bg)}` 读的是 html 自己的 --bg，
+   只写在 body.night 上，夜间时 html 的底色会一直停在日间浅色 ——
+   页面过滚动 / 视口边缘就会闪一条浅粉边（html.night 本来就是为了兜这个）。
+   写法和上面的调色板一致（html.pal-x,body.pal-x）。 */
+html.night,body.night{
   --ink:#f7edf6; --muted:#c6b7c8;
   --glass:rgba(34,26,46,.62); --glass-2:rgba(255,255,255,.07);
   --glass-h:rgba(255,255,255,.13); --glass-solid:rgba(31,25,42,.92);
