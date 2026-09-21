@@ -21,15 +21,6 @@ window.RINSORA_MUSIC = {
   "version": 1,
   "tracks": [
     {
-      "id": "shelter",
-      "title": "Shelter (乐器版)",
-      "artist": "Porter Robinson & Madeon",
-      "cover": "assets/music/shelter-cover.png",
-      "src": "assets/music/shelter.mp3",
-      "lrc": "",
-      "date": "2026-09-21"
-    },
-    {
       "id": "m-muashb2d",
       "title": "欢迎来到空凛的小窝~",
       "artist": "Rinsora",
