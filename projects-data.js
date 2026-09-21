@@ -25,5 +25,18 @@ window.RINSORA_PROJECTS = {
     "Bot",
     "其他"
   ],
-  "items": []
+  "items": [
+    {
+      "id": "bilibili",
+      "name": "Bilibili直播间双屏弹幕插件",
+      "category": "Github项目",
+      "url": "https://github.com/rinsoraa/bili-danmaku-dualscreen",
+      "desc": "一个面向「双屏看直播」场景的浏览器扩展：一块屏幕全屏播放 B 站直播间画面，另一块屏幕独立、实时地显示该直播间的弹幕。",
+      "tags": [
+        "JavaScript"
+      ],
+      "icon": "📦",
+      "date": "2026.09.21"
+    }
+  ]
 };
