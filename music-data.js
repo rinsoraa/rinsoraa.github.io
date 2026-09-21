@@ -28,6 +28,15 @@ window.RINSORA_MUSIC = {
       "src": "assets/music/m-muashb2d.ogg",
       "lrc": "",
       "date": "2026-09-21"
+    },
+    {
+      "id": "shelter",
+      "title": "Shelter (乐器版)",
+      "artist": "Porter Robinson & Madeon",
+      "cover": "assets/music/shelter-cover.png",
+      "src": "assets/music/shelter.mp3",
+      "lrc": "",
+      "date": "2026-09-21"
     }
   ]
 };
