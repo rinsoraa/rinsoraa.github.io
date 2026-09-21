@@ -1,35 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffe2ef"/><stop offset="1" stop-color="#fff0b8"/></linearGradient>
-    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff8fbd"/><stop offset="1" stop-color="#f6b0d1"/></linearGradient>
-  </defs>
-  <circle cx="256" cy="256" r="250" fill="url(#bg)"/>
-  <circle cx="256" cy="269" r="154" fill="#fff7fb" opacity=".95"/>
-  <!-- ears -->
-  <path d="M136 183 C105 150 103 93 130 62 C173 96 182 133 169 181Z" fill="#ffc6dc"/>
-  <path d="M376 183 C407 150 409 93 382 62 C339 96 330 133 343 181Z" fill="#ffc6dc"/>
-  <path d="M140 140 C127 119 126 97 136 80 C156 101 161 119 155 143Z" fill="#ffe8b8"/>
-  <path d="M372 140 C385 119 386 97 376 80 C356 101 351 119 357 143Z" fill="#ffe8b8"/>
-  <!-- hair -->
-  <path d="M120 242 C100 145 152 79 256 78 C360 79 412 145 392 242 L365 355 C343 393 302 416 256 416 C210 416 169 393 147 355Z" fill="url(#hair)"/>
-  <path d="M141 190 C151 126 191 103 256 103 C321 103 361 126 371 190 C326 160 284 150 256 150 C228 150 186 160 141 190Z" fill="#ffb7d2" opacity=".85"/>
-  <!-- face -->
-  <path d="M169 219 C171 177 207 151 256 151 C305 151 341 177 343 219 L337 290 C330 352 294 381 256 381 C218 381 182 352 175 290Z" fill="#fffdfd"/>
-  <!-- bangs -->
-  <path d="M146 207 C143 158 183 119 228 116 C249 114 270 114 291 118 C337 124 368 162 365 208 C338 184 312 170 286 165 C264 160 244 161 224 166 C194 173 170 187 146 207Z" fill="#ff9dc6"/>
-  <!-- eyes -->
-  <ellipse cx="211" cy="246" rx="25" ry="31" fill="#6e566f"/><ellipse cx="301" cy="246" rx="25" ry="31" fill="#6e566f"/>
-  <ellipse cx="216" cy="238" rx="9" ry="12" fill="#fff"/><ellipse cx="306" cy="238" rx="9" ry="12" fill="#fff"/>
-  <circle cx="205" cy="262" r="5" fill="#f68cac"/><circle cx="311" cy="262" r="5" fill="#f68cac"/>
-  <!-- blush -->
-  <ellipse cx="185" cy="283" rx="30" ry="11" fill="#ffc4d9" opacity=".8"/><ellipse cx="327" cy="283" rx="30" ry="11" fill="#ffc4d9" opacity=".8"/>
-  <!-- mouth -->
-  <path d="M242 287 Q256 298 270 287 Q267 314 256 314 Q245 314 242 287Z" fill="#f38aac"/>
-  <!-- bow -->
-  <path d="M233 367 C204 346 189 357 185 383 C207 387 231 382 248 370Z" fill="#ffe28e"/>
-  <path d="M279 367 C308 346 323 357 327 383 C305 387 281 382 264 370Z" fill="#ffe28e"/>
-  <circle cx="256" cy="371" r="15" fill="#ff9dc6"/>
-  <!-- sparkle -->
-  <path d="M398 327 l7 15 15 7-15 7-7 15-7-15-15-7 15-7z" fill="#ffe37d"/>
-  <path d="M95 334 l5 11 11 5-11 5-5 11-5-11-11-5 11-5z" fill="#b9eadd"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFD6E8"/><stop offset=".55" stop-color="#FFF0B7"/><stop offset="1" stop-color="#D5C7FF"/></linearGradient>
+  <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9B78A8"/><stop offset="1" stop-color="#765B90"/></linearGradient>
+</defs>
+<rect width="256" height="256" rx="64" fill="url(#bg)"/>
+<circle cx="128" cy="132" r="84" fill="#F8E8E8"/>
+<path d="M65 115C62 72 89 43 130 43c43 0 68 32 64 74l-18-18-11 23-20-20-21 21-20-20-20 21z" fill="url(#hair)"/>
+<path d="M83 132c4-21 23-34 44-34s40 13 45 34" fill="none" stroke="#6A4F6F" stroke-width="8" stroke-linecap="round"/>
+<circle cx="100" cy="137" r="7" fill="#6A4F6F"/><circle cx="156" cy="137" r="7" fill="#6A4F6F"/>
+<path d="M117 159c7 7 20 7 27 0" fill="none" stroke="#D57E9E" stroke-width="6" stroke-linecap="round"/>
+<circle cx="84" cy="157" r="9" fill="#FFC5D9" opacity=".75"/><circle cx="172" cy="157" r="9" fill="#FFC5D9" opacity=".75"/>
+<path d="M65 99c-12-23-31-26-42-12 14-1 23 6 29 20zM191 99c12-23 31-26 42-12-14-1-23 6-29 20z" fill="#8F72A1"/>
+<path d="M101 209c14-17 41-19 56 0" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>
+<circle cx="208" cy="62" r="11" fill="#FFF"/><text x="205" y="67" font-size="16" fill="#E487AC">✦</text>
 </svg>

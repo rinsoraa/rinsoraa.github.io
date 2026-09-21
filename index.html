@@ -2,27 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#ffb6d5">
-
-  <!-- ============================================================
-       身份与标题
-       ------------------------------------------------------------
-       主身份是「空凛 / Rinsora」（人），「罐头商铺」是这个小窝的名字。
-       标题里用 · 把两者串起来，读起来是「空凛 的小窝，叫罐头商铺」，
-       不会让人以为是两个不同的站点。
-       ============================================================ -->
-  <title>空凛 · Rinsora 的小窝</title>
-  <meta name="description" content="空凛 / Rinsora 的个人小窝「罐头商铺」——记录和日常折腾。">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffd2e5">
+  <meta name="description" content="空凛 / Rinsora 的个人小窝：记录 AI、Minecraft、Web、项目、博客与日常折腾。">
   <link rel="canonical" href="https://rinsora.dpdns.org/">
-
-  <!-- 图标 -->
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-
-  <!-- 分享卡片（OG）：og:image / og:url 必须是绝对地址，
-       不然发到 QQ、微信、Discord、Telegram 里抓不到图 -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="空凛 · Rinsora 的小窝">
   <meta property="og:title" content="空凛 · Rinsora 的小窝">
@@ -34,173 +20,377 @@
   <meta name="twitter:title" content="空凛 · Rinsora 的小窝">
   <meta name="twitter:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
   <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
-
+  <title>空凛 · Rinsora 的小窝</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- 主题先于首屏绘制落类，避免夜间用户刷新时闪一下白底（html 那份是给视口边缘兜底的） -->
-  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</script>
-  <div class="bg-decor" aria-hidden="true">
-    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
-    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+<script>
+try{
+  const mode=localStorage.getItem('rinsora-theme');
+  if(mode==='night'){
+    document.documentElement.classList.add('night');
+  }
+}catch(e){}
+</script>
+
+<div class="scene" aria-hidden="true">
+  <div class="aurora aurora-a"></div>
+  <div class="aurora aurora-b"></div>
+  <div class="aurora aurora-c"></div>
+  <div class="aurora aurora-d"></div>
+  <div class="grid-floor"></div>
+  <div class="stars">
+    <span>✦</span><span>✧</span><span>·</span><span>✦</span><span>·</span><span>✧</span>
+    <span>·</span><span>✦</span><span>✧</span><span>·</span><span>✦</span><span>·</span>
   </div>
+  <div class="scene-noise"></div>
+</div>
+<div class="ambient-glow" id="ambientGlow" aria-hidden="true"></div>
+<div class="cursor-dot" id="cursorDot" aria-hidden="true"></div>
+<div class="cursor-ring" id="cursorRing" aria-hidden="true"><span>♡</span></div>
 
-  <!-- 磨砂玻璃层：盖在装饰色块上，把背景糊成柔和的色雾 -->
-  <div class="bg-frost" aria-hidden="true"></div>
+<!-- 开屏 -->
+<div class="boot-screen" id="bootScreen">
+  <div class="boot-orbit" aria-hidden="true"></div>
+  <div class="boot-card">
+    <div class="boot-mark">R</div>
+    <p class="boot-kicker">RINSORA SYSTEM</p>
+    <h1>正在打开空凛的小世界</h1>
+    <p class="boot-sub">loading my little world...</p>
+    <div class="boot-progress"><i id="bootProgress"></i></div>
+    <div class="boot-meta"><span>♡ candy room</span><span id="bootPercent">0%</span></div>
+  </div>
+</div>
 
-  <div class="screen-grain" aria-hidden="true"></div>
-
-  <!-- 欢迎页 -->
-  <main class="welcome-screen" id="welcomeScreen">
-    <div class="welcome-card glass">
-      <div class="mascot-wrap" aria-label="空凛头像">
-        <div class="mascot-ring"></div>
-        <img class="avatar avatar-large" src="assets/avatar.png" alt="空凛的头像">
-        <span class="status-dot" title="在线"></span>
-      </div>
-
-      <!-- 门口：只放头像、名字、一句话、音乐和「进入小窝」。
-           名字层级是 空凛（主）→ Rinsora（英文名）→ 罐头商铺（小窝名），
-           三层各司其职，不再互相抢戏。 -->
-      <p class="eyebrow">✿ WELCOME TO MY LITTLE HOME ✿</p>
-      <h1 class="welcome-name">空凛<span class="brand-sub">Rinsora</span></h1>
-      <p class="welcome-nest">罐头商铺 · 世界里小小的一隅</p>
-      <p class="welcome-bio">记录一些喜欢的东西，也记录正在成为的自己。<br>这里是我的个人小窝，欢迎进来坐坐 ♡</p>
-
-      <!-- 欢迎页的音乐播放器：内容由 music.js 渲染。
-           收起时只是一张会自转的封面唱片，鼠标移上去才平滑展开完整详情。 -->
-      <div id="landingPlayer"></div>
-
-      <button class="enter-btn" id="enterBtn">
-        <span>进入小窝</span>
-        <span class="enter-arrow">→</span>
-      </button>
-      <p class="tip">点击后，头像会移动到左侧，开始探索我的世界</p>
+<!-- 欢迎页：门口只保留头像、简介、音乐、进入按钮 -->
+<main class="welcome-screen" id="welcomeScreen">
+  <div class="welcome-halo" aria-hidden="true"></div>
+  <div class="welcome-card glass" id="welcomeCard">
+    <div class="window-head">
+      <div class="window-dots"><i></i><i></i><i></i></div>
+      <span>rinsora://welcome</span>
+      <span class="window-id">01</span>
     </div>
-  </main>
 
-  <!-- 桌面态 -->
-  <div class="app" id="app">
-    <aside class="side-rail">
-      <div class="avatar-nav-wrap" id="avatarNavWrap">
-        <div class="avatar-hint">Like me ♡</div>
-        <button class="avatar-button" id="avatarButton" aria-label="打开导航">
-          <img class="avatar avatar-sidebar" src="assets/avatar.png" alt="空凛">
-        </button>
-        <nav class="radial-nav" id="radialNav" aria-label="主导航">
-          <button class="radial-item active" data-target="about" style="--i:0"><span>♡</span><b>主页</b></button>
-          <button class="radial-item" data-target="blog" style="--i:1"><span>✎</span><b>博客</b></button>
-          <button class="radial-item" data-target="projects" style="--i:2"><span>✦</span><b>项目展示</b></button>
-        </nav>
+    <div class="mascot-wrap" id="landingMascot">
+      <div class="mascot-orbit orbit-one"></div>
+      <div class="mascot-orbit orbit-two"></div>
+      <div class="mascot-ring"></div>
+      <div class="avatar-glass">
+        <img class="avatar avatar-large" src="assets/avatar.png" alt="空凛的头像" onerror="this.onerror=null;this.src='assets/avatar.svg'">
       </div>
-      <div class="side-name">空凛<small>Rinsora · 罐头商铺</small></div>
-      <div class="side-status"><span></span> currently online</div>
-    </aside>
+      <span class="status-dot" title="在线"></span>
+      <div class="mascot-sticker sticker-a">♡</div>
+      <div class="mascot-sticker sticker-b">✦</div>
+    </div>
 
-    <section class="content" id="mainContent">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">MY LITTLE SPACE</p>
-          <h2 id="sectionTitle">关于我</h2>
-        </div>
-        <!-- 桌面端会由 CSS 挪到页面左下角（手机端留在原位），
-             收起时是一枚纯图标圆钮，悬停展开文字说明 -->
-        <div class="top-actions">
-          <button class="soft-btn dock-btn" id="themeBtn" type="button"
-                  title="切换夜间模式" aria-label="切换夜间模式">
-            <span class="dock-ic" aria-hidden="true"><svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 13.1A8.6 8.6 0 1 1 10.9 3.2a6.7 6.7 0 0 0 9.9 9.9Z"/></svg><svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.1"/><path d="M12 2.3v2.1"/><path d="M12 19.6v2.1"/><path d="m4.3 4.3 1.5 1.5"/><path d="m18.2 18.2 1.5 1.5"/><path d="M2.3 12h2.1"/><path d="M19.6 12h2.1"/><path d="m4.3 19.7 1.5-1.5"/><path d="m18.2 5.8 1.5-1.5"/></svg></span>
-            <span class="dock-label" id="themeLabel">夜间模式</span>
-          </button>
-          <button class="soft-btn dock-btn" id="miniLyricsBtn" type="button"
-                  title="隐藏底部歌词" aria-label="显示或隐藏底部歌词" aria-pressed="true">
-            <span class="dock-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.1V5.3l10-2v12.5"/><circle cx="6.4" cy="18.1" r="2.6"/><circle cx="16.4" cy="15.8" r="2.6"/></svg></span>
-            <span class="dock-label">歌词</span>
-          </button>
-        </div>
-      </header>
+    <p class="eyebrow">✿ WELCOME TO MY LITTLE HOME ✿</p>
+    <h1 class="welcome-name">空凛<span>Rinsora</span></h1>
+    <div class="welcome-nest">「罐头商铺」 · 世界里小小的一隅</div>
+    <p class="welcome-bio">记录一些喜欢的东西，也记录正在成为的自己。<br>这里是我的个人小窝，欢迎进来坐坐 ♡</p>
 
-      <div class="section-stack">
-        <section class="page-section active" id="about">
-          <div class="hero-grid">
-            <article class="intro-card card">
-              <div class="sticker">NEW!</div>
-              <p class="section-kicker">✿ ABOUT ME</p>
-              <h3>你好呀，我是 <span>空凛</span>。</h3>
-              <p class="lead">也可以叫我 <b>Rinsora</b>。我喜欢研究那些“本来没有必要，但做出来很有意思”的东西。</p>
-              <p>平时会折腾一些没啥大用但自己觉得有意思的项目。这个页面会慢慢记录我做过的项目、写下的东西，以及一些只属于自己的碎碎念。</p>
-              <p>最爱的游戏：Minecraft；我的ID: RinsoraNeko</p>
-              <div class="tag-row"><span>AI</span><span>Minecraft</span><span>Web</span><span>Design</span><span>折腾中</span></div>
-            </article>
-            <aside class="mini-card card">
-              <div class="profile-chip"><span class="chip-icon">♡</span><span>空凛的小资料</span></div>
-              <dl>
-                <div><dt>NAME</dt><dd>空凛 / Rinsora</dd></div>
-                <div><dt>STATUS</dt><dd><span class="online-dot"></span> Online</dd></div>
-                <div><dt>MOOD</dt><dd>☀ sunny day</dd></div>
-                <div><dt>NOW</dt><dd>想把小窝继续变温馨 ✦</dd></div>
-              </dl>
-              <div class="quote">“记录一些喜欢的东西，也记录正在成为的自己。”</div>
-            </aside>
-          </div>
+    <div class="landing-meta">
+      <span><i class="tiny-dot"></i> currently online</span>
+      <span>AI · Minecraft · Web · 乱七八糟</span>
+    </div>
 
-          <!-- 最近发布的博客 / 项目：内容由 script.js 从下面的博客区
-               与 projects-data.js 里取最新的几条渲染，没有就整块不显示 -->
-          <div id="recentFeed"></div>
+    <div id="landingPlayer"></div>
 
-          <div class="section-heading"><span>✦</span><h3>最近在做什么</h3><span class="line"></span></div>
-          <!-- 不作为「技能列表」，而当成一条会变的个人动态：
-               四条状态 + 在线 / 最后更新，改内容只要改这几行文字 -->
-          <div class="now-panel card">
-            <div class="now-head">
-              <span class="now-kicker">✦ NOW PLAYING</span>
-              <span class="now-live"><i></i>Online<span class="now-sep">·</span>Last update <b id="nowUpdate">—</b></span>
-            </div>
-            <ul class="now-list">
-              <li><span class="now-label">正在折腾</span><span class="now-val">AI Agent</span><i aria-hidden="true">🤖</i></li>
-              <li><span class="now-label">最近沉迷</span><span class="now-val">Minecraft</span><i aria-hidden="true">⛏</i></li>
-              <li><span class="now-label">正在制作</span><span class="now-val">Rinsora's Home</span><i aria-hidden="true">🌸</i></li>
-              <li class="is-blank"><span class="now-label">下一件想做</span><span class="now-val">？？？</span><i aria-hidden="true">✦</i></li>
-            </ul>
-          </div>
-        </section>
-
-        <section class="page-section" id="blog">
-          <div class="section-heading"><span>✿</span><h3>博客 / 随笔</h3><span class="line"></span></div>
-          <p class="section-sub">一些折腾记录、想法和技术笔记。</p>
-          <!-- 分类筛选：由 script.js 从下面卡片上的 data-cat 收集生成，加文章不用改这里 -->
-          <div class="blog-filter" id="blogFilter"></div>
-          <div class="blog-grid">
-            <article class="blog-card card" data-cat="随笔" data-min="1"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/hello.html">Hello</a></h4><p>罐头</p><div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">1 min</span><span class="read-more">READ MORE →</span></div></article>
-            <article class="blog-card card" data-cat="随笔" data-min="3"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/why-i-made-my-own-home.html">为什么我想做一个属于自己的小窝</a></h4><p>从“想有个主页”开始，慢慢把喜欢的东西装进去……</p><div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">3 min</span><span class="read-more">READ MORE →</span></div></article>
-            <article class="blog-card card" data-cat="工作流" data-min="4"><span class="date">2026.09.18</span><h4><a class="card-title-link" href="posts/ai-workflow.html">把 AI 工具变成日常工作流</a></h4><p>一些正在尝试的自动化思路、工具组合和踩坑记录。</p><div class="blog-foot"><span class="bm-cat">工作流</span><span class="bm-min">4 min</span><span class="read-more">READ MORE →</span></div></article>
-            <article class="blog-card card" data-cat="捣鼓日志" data-min="4"><span class="date">2026.09.10</span><h4><a class="card-title-link" href="posts/minecraft-server-log.html">Minecraft 服务器折腾日志</a></h4><p>整合包、联机、端口、Mod……总会有下一件要修的事。</p><div class="blog-foot"><span class="bm-cat">捣鼓日志</span><span class="bm-min">4 min</span><span class="read-more">READ MORE →</span></div></article>
-          </div>
-          <p class="blog-empty" id="blogEmpty" hidden>这个分类下还没有文章 ✦</p>
-        </section>
-
-        <section class="page-section" id="projects">
-          <div class="section-heading"><span>★</span><h3>项目展示</h3><span class="line"></span></div>
-          <!-- 内容由 projects-data.js 提供数据、projects.js 渲染成按大分类分组的树 -->
-          <div class="project-tree" id="projectTree"></div>
-        </section>
-      </div>
-    </section>
-
-    <!-- 常驻音乐播放器：同样由 music.js 渲染 -->
-    <aside id="floatingPlayer"></aside>
+    <button class="enter-btn magnetic" id="enterBtn" type="button">
+      <span class="enter-icon">↗</span>
+      <span>进入小窝</span>
+      <em>ENTER MY ROOM</em>
+    </button>
+    <p class="tip">点击后，头像会移动到左侧，音乐播放器将收起为常驻唱片机</p>
   </div>
+</main>
 
-  <audio id="audio" preload="metadata"></audio>
+<!-- 桌面态 -->
+<div class="app" id="app">
+  <aside class="side-rail">
+    <div class="rail-top">
+      <span class="rail-index">RINSORA / 01</span>
+      <span class="rail-squiggle">⌁</span>
+    </div>
 
-  <!-- 音乐：先数据、再播放器、最后添加音乐面板，顺序不能反 -->
-  <script src="gh-api.js"></script>
-  <script src="music-data.js"></script>
-  <script src="music.js"></script>
-  <script src="music-upload.js"></script>
+    <div class="avatar-nav-wrap" id="avatarNavWrap">
+      <div class="avatar-hint">MOVE HERE ♡</div>
+      <div class="avatar-backlight" aria-hidden="true"></div>
+      <button class="avatar-button" id="avatarButton" aria-label="打开导航">
+        <img class="avatar avatar-sidebar" src="assets/avatar.png" alt="空凛" onerror="this.onerror=null;this.src='assets/avatar.svg'">
+      </button>
+      <nav class="radial-nav" id="radialNav" aria-label="主导航">
+        <button class="radial-item active" data-target="about" style="--i:0" type="button"><span>♡</span><b>个人简介</b><small>ABOUT</small></button>
+        <button class="radial-item" data-target="blog" style="--i:1" type="button"><span>✎</span><b>博客</b><small>BLOG</small></button>
+        <button class="radial-item" data-target="projects" style="--i:2" type="button"><span>✦</span><b>项目展示</b><small>PROJECTS</small></button>
+      </nav>
+    </div>
 
-  <script src="projects-data.js"></script>
-  <script src="projects.js"></script>
-  <script src="blog-admin.js"></script>
-  <script src="script.js"></script>
+    <div class="side-id">
+      <strong>空凛</strong>
+      <span>Rinsora</span>
+      <small>罐头商铺</small>
+    </div>
+    <div class="side-status"><span></span><b id="sidePresence">ONLINE</b></div>
+
+    <div class="rail-bottom">
+      <span>SCROLL / EXPLORE</span>
+      <i>↓</i>
+    </div>
+  </aside>
+
+  <section class="content" id="mainContent">
+    <header class="topbar">
+      <div class="crumb">
+        <p class="eyebrow">MY LITTLE SPACE</p>
+        <h2 id="sectionTitle">个人简介</h2>
+      </div>
+      <div class="top-actions">
+        <button class="soft-btn dock-btn" id="themeBtn" type="button" title="切换夜间模式" aria-label="切换夜间模式">
+          <span class="dock-ic">
+            <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20.8 13.1A8.6 8.6 0 1 1 10.9 3.2a6.7 6.7 0 0 0 9.9 9.9Z"/></svg>
+            <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="4.1"/><path d="M12 2.3v2.1M12 19.6v2.1M4.3 4.3l1.5 1.5M18.2 18.2l1.5 1.5M2.3 12h2.1M19.6 12h2.1M4.3 19.7l1.5-1.5M18.2 5.8l1.5-1.5"/></svg>
+          </span>
+          <span class="dock-label" id="themeLabel">夜间模式</span>
+        </button>
+        <button class="soft-btn dock-btn" id="miniLyricsBtn" type="button" title="隐藏底部歌词" aria-label="显示或隐藏底部歌词" aria-pressed="true">
+          <span class="dock-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 18.1V5.3l10-2v12.5"/><circle cx="6.4" cy="18.1" r="2.6"/><circle cx="16.4" cy="15.8" r="2.6"/></svg>
+          </span>
+          <span class="dock-label">歌词</span>
+        </button>
+        <button class="soft-btn dock-btn settings-open" id="settingsBtn" type="button" aria-label="打开设置">
+          <span class="dock-ic">⚙</span>
+          <span class="dock-label">外观</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="page-progress"><i id="pageProgress"></i></div>
+
+    <div class="section-stack">
+      <!-- ABOUT -->
+      <section class="page-section active" id="about">
+        <div class="about-hero">
+          <article class="intro-card card tilt-card">
+            <div class="card-sheen"></div>
+            <div class="sticker sticker-pink">HELLO ♡</div>
+            <div class="section-kicker">✿ ABOUT ME / 01</div>
+            <h3>你好呀，<br>我是 <span>空凛</span>。</h3>
+            <p class="lead">也可以叫我 <b>Rinsora</b>。我喜欢研究那些“本来没有必要，但做出来很有意思”的东西。</p>
+            <p>平时会在 AI、Minecraft、网页折腾、电商设计之间来回横跳。这个页面会慢慢记录我做过的项目、写下的东西，以及一些只属于自己的碎碎念。</p>
+            <div class="tag-row">
+              <span>AI</span><span>Minecraft</span><span>Web</span><span>Design</span><span>折腾中</span>
+            </div>
+            <div class="hero-sign">Rinsora <em>✦</em></div>
+          </article>
+
+          <aside class="mini-card card tilt-card">
+            <div class="profile-chip"><span class="chip-icon">♡</span><span>空凛的小资料</span><em>PROFILE</em></div>
+            <div class="profile-avatar-row">
+              <div class="mini-avatar"><img src="assets/avatar.png" alt="" onerror="this.onerror=null;this.src='assets/avatar.svg'"></div>
+              <div><strong>空凛 / Rinsora</strong><small>little room resident</small></div>
+            </div>
+            <dl>
+              <div><dt>NAME</dt><dd>空凛 / Rinsora</dd></div>
+              <div><dt>STATUS</dt><dd><span class="online-dot"></span> Online</dd></div>
+              <div><dt>MOOD</dt><dd>☀ sunny day</dd></div>
+              <div><dt>NOW</dt><dd>想把小窝继续变温馨 ✦</dd></div>
+            </dl>
+            <div class="quote">“记录一些喜欢的东西，也记录正在成为的自己。”</div>
+          </aside>
+        </div>
+
+        <div id="recentFeed"></div>
+
+        <div class="section-heading fancy-heading">
+          <span>✦</span><h3>最近在做什么</h3><small>NOW / STATUS</small><span class="line"></span>
+        </div>
+        <div class="now-panel card tilt-card">
+          <div class="now-head">
+            <div>
+              <span class="now-kicker">✦ NOW PLAYING</span>
+              <p>把正在发生的事情，留一点点记录。</p>
+            </div>
+            <span class="now-live"><i></i><b>Online</b><span class="now-sep">·</span>Last update <strong id="nowUpdate">—</strong></span>
+          </div>
+          <ul class="now-list">
+            <li><span class="now-label">正在折腾</span><span class="now-val">AI Agent</span><i>🤖</i></li>
+            <li><span class="now-label">最近沉迷</span><span class="now-val">Minecraft</span><i>⛏</i></li>
+            <li><span class="now-label">正在制作</span><span class="now-val">Rinsora's Home</span><i>🌸</i></li>
+            <li class="is-blank"><span class="now-label">下一件想做</span><span class="now-val">？？？</span><i>✦</i></li>
+          </ul>
+        </div>
+
+        <div class="about-lower">
+          <article class="quote-card card tilt-card">
+            <div class="quote-mark">“</div>
+            <p>欢迎来到我的小世界。<br>这里不追求什么都做好，只想把喜欢的东西慢慢装进来。</p>
+            <span>— 空凛 / Rinsora</span>
+          </article>
+          <article class="time-card card">
+            <div class="time-top"><span>TIME IN MY LITTLE WORLD</span><b id="liveClock">--:--</b></div>
+            <div class="time-date" id="liveDate">2026.09.22 · Tuesday</div>
+            <div class="time-track"><i id="timeProgress"></i></div>
+            <div class="time-foot"><span>今日进度</span><b id="dayPercent">0%</b></div>
+          </article>
+        </div>
+
+        <div class="section-heading fancy-heading">
+          <span>☁</span><h3>一点碎碎念</h3><small>MOMENTS</small><span class="line"></span>
+        </div>
+        <div class="moments-grid" id="momentsGrid"></div>
+      </section>
+
+      <!-- BLOG -->
+      <section class="page-section" id="blog">
+        <div class="section-hero-row">
+          <div>
+            <div class="section-kicker">✿ BLOG / 02</div>
+            <h3 class="section-display">一些折腾记录、<br><span>想法和技术笔记。</span></h3>
+            <p class="section-sub">有些东西写下来之后，才发现自己真的做过。</p>
+          </div>
+          <div class="hero-orbit" aria-hidden="true"><span>BLOG</span><i>✦</i></div>
+        </div>
+
+        <div class="section-heading"><span>✿</span><h3>博客 / 随笔</h3><small>ARTICLES</small><span class="line"></span></div>
+        <div class="blog-filter" id="blogFilter"></div>
+
+        <div class="blog-grid">
+          <article class="blog-card card tilt-card" data-cat="随笔" data-min="1">
+            <div class="blog-index">01</div>
+            <span class="date">2026.09.21</span>
+            <span class="blog-cat">随笔</span>
+            <h4><a class="card-title-link" href="posts/hello.html">Hello</a></h4>
+            <p>罐头</p>
+            <div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">1 min</span><span class="read-more">READ MORE ↗</span></div>
+          </article>
+          <article class="blog-card card tilt-card" data-cat="随笔" data-min="3">
+            <div class="blog-index">02</div>
+            <span class="date">2026.09.21</span>
+            <span class="blog-cat">随笔</span>
+            <h4><a class="card-title-link" href="posts/why-i-made-my-own-home.html">为什么我想做一个属于自己的小窝</a></h4>
+            <p>从“想有个主页”开始，慢慢把喜欢的东西装进去……</p>
+            <div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">3 min</span><span class="read-more">READ MORE ↗</span></div>
+          </article>
+          <article class="blog-card card tilt-card" data-cat="工作流" data-min="4">
+            <div class="blog-index">03</div>
+            <span class="date">2026.09.18</span>
+            <span class="blog-cat">AI</span>
+            <h4><a class="card-title-link" href="posts/ai-workflow.html">把 AI 工具变成日常工作流</a></h4>
+            <p>一些正在尝试的自动化思路、工具组合和踩坑记录。</p>
+            <div class="blog-foot"><span class="bm-cat">工作流</span><span class="bm-min">4 min</span><span class="read-more">READ MORE ↗</span></div>
+          </article>
+          <article class="blog-card card tilt-card" data-cat="捣鼓日志" data-min="4">
+            <div class="blog-index">04</div>
+            <span class="date">2026.09.10</span>
+            <span class="blog-cat">Minecraft</span>
+            <h4><a class="card-title-link" href="posts/minecraft-server-log.html">Minecraft 服务器折腾日志</a></h4>
+            <p>整合包、联机、端口、Mod……总会有下一件要修的事。</p>
+            <div class="blog-foot"><span class="bm-cat">捣鼓日志</span><span class="bm-min">4 min</span><span class="read-more">READ MORE ↗</span></div>
+          </article>
+        </div>
+        <p class="blog-empty" id="blogEmpty" hidden>这个分类下还没有文章 ✦</p>
+
+        <div class="blog-end-cap"><span>✦</span> KEEP WRITING <span>♡</span></div>
+      </section>
+
+      <!-- PROJECTS -->
+      <section class="page-section" id="projects">
+        <div class="section-hero-row project-hero-row">
+          <div>
+            <div class="section-kicker">★ PROJECTS / 03</div>
+            <h3 class="section-display">把一些“<span>没啥用</span>”的东西，<br>做出来。</h3>
+            <p class="section-sub">也许没用，但每一个都属于空凛的折腾记录。</p>
+          </div>
+          <div class="project-mascot" aria-hidden="true">
+            <span>BUILD</span><strong>✦</strong><em>• • •</em>
+          </div>
+        </div>
+
+        <div class="project-note card">
+          <div class="note-pin"></div>
+          <strong>PROJECT SHELF</strong>
+          <p>这里会慢慢摆满小工具、Minecraft 实验、Bot 和各种奇奇怪怪的网页。</p>
+          <span>Rinsora / Collection 2026</span>
+        </div>
+
+        <div class="section-heading"><span>★</span><h3>项目展示</h3><small>COLLECTION</small><span class="line"></span></div>
+        <div class="project-tree" id="projectTree"></div>
+      </section>
+    </div>
+  </section>
+
+  <aside id="floatingPlayer"></aside>
+
+  <!-- 设置抽屉 -->
+  <div class="settings-mask" id="settingsMask"></div>
+  <aside class="settings-panel" id="settingsPanel" aria-label="外观设置">
+    <div class="settings-head">
+      <div><p>RINSORA LAB</p><h3>小窝设置</h3></div>
+      <button type="button" class="settings-close" id="settingsClose" aria-label="关闭">×</button>
+    </div>
+
+    <div class="settings-tabs">
+      <button class="set-tab active" data-tab="appearance" type="button">外观</button>
+      <button class="set-tab" data-tab="effects" type="button">特效</button>
+      <button class="set-tab" data-tab="aboutSite" type="button">关于</button>
+    </div>
+
+    <div class="set-pane active" data-pane="appearance">
+      <div class="set-block">
+        <label>主题配色</label>
+        <div class="theme-grid">
+          <button data-theme="candy" type="button"><i class="swatch sw-candy"></i><span>糖果粉黄</span></button>
+          <button data-theme="sunset" type="button"><i class="swatch sw-sunset"></i><span>蜜桃晚霞</span></button>
+          <button data-theme="dream" type="button"><i class="swatch sw-dream"></i><span>梦幻紫蓝</span></button>
+          <button data-theme="mint" type="button"><i class="swatch sw-mint"></i><span>薄荷汽水</span></button>
+        </div>
+      </div>
+      <div class="set-block">
+        <label>主题色相 <output id="hueValue">0°</output></label>
+        <input id="hueRange" type="range" min="-20" max="40" value="0">
+      </div>
+    </div>
+
+    <div class="set-pane" data-pane="effects">
+      <div class="set-toggle"><span><b>星尘粒子</b><small>让背景有一点点流动</small></span><button class="switch on" data-setting="particles" type="button"><i></i></button></div>
+      <div class="set-toggle"><span><b>鼠标光晕</b><small>光圈会追着你的指针</small></span><button class="switch on" data-setting="cursor" type="button"><i></i></button></div>
+      <div class="set-toggle"><span><b>卡片倾斜</b><small>悬停时产生轻微 3D 反光</small></span><button class="switch on" data-setting="tilt" type="button"><i></i></button></div>
+      <div class="set-toggle"><span><b>点击涟漪</b><small>点击页面时留下一个小水波</small></span><button class="switch on" data-setting="ripple" type="button"><i></i></button></div>
+    </div>
+
+    <div class="set-pane" data-pane="aboutSite">
+      <div class="lab-card">
+        <span>VERSION</span><strong>Rinsora Home V2</strong>
+        <p>把小窝做得更像一个“真的房间”：动态壁纸、玻璃 UI、角色导航、歌词播放器与微交互。</p>
+      </div>
+      <div class="lab-list">
+        <div><span>DESIGN</span><b>Candy / Anime / Acrylic</b></div>
+        <div><span>STACK</span><b>HTML · CSS · JavaScript</b></div>
+        <div><span>HOST</span><b>GitHub Pages</b></div>
+      </div>
+    </div>
+
+    <div class="settings-foot">changes are saved locally ♡</div>
+  </aside>
+
+  <!-- 移动端底部导航 -->
+  <nav class="mobile-nav" aria-label="移动端导航">
+    <button class="active" data-target="about" type="button"><span>♡</span>主页</button>
+    <button data-target="blog" type="button"><span>✎</span>博客</button>
+    <button data-target="projects" type="button"><span>✦</span>项目</button>
+  </nav>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+<script src="gh-api.js"></script>
+<script src="music-data.js"></script>
+<script src="music.js"></script>
+<script src="music-upload.js"></script>
+<script src="projects-data.js"></script>
+<script src="projects.js"></script>
+<script src="blog-admin.js"></script>
+<script src="script.js"></script>
 </body>
 </html>

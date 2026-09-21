@@ -1,363 +1,416 @@
-/* ============================================================
-   script.js —— 首页的「壳」
-   ------------------------------------------------------------
-   只管：进入动画、左侧头像导航、切换板块、夜间模式、hash 直达、
-        主页的「最近发布」区、鼠标点击涟漪。
+(() => {
+  'use strict';
 
-   音乐播放器（播放 / 暂停、进度、歌词栏、播放列表、添加音乐）
-   已经整体搬到 music.js + music-upload.js 里了，
-   这里一行都不碰播放相关的 DOM，免得两边抢同一批元素。
-   ============================================================ */
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+  const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const welcome = $('#welcomeScreen');
+  const app = $('#app');
+  const landingPlayer = $('#landingPlayer');
+  const floatingPlayer = $('#floatingPlayer');
+  const enterBtn = $('#enterBtn');
+  const navWrap = $('#avatarNavWrap');
+  const avatarButton = $('#avatarButton');
+  const themeBtn = $('#themeBtn');
+  const themeLabel = $('#themeLabel');
+  const settingsPanel = $('#settingsPanel');
+  const settingsMask = $('#settingsMask');
+  const pageProgress = $('#pageProgress');
+  const boot = $('#bootScreen');
 
-const enterBtn = document.getElementById('enterBtn');
-const welcomeScreen = document.getElementById('welcomeScreen');
-const app = document.getElementById('app');
-const landingPlayer = document.getElementById('landingPlayer');
-const floatingPlayer = document.getElementById('floatingPlayer');
-const avatarNavWrap = document.getElementById('avatarNavWrap');
-const avatarButton = document.getElementById('avatarButton');
-const themeBtn = document.getElementById('themeBtn');
-const themeLabel = document.getElementById('themeLabel');
+  const state = {
+    section: 'about',
+    theme: localStorage.getItem('rinsora-v2-theme') || (localStorage.getItem('rinsora-theme') === 'night' ? 'dream' : 'candy'),
+    settings: {
+      particles: localStorage.getItem('rinsora-effect-particles') !== 'off',
+      cursor: localStorage.getItem('rinsora-effect-cursor') !== 'off',
+      tilt: localStorage.getItem('rinsora-effect-tilt') !== 'off',
+      ripple: localStorage.getItem('rinsora-effect-ripple') !== 'off'
+    },
+    hue: Number(localStorage.getItem('rinsora-effect-hue') || 0)
+  };
 
-const $ = (s, r) => (r || document).querySelector(s);
-const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  function save(k,v){ try{localStorage.setItem(k,v)}catch(e){} }
 
-const esc = (s) => String(s == null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  // ---------- Boot ----------
+  let p = 0;
+  const bootTimer = setInterval(()=>{
+    p = Math.min(100, p + (p < 70 ? 9 : 5));
+    $('#bootProgress').style.width = p + '%';
+    $('#bootPercent').textContent = p + '%';
+    if(p >= 100){
+      clearInterval(bootTimer);
+      setTimeout(()=>boot.classList.add('done'), 260);
+    }
+  }, 70);
 
-/* 博客卡片是「最近发布」和「分类筛选」共用的数据源，声明必须放在最前面：
-   文件中部就会调用用到它的函数，而 const 有暂时性死区，
-   写在后面会当场 ReferenceError，整段脚本跟着停摆。 */
-const blogCards = ()=>$$('#blog .blog-grid .blog-card');
-
-/* ---------------------------------------------------------- 进入小窝 ---- */
-
-function enterApp(instant){
-  /* 上一个页面里如果还开着播放列表，把两个播放器一起收回收起态。
-     不然进到小窝时右下角那个播放器会白捡一个"已展开"的列表，显示就错乱了。 */
-  try{
-    if (window.RinsoraMusic && window.RinsoraMusic.collapse) window.RinsoraMusic.collapse();
-  }catch(e){}
-
-  if (landingPlayer) landingPlayer.classList.add('exit');
-  welcomeScreen.classList.add('hidden');
-  app.classList.add('visible');
-  if(instant){
-    welcomeScreen.style.display='none';
-    floatingPlayer.classList.add('visible');
-  }else{
-    setTimeout(()=>floatingPlayer.classList.add('visible'),360);
+  // ---------- Utilities ----------
+  function isReduceMotion(){
+    try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}
   }
-}
-enterBtn.addEventListener('click',()=>enterApp(false));
 
-/* ------------------------------------------------------------ 导航 ----
-   点击头像：挂起 / 收起导航栏（可切换）。
-   再点页面上任何空白处也会收起。
-   鼠标悬停依然能顺带展开，但「刚被显式收起」的那一下不会被悬停重新顶开
-   —— 靠 nav-closed 抑制类，鼠标移开后自动复位。 */
+  function updateCursorState(){
+    document.body.classList.toggle('cursor-on', state.settings.cursor && !isReduceMotion());
+  }
 
-function openNav(on){
-  avatarNavWrap.classList.toggle('open', on);
-  avatarNavWrap.classList.toggle('nav-closed', !on);
-}
+  function applyEffects(){
+    document.body.classList.toggle('no-particles', !state.settings.particles);
+    document.body.classList.toggle('cursor-on', state.settings.cursor && !isReduceMotion());
+    document.body.classList.toggle('no-tilt', !state.settings.tilt);
+    $$('.switch').forEach(btn=>btn.classList.toggle('on', !!state.settings[btn.dataset.setting]));
+  }
 
-avatarButton.addEventListener('click',()=>{
-  openNav(!avatarNavWrap.classList.contains('open'));
-});
+  // ---------- Theme ----------
+  function applyTheme(theme, persist=true){
+    document.body.classList.remove('theme-sunset','theme-dream','theme-mint');
+    let isNight = false;
+    if(theme === 'sunset') document.body.classList.add('theme-sunset');
+    if(theme === 'mint') document.body.classList.add('theme-mint');
+    if(theme === 'dream'){
+      document.body.classList.add('theme-dream');
+      isNight = true;
+    }
+    document.body.classList.toggle('night', isNight);
+    document.documentElement.classList.toggle('night', isNight);
+    themeLabel.textContent = isNight ? '日间模式' : '夜间模式';
+    themeBtn.title = isNight ? '切换日间模式' : '切换夜间模式';
+    $$('.theme-grid button').forEach(btn=>btn.classList.toggle('active',btn.dataset.theme===theme));
+    if(persist){
+      state.theme = theme;
+      save('rinsora-v2-theme', theme);
+      save('rinsora-theme', isNight ? 'night' : 'light');
+    }
+  }
 
-/* 鼠标移开就把抑制复位，下次悬停照常展开 */
-avatarNavWrap.addEventListener('mouseleave',()=>{
-  avatarNavWrap.classList.remove('nav-closed');
-});
-
-/* 点空白处收起导航栏 */
-document.addEventListener('click',(e)=>{
-  if(e.target && e.target.closest && e.target.closest('#avatarNavWrap')) return;
-  avatarNavWrap.classList.remove('open');
-  avatarNavWrap.classList.remove('nav-closed');
-});
-
-$$('.radial-item').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    $$('.radial-item').forEach(x=>x.classList.remove('active'));
-    btn.classList.add('active');
-    showSection(btn.dataset.target);
-    avatarNavWrap.classList.remove('open');
-    avatarNavWrap.classList.remove('nav-closed');
+  themeBtn?.addEventListener('click',()=>{
+    const next = document.body.classList.contains('night') ? 'candy' : 'dream';
+    applyTheme(next,true);
+    toast(next==='dream'?'已切换到梦幻夜景 ✦':'回到糖果白日 ☀');
   });
-});
+  applyTheme(state.theme,false);
 
-function showSection(id){
-  $$('.page-section').forEach(s=>s.classList.remove('active'));
-  const target=document.getElementById(id); if(target) target.classList.add('active');
-  const titles={about:'主页',blog:'博客 / 随笔',projects:'项目展示'};
-  document.getElementById('sectionTitle').textContent=titles[id]||'我的小窝';
-}
+  // ---------- Avatar flight ----------
+  function flyAvatar(){
+    if(isReduceMotion()) return;
+    const from = $('.avatar-glass img', welcome);
+    const to = $('.avatar-sidebar', app);
+    if(!from || !to) return;
+    const a = from.getBoundingClientRect();
+    const b = to.getBoundingClientRect();
 
-/* -------------------------------------------------------- 夜间模式 ----
-   按钮里叠着日 / 月两个 SVG，换挡动画交给 CSS（.ic-sun / .ic-moon 的
-   透明度 + 旋转），这里只负责切 body 上的 night 类。
+    const clone = from.cloneNode(true);
+    clone.className = 'avatar-flight';
+    clone.style.left = `${a.left}px`;
+    clone.style.top = `${a.top}px`;
+    clone.style.width = `${a.width}px`;
+    clone.style.height = `${a.height}px`;
+    document.body.appendChild(clone);
 
-   页面本身的过渡用 View Transitions：先给当前画面拍一张快照，再从
-   按钮所在的位置扩散一个圆，把新配色"揭"出来。浏览器不支持、或者
-   用户开了「减少动态效果」时，直接切换，不做动画。 */
+    const glow = document.createElement('div');
+    glow.className = 'avatar-flight-glow';
+    glow.style.left = `${a.left + a.width/2 - 115}px`;
+    glow.style.top = `${a.top + a.height/2 - 115}px`;
+    glow.style.width = '230px';
+    glow.style.height = '230px';
+    document.body.appendChild(glow);
 
-let reduceMotion = false;
-try { reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e){}
+    from.style.opacity = '0';
+    to.style.opacity = '0';
 
-function applyTheme(night,persist){
-  document.body.classList.toggle('night',night);
-  /* html 上也挂一份：html 的底色只是给视口边缘（超宽屏、橡皮筋回弹）兜底的，
-     不跟着一起切的话，夜里会在边缘漏出一条白边 */
-  document.documentElement.classList.toggle('night',night);
-  if(themeLabel) themeLabel.textContent = night ? '日间模式' : '夜间模式';
-  if(themeBtn) themeBtn.title = night ? '切换日间模式' : '切换夜间模式';
-  if(persist){ try{ localStorage.setItem('rinsora-theme',night?'night':'light'); }catch(e){} }
-}
+    const dx = b.left - a.left;
+    const dy = b.top - a.top;
+    const sx = b.width / a.width;
+    const sy = b.height / a.height;
 
-function toggleTheme(){
-  const next = !document.body.classList.contains('night');
-  if(!document.startViewTransition || reduceMotion){ applyTheme(next,true); return; }
+    const anim = clone.animate([
+      {transform:'translate3d(0,0,0) scale(1) rotate(0deg)', filter:'drop-shadow(0 16px 20px rgba(150,100,135,.22))'},
+      {transform:`translate3d(${dx*.45}px,${dy*.25}px,0) scale(${1.18}) rotate(-6deg)`},
+      {transform:`translate3d(${dx}px,${dy}px,0) scale(${sx}) rotate(0deg)`, filter:'drop-shadow(0 18px 28px rgba(220,124,169,.33))'}
+    ],{duration:920,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
 
-  /* 主题切换只允许落一次（正常路径走过渡回调，兜底路径走定时器） */
-  let applied = false;
-  const applyOnce = ()=>{ if(applied) return; applied = true; applyTheme(next,true); };
+    glow.animate([
+      {transform:'translate3d(0,0,0) scale(.9)',opacity:.8},
+      {transform:`translate3d(${dx*.5}px,${dy*.5}px,0) scale(1.2)`,opacity:.35},
+      {transform:`translate3d(${dx}px,${dy}px,0) scale(.55)`,opacity:0}
+    ],{duration:920,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
 
-  const r = themeBtn.getBoundingClientRect();
-  const x = r.left + r.width/2, y = r.top + r.height/2;
-  /* 半径取到最远的那个角，保证圆能盖住整屏 */
-  const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 28;
+    anim.finished?.then(()=>{
+      clone.remove(); glow.remove();
+      from.style.opacity='';
+      to.style.opacity='';
+    }).catch(()=>{
+      clone.remove(); glow.remove(); from.style.opacity=''; to.style.opacity='';
+    });
+  }
 
-  /* ★ 更新回调里等两帧再 resolve。
-     浏览器是等这个回调 resolve 之后才去拍「新」快照的；如果一改完类名就返回，
-     快照会拍到「毛玻璃层还没按新配色重新合成」的那一帧 —— 表现出来就是
-     「毛玻璃先消失 → 切成夜间 → 毛玻璃再回来」。
-     等两帧 = 等它重新合成完，新快照里的毛玻璃就是连续的，不再有中断。
-     （CSS 里给这些层加的 will-change:backdrop-filter 是第二道保险；rAF 万一被
-      节流，就用一个定时器兜底放行，绝不让过渡永远卡在半路。） */
-  const vt = document.startViewTransition(()=>new Promise(done=>{
-    applyOnce();
-    let fin = false;
-    const end = ()=>{ if(!fin){ fin = true; done(); } };
-    requestAnimationFrame(()=>requestAnimationFrame(end));
-    setTimeout(end,150);
+  function enterApp(instant=false){
+    try{window.RinsoraMusic?.collapse?.()}catch(e){}
+    if(!instant) flyAvatar();
+    landingPlayer?.classList.add('exit');
+    welcome?.classList.add('hidden');
+    app?.classList.add('visible');
+    const show = ()=>floatingPlayer?.classList.add('visible');
+    instant ? show() : setTimeout(show, 390);
+  }
+  enterBtn?.addEventListener('click',()=>enterApp(false));
+
+  // ---------- Navigation ----------
+  const titles = {about:'个人简介', blog:'博客 / 随笔', projects:'项目展示'};
+  function showSection(id, push=true){
+    if(!titles[id]) id='about';
+    state.section = id;
+    $$('.page-section').forEach(s=>s.classList.toggle('active', s.id===id));
+    $$('.radial-item').forEach(b=>b.classList.toggle('active', b.dataset.target===id));
+    $$('.mobile-nav button').forEach(b=>b.classList.toggle('active', b.dataset.target===id));
+    $('#sectionTitle').textContent=titles[id];
+    const widths={about:33,blog:66,projects:100};
+    pageProgress.style.width=(widths[id]||33)+'%';
+    document.title = `${titles[id]} · 空凛 · Rinsora`;
+    if(push && history.replaceState) history.replaceState(null,'','#'+id);
+    window.scrollTo({top:0,behavior:isReduceMotion()?'auto':'smooth'});
+  }
+
+  function routeHash(){
+    const h=(location.hash||'').replace(/^#/,'').toLowerCase();
+    if(h==='admin'||h==='write'||h==='editor'){location.href='editor.html';return;}
+    if(h==='project'||h==='newproject'){location.href='project-editor.html';return;}
+    if(titles[h]){
+      enterApp(true);
+      showSection(h,false);
+    }
+  }
+
+  $$('.radial-item,.mobile-nav button').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      showSection(btn.dataset.target,true);
+      navWrap.classList.remove('open','nav-closed');
+    });
+  });
+  avatarButton?.addEventListener('click',e=>{
+    e.stopPropagation();
+    navWrap.classList.toggle('open');
+    navWrap.classList.remove('nav-closed');
+  });
+  navWrap?.addEventListener('mouseleave',()=>navWrap.classList.remove('nav-closed'));
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#avatarNavWrap')) navWrap?.classList.remove('open','nav-closed');
+  });
+  window.addEventListener('hashchange',routeHash);
+
+  // ---------- Settings ----------
+  function openSettings(){settingsPanel?.classList.add('open');settingsMask?.classList.add('open')}
+  function closeSettings(){settingsPanel?.classList.remove('open');settingsMask?.classList.remove('open')}
+  $$('.settings-open').forEach(b=>b.addEventListener('click',openSettings));
+  $('#settingsClose')?.addEventListener('click',closeSettings);
+  settingsMask?.addEventListener('click',closeSettings);
+
+  $$('.set-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      $$('.set-tab').forEach(x=>x.classList.remove('active'));
+      $$('.set-pane').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+      $(`.set-pane[data-pane="${btn.dataset.tab}"]`)?.classList.add('active');
+    });
+  });
+
+  $$('.theme-grid button').forEach(btn=>btn.addEventListener('click',()=>{
+    const t=btn.dataset.theme;
+    applyTheme(t,true);
+    toast(`已换上「${btn.textContent.trim()}」`);
   }));
 
-  /* ★ 兜底：某些环境（无头浏览器、虚拟时间）里视图过渡的回调压根不会执行，
-     那样"点一下夜间按钮"就会毫无反应。所以再挂一个定时器，最迟 130ms 一定切过去。
-     正常浏览器里回调远早于此，这一下是空操作。 */
-  setTimeout(applyOnce,130);
+  $('#hueRange')?.addEventListener('input',e=>{
+    state.hue=Number(e.target.value||0);
+    $('#hueValue').textContent = (state.hue>=0?'+':'') + state.hue + '°';
+    document.documentElement.style.setProperty('--hue', `${state.hue}deg`);
+    save('rinsora-effect-hue',state.hue);
+  });
+  $('#hueRange').value=state.hue; $('#hueValue').textContent=(state.hue>=0?'+':'')+state.hue+'°';
+  document.documentElement.style.setProperty('--hue', `${state.hue}deg`);
 
-  vt.ready.then(()=>{
-    document.documentElement.animate(
-      { clipPath: [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${far}px at ${x}px ${y}px)`
-        ] },
-      { duration: 640, easing: 'cubic-bezier(.2,.8,.2,1)',
-        pseudoElement: '::view-transition-new(root)' }
-    );
-  }).catch(()=>{});
-}
+  $$('.switch').forEach(btn=>btn.addEventListener('click',()=>{
+    const k=btn.dataset.setting;
+    state.settings[k]=!state.settings[k];
+    save('rinsora-effect-'+k, state.settings[k]?'on':'off');
+    applyEffects();
+  }));
+  applyEffects();
 
-if(themeBtn) themeBtn.addEventListener('click',toggleTheme);
+  // ---------- Clock / time ----------
+  const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function updateClock(){
+    const now=new Date();
+    const hh=String(now.getHours()).padStart(2,'0');
+    const mm=String(now.getMinutes()).padStart(2,'0');
+    const ss=String(now.getSeconds()).padStart(2,'0');
+    $('#liveClock').textContent=`${hh}:${mm}`;
+    $('#liveDate').textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} · ${dayNames[now.getDay()]}`;
+    const pct=((now.getHours()*3600+now.getMinutes()*60+now.getSeconds())/86400)*100;
+    $('#timeProgress').style.width=pct.toFixed(2)+'%';
+    $('#dayPercent').textContent=Math.floor(pct)+'%';
+    $('#sidePresence').textContent=now.getHours()>=0 ? 'ONLINE' : 'AWAY';
+  }
+  updateClock(); setInterval(updateClock,1000);
 
-/* ---------- 主题记忆：和文章页共用同一个 localStorage key ---------- */
-try{ if(localStorage.getItem('rinsora-theme')==='night') applyTheme(true,false); else applyTheme(false,false); }catch(e){}
+  // ---------- Moments ----------
+  const moments=[
+    ['2026.09.22','终于把小窝的 V2 认真规划起来了。现在开始研究，怎么把“网页”做得像一间房间。','🌸'],
+    ['2026.09.21','又折腾了一晚上 AI Agent。很多东西其实没那么有用，但做出来的时候总是很开心。','🤖'],
+    ['2026.09.10','Minecraft 服务器又出现了新的问题。嗯……很正常。','⛏']
+  ];
+  function renderMoments(){
+    const host=$('#momentsGrid'); if(!host)return;
+    host.innerHTML=moments.map(m=>`<article class="moment-card card tilt-card"><div class="moment-date">${m[0]}</div><p>${esc(m[1])}</p><span class="moment-icon">${m[2]}</span></article>`).join('');
+    wireTilt();
+  }
+  renderMoments();
 
-/* ------------------------------------------------- 主页「最近发布」 ----
-   博客直接从 #blog 的卡片里读（不再抄一份数据，改博客只需要改一处），
-   项目读 projects-data.js。项目一条都没有时，项目那一整块不渲染。 */
+  // ---------- Recent feed ----------
+  function readRecentPosts(limit=3){
+    return $$('#blog .blog-grid .blog-card').map(card=>{
+      const a=$('.card-title-link',card), d=$('.date',card), p=card.querySelector('p');
+      return a?{title:a.textContent.trim(),href:a.getAttribute('href')||'#',date:d?.textContent.trim()||'',desc:p?.textContent.trim()||''}:null;
+    }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,limit);
+  }
+  function readRecentProjects(limit=3){
+    const raw=window.RINSORA_PROJECTS||{};
+    const items=Array.isArray(raw.items)?raw.items.slice():[];
+    const sorter=window.RinsoraProjects?.newestFirst||(list=>list.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))));
+    return sorter(items).slice(0,limit);
+  }
+  function latestUpdate(){
+    const ds=[];
+    $$('#blog .blog-grid .blog-card .date').forEach(x=>ds.push(x.textContent.trim()));
+    (window.RINSORA_PROJECTS?.items||[]).forEach(x=>x?.date&&ds.push(String(x.date)));
+    ds.sort();return ds.at(-1)||'';
+  }
+  function buildRecent(){
+    const host=$('#recentFeed'); if(!host)return;
+    const posts=readRecentPosts(), projs=readRecentProjects();
+    if(!posts.length&&!projs.length){host.innerHTML='';return;}
+    let html='<div class="section-heading fancy-heading"><span>✧</span><h3>最近发布</h3><small>RECENT</small><span class="line"></span></div>';
+    if(posts.length){
+      html+='<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新博客<span class="rt-line"></span></div><div class="recent-grid">';
+      html+=posts.map(p=>`<a class="recent-card" href="${esc(p.href)}"><span class="rc-kind">BLOG</span><b class="rc-title">${esc(p.title)}</b><span class="rc-desc">${esc(p.desc)}</span><span class="rc-foot"><span>${esc(p.date)}</span><span>READ MORE ↗</span></span></a>`).join('');
+      html+='</div></div>';
+    }
+    if(projs.length){
+      html+='<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新项目<span class="rt-line"></span></div><div class="recent-grid">';
+      html+=projs.map(p=>{
+        const tag=p.url?'a':'div';const attr=p.url?` href="${esc(p.url)}" target="_blank" rel="noopener"`:'';
+        return `<${tag} class="recent-card"${attr}><span class="rc-kind k-proj">PROJECT</span><b class="rc-title">${esc(p.name||'Untitled')}</b><span class="rc-desc">${esc(p.desc||'')}</span><span class="rc-foot"><span>${esc(p.date||'')}</span><span>${p.url?'OPEN ↗':''}</span></span></${tag}>`;
+      }).join('');
+      html+='</div></div>';
+    }
+    host.innerHTML=html;
+  }
+  function addRecentStyles(){
+    if($('#v2RecentStyles'))return;
+    const s=document.createElement('style');s.id='v2RecentStyles';s.textContent=`
+      .recent-grid-wrap{margin:0 0 16px}.recent-sub{display:flex;align-items:center;gap:8px;color:#ad97a8;font-size:8px;letter-spacing:.14em;margin-bottom:9px}.recent-sub i{width:6px;height:6px;border-radius:50%;background:#ef9fbc}.rt-line{height:1px;flex:1;background:linear-gradient(90deg,rgba(213,180,198,.35),transparent)}.recent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.recent-card{display:flex;flex-direction:column;gap:7px;padding:14px 15px;border-radius:18px;transition:transform .25s var(--ease),background .2s}.recent-card:hover{transform:translateY(-4px);background:var(--glass-h)}.rc-kind{font-size:7px;letter-spacing:.18em;color:#d07f9f;font-weight:1000}.rc-kind.k-proj{color:#8e84cf}.rc-title{font-size:11px;line-height:1.4}.rc-desc{font-size:9px;color:#a28f9e;line-height:1.7;min-height:30px}.rc-foot{display:flex;justify-content:space-between;margin-top:auto;color:#ae99a8;font-size:7px;gap:8px}.rc-foot span:last-child{color:#cd86a2;font-weight:900}@media(max-width:860px){.recent-grid{grid-template-columns:1fr}}`;
+    document.head.appendChild(s);
+  }
+  addRecentStyles();buildRecent();
 
-function readRecentPosts(limit){
-  return $$('#blog .blog-grid .blog-card').map(card=>{
-    const a = card.querySelector('.card-title-link');
-    if(!a) return null;
-    const d = card.querySelector('.date'), p = card.querySelector('p');
-    return {
-      date : d ? d.textContent.trim() : '',
-      title: a.textContent.trim(),
-      href : a.getAttribute('href') || '#',
-      desc : p ? p.textContent.trim() : ''
+  // ---------- Blog filter ----------
+  function buildBlogFilter(){
+    const host=$('#blogFilter'); if(!host)return;
+    const cats=[...new Set(blogCards().map(c=>(c.dataset.cat||'').trim()).filter(Boolean))];
+    if(cats.length<2){host.innerHTML='';return;}
+    host.innerHTML=['全部',...cats].map((c,i)=>`<button class="bf-chip${i===0?' active':''}" type="button" data-cat="${esc(i?c:'')}">${esc(c)}</button>`).join('');
+    host.onclick=e=>{
+      const btn=e.target.closest('.bf-chip');if(!btn)return;
+      $$('.bf-chip',host).forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+      applyBlogFilter(btn.dataset.cat||'');
     };
-  }).filter(Boolean).slice(0,limit);
-}
+    applyBlogFilter('');
+  }
+  function blogCards(){return $$('#blog .blog-grid .blog-card')}
+  function applyBlogFilter(cat){
+    let count=0;
+    blogCards().forEach(card=>{const hit=!cat||(card.dataset.cat||'')===cat;card.hidden=!hit;if(hit)count++});
+    const empty=$('#blogEmpty');if(empty)empty.hidden=count>0;
+  }
+  buildBlogFilter();
 
-function readRecentProjects(limit){
-  const raw = window.RINSORA_PROJECTS || {};
-  const items = Array.isArray(raw.items) ? raw.items.slice() : [];
-  /* 排序规则统一放在 projects.js 里（window.RinsoraProjects.newestFirst）：
-     按 date 倒排，日期相同就看它在 items 里靠不靠后 —— 编辑台新增是 push 追加的，
-     所以数组里越靠后越新。首页「最新项目」和项目展示页必须共用同一套，别各写一份。
-     万一 projects.js 没加载成功，退回一个只比日期的简单排序兜底。 */
-  const newestFirst = (window.RinsoraProjects && window.RinsoraProjects.newestFirst) ||
-    ((list)=>list.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))));
-  /* 返回顺序 = 渲染顺序 = 从左往右，所以最新的排最左 */
-  return newestFirst(items).slice(0,limit);
-}
+  // ---------- Tilt ----------
+  function wireTilt(){
+    if(state.settings.tilt && !isReduceMotion()){
+      $$('.tilt-card').forEach(card=>{
+        if(card.dataset.tiltBound)return;
+        card.dataset.tiltBound='1';
+        card.addEventListener('pointermove',e=>{
+          if(e.pointerType==='touch')return;
+          const r=card.getBoundingClientRect();
+          const x=(e.clientX-r.left)/r.width-.5;
+          const y=(e.clientY-r.top)/r.height-.5;
+          card.style.transform=`perspective(800px) rotateX(${(-y*4).toFixed(2)}deg) rotateY(${(x*5).toFixed(2)}deg) translateY(-2px)`;
+        });
+        card.addEventListener('pointerleave',()=>{card.style.transform='';});
+      });
+    }
+  }
+  wireTilt();
 
-function buildRecent(){
-  const host = document.getElementById('recentFeed');
-  if(!host) return;
+  // ---------- Cursor ----------
+  const dot=$('#cursorDot'), ring=$('#cursorRing'), glow=$('#ambientGlow');
+  let cx=innerWidth/2,cy=innerHeight/2, rx=cx,ry=cy;
+  function moveCursor(e){
+    cx=e.clientX;cy=e.clientY;
+    if(dot){dot.style.left=cx+'px';dot.style.top=cy+'px'}
+    if(glow){glow.style.left=cx+'px';glow.style.top=cy+'px'}
+  }
+  document.addEventListener('pointermove',moveCursor,{passive:true});
+  function cursorLoop(){
+    rx+=(cx-rx)*.18;ry+=(cy-ry)*.18;
+    if(ring){ring.style.left=rx+'px';ring.style.top=ry+'px'}
+    requestAnimationFrame(cursorLoop);
+  }
+  cursorLoop();
+  document.addEventListener('pointerover',e=>{
+    if(e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item')) document.body.classList.add('cursor-hover');
+  });
+  document.addEventListener('pointerout',e=>{
+    if(e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item')) document.body.classList.remove('cursor-hover');
+  });
 
-  const posts  = readRecentPosts(3);
-  const projs  = readRecentProjects(3);
-  if(!posts.length && !projs.length){ host.innerHTML=''; return; }
+  // ---------- Ripple ----------
+  document.addEventListener('pointerdown',e=>{
+    if(!state.settings.ripple||isReduceMotion()||e.button===2)return;
+    const el=document.createElement('span');el.className='click-ripple';el.style.left=e.clientX+'px';el.style.top=e.clientY+'px';document.body.appendChild(el);
+    setTimeout(()=>el.remove(),650);
+  });
 
-  let html = '<div class="section-heading"><span>✧</span><h3>最近发布</h3><span class="line"></span></div>';
+  // ---------- Keyboard ----------
+  document.addEventListener('keydown',e=>{
+    const key=e.key.toLowerCase();
+    if((e.ctrlKey||e.metaKey)&&key==='k'){e.preventDefault();openSettings();}
+    if(key==='1')showSection('about');
+    if(key==='2')showSection('blog');
+    if(key==='3')showSection('projects');
+    if(key==='escape')closeSettings();
+  });
 
-  if(posts.length){
-    html += '<div class="recent-block">' +
-      '<div class="recent-sub"><i></i>最新博客<span class="rt-line"></span></div>' +
-      '<div class="recent-grid">' +
-        posts.map(p=>
-          `<a class="recent-card" href="${esc(p.href)}">` +
-            '<span class="rc-kind">BLOG</span>' +
-            `<b class="rc-title">${esc(p.title)}</b>` +
-            `<span class="rc-desc">${esc(p.desc)}</span>` +
-            '<span class="rc-foot">' +
-              `<span class="rc-date">${esc(p.date)}</span>` +
-              '<span class="recent-more">READ MORE →</span>' +
-            '</span>' +
-          '</a>'
-        ).join('') +
-      '</div></div>';
+  // ---------- Toast ----------
+  let toastEl,toastTimer;
+  function toast(msg){
+    if(!toastEl){toastEl=document.createElement('div');toastEl.className='blog-toast';document.body.appendChild(toastEl)}
+    toastEl.textContent=msg;toastEl.className='blog-toast show';
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.className='blog-toast',2500);
   }
 
-  if(projs.length){
-    html += '<div class="recent-block">' +
-      '<div class="recent-sub"><i></i>最新项目<span class="rt-line"></span></div>' +
-      '<div class="recent-grid">' +
-        projs.map(p=>{
-          const tag  = p.url ? 'a' : 'div';
-          const attr = p.url ? ` href="${esc(p.url)}" target="_blank" rel="noopener"` : '';
-          return `<${tag} class="recent-card"${attr}>` +
-            '<span class="rc-kind k-proj">PROJECT</span>' +
-            `<b class="rc-title">${esc(p.name)}</b>` +
-            `<span class="rc-desc">${esc(p.desc || '')}</span>` +
-            '<span class="rc-foot">' +
-              `<span class="rc-date">${esc(p.date || '')}</span>` +
-              (p.url ? '<span class="recent-more">OPEN →</span>' : '') +
-            '</span>' +
-          `</${tag}>`;
-        }).join('') +
-      '</div></div>';
+  // ---------- External module hook ----------
+  window.RinsoraHome = {
+    refreshRecent:()=>{buildRecent();$('#nowUpdate').textContent=latestUpdate()||'—';wireTilt()},
+    refreshBlogFilter:buildBlogFilter,
+    showSection
+  };
+
+  $('#nowUpdate').textContent=latestUpdate()||'—';
+
+  // ---------- Hash / initial ----------
+  if(location.hash){
+    setTimeout(routeHash, 50);
   }
-
-  host.innerHTML = html;
-}
-
-buildRecent();
-paintNowUpdate();
-
-/* ------------------------------------------------ 博客分类筛选 ----
-   分类不写死在代码里：直接从卡片的 data-cat 上收集，所以写作台/本地脚本
-   新发的文章只要卡片带上 data-cat，筛选项就会自动多出来一项。
-   只有一个分类时不渲染筛选条（「全部」和它本身没区别）。 */
-
-function applyBlogFilter(cat){
-  let shown = 0;
-  blogCards().forEach(card=>{
-    const hit = !cat || (card.dataset.cat || '').trim() === cat;
-    card.hidden = !hit;
-    if(hit) shown++;
-  });
-  const empty = document.getElementById('blogEmpty');
-  if(empty) empty.hidden = shown > 0;
-}
-
-function buildBlogFilter(){
-  const host = document.getElementById('blogFilter');
-  if(!host) return;
-
-  const cats = [];
-  blogCards().forEach(card=>{
-    const c = (card.dataset.cat || '').trim();
-    if(c && cats.indexOf(c) === -1) cats.push(c);
-  });
-
-  if(cats.length < 2){ host.innerHTML = ''; return; }
-
-  host.innerHTML = ['全部'].concat(cats).map((c,i)=>
-    `<button class="bf-chip${i === 0 ? ' active' : ''}" type="button"` +
-    ` data-cat="${esc(i === 0 ? '' : c)}">${esc(c)}</button>`
-  ).join('');
-
-  host.addEventListener('click',(e)=>{
-    const btn = e.target.closest ? e.target.closest('.bf-chip') : null;
-    if(!btn) return;
-    $$('.bf-chip', host).forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    applyBlogFilter(btn.dataset.cat || '');
-  });
-
-  applyBlogFilter('');
-}
-
-buildBlogFilter();
-
-/* 「最后更新」＝博客和项目里最新的那个日期（YYYY.MM.DD 定宽，比字符串就是比时间） */
-function latestUpdate(){
-  const ds = [];
-  blogCards().forEach(card=>{
-    const d = card.querySelector('.date');
-    if(d) ds.push(d.textContent.trim());
-  });
-  const raw = window.RINSORA_PROJECTS || {};
-  (Array.isArray(raw.items) ? raw.items : []).forEach(it=>{
-    if(it && it.date) ds.push(String(it.date).trim());
-  });
-  ds.sort();
-  return ds.length ? ds[ds.length - 1] : '';
-}
-
-function paintNowUpdate(){
-  const el = document.getElementById('nowUpdate');
-  if(!el) return;
-  const s = latestUpdate();
-  if(s) el.textContent = s;
-}
-
-/* ------------------------------------------------------ 鼠标点击涟漪 ----
-   在指针位置放一个会扩散淡出的小圆，自动清理，不拦截任何事件。
-   尊重「减少动态效果」，那种情况下 CSS 直接不显示。 */
-document.addEventListener('pointerdown',(e)=>{
-  if(e.button !== undefined && e.button !== 0) return;
-  const dot = document.createElement('span');
-  dot.className = 'click-ripple';
-  dot.style.left = e.clientX + 'px';
-  dot.style.top  = e.clientY + 'px';
-  document.body.appendChild(dot);
-  setTimeout(()=>{ if(dot.parentNode) dot.parentNode.removeChild(dot); },620);
-});
-
-/* ---------- hash 直达：index.html#blog / #about / #projects ----------
-   从文章页点「回到博客列表」时直接落到博客板块，不用重看一遍欢迎页。 */
-const HASH_SECTIONS=['about','blog','projects'];
-function sectionFromHash(){
-  const h=(location.hash||'').replace(/^#/,'').toLowerCase();
-  return HASH_SECTIONS.includes(h)?h:null;
-}
-function activateSection(id){
-  $$('.radial-item').forEach(b=>b.classList.toggle('active',b.dataset.target===id));
-  showSection(id);
-}
-function syncFromHash(){
-  const s=sectionFromHash();
-  if(s) activateSection(s);
-}
-(function initFromHash(){
-  const s=sectionFromHash();
-  if(!s) return;
-  activateSection(s);
-  enterApp(true);
 })();
-window.addEventListener('hashchange',syncFromHash);
-
-/* 给别的模块留个口子：内容变了可以重刷「最近发布」和「最后更新」 */
-window.RinsoraHome = {
-  refreshRecent: ()=>{ buildRecent(); paintNowUpdate(); },
-  refreshBlogFilter: buildBlogFilter
-};
