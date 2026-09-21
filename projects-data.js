@@ -49,6 +49,20 @@ window.RINSORA_PROJECTS = {
       ],
       "icon": "📦",
       "date": "2026.09.21"
+    },
+    {
+      "id": "rinsoraa-rinsoraa-github-io",
+      "name": "rinsoraa/rinsoraa.github.io",
+      "category": "Github项目",
+      "url": "https://github.com/rinsoraa/rinsoraa.github.io",
+      "desc": "就是这个网页的源码",
+      "tags": [
+        "JavaScript",
+        "GitHub",
+        "rinsoraa"
+      ],
+      "icon": "✦",
+      "date": "2026.09.21"
     }
   ]
 };
