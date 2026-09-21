@@ -37,6 +37,18 @@ window.RINSORA_PROJECTS = {
       ],
       "icon": "📦",
       "date": "2026.09.21"
+    },
+    {
+      "id": "trayhider",
+      "name": "TrayHider",
+      "category": "Github项目",
+      "url": "https://github.com/rinsoraa/TrayHider",
+      "desc": "Windows 11 托盘图标管理器 —— 隐藏/显示系统托盘图标",
+      "tags": [
+        "C#"
+      ],
+      "icon": "📦",
+      "date": "2026.09.21"
     }
   ]
 };
