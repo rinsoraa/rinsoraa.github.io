@@ -1,9 +1,40 @@
+/* ============================================================
+   空凛 · Rinsora 的小窝 —— 首页交互
+   ------------------------------------------------------------
+   这一份脚本负责「界面层」，不碰任何数据层：
+     · 开屏进度
+     · 主题（调色板 × 明暗）、夜间切换的圆形扩散过渡
+     · 进入小窝：头像飞入左侧 + 右下播放器向上淡入
+     · 径向导航 / 移动端导航 / hash 路由
+     · 外观设置抽屉（配色、色相、特效开关）
+     · 星尘 canvas、鼠标光晕、卡片倾斜、点击涟漪
+     · 时钟、碎碎念、最近发布、博客分类筛选
+
+   播放器（音乐 + 歌词栏）由 music.js 负责；
+   项目树由 projects.js 负责；添加音乐弹窗由 music-upload.js 负责。
+   这里只暴露 window.RinsoraHome 给它们回调。
+   ============================================================ */
 (() => {
   'use strict';
 
-  const $ = (s,r=document)=>r.querySelector(s);
-  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
-  const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  /* ---------------------------------------------------- 小工具 ---- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = (s) => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const store = {
+    get(k, d = null) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* 隐私模式下忽略 */ } }
+  };
+  const reduceMotion = () => {
+    try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  };
+  const rAF2 = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+
+  /* ---------------------------------------------------- 元素引用 ---- */
+  const html = document.documentElement;
+  const body = document.body;
   const welcome = $('#welcomeScreen');
   const app = $('#app');
   const landingPlayer = $('#landingPlayer');
@@ -18,399 +49,665 @@
   const pageProgress = $('#pageProgress');
   const boot = $('#bootScreen');
 
+  const PALETTES = ['candy', 'sunset', 'lilac', 'mint'];
+
+  /* ---------------------------------------------------- 状态 ---- */
   const state = {
     section: 'about',
-    theme: localStorage.getItem('rinsora-v2-theme') || (localStorage.getItem('rinsora-theme') === 'night' ? 'dream' : 'candy'),
-    settings: {
-      particles: localStorage.getItem('rinsora-effect-particles') !== 'off',
-      cursor: localStorage.getItem('rinsora-effect-cursor') !== 'off',
-      tilt: localStorage.getItem('rinsora-effect-tilt') !== 'off',
-      ripple: localStorage.getItem('rinsora-effect-ripple') !== 'off'
-    },
-    hue: Number(localStorage.getItem('rinsora-effect-hue') || 0)
+    night: store.get('rinsora-theme') === 'night',
+    palette: (() => {
+      const p = store.get('rinsora-palette', 'candy');
+      return PALETTES.indexOf(p) === -1 ? 'candy' : p;
+    })(),
+    hue: Number(store.get('rinsora-hue', '0')) || 0,
+    effects: {
+      particles: store.get('rinsora-effect-particles', 'on') !== 'off',
+      cursor: store.get('rinsora-effect-cursor', 'on') !== 'off',
+      tilt: store.get('rinsora-effect-tilt', 'on') !== 'off',
+      ripple: store.get('rinsora-effect-ripple', 'on') !== 'off'
+    }
   };
 
-  function save(k,v){ try{localStorage.setItem(k,v)}catch(e){} }
-
-  // ---------- Boot ----------
-  let p = 0;
-  const bootTimer = setInterval(()=>{
-    p = Math.min(100, p + (p < 70 ? 9 : 5));
-    $('#bootProgress').style.width = p + '%';
-    $('#bootPercent').textContent = p + '%';
-    if(p >= 100){
+  /* ---------------------------------------------------- 开屏 ---- */
+  let bootPct = 0;
+  const bootTimer = setInterval(() => {
+    bootPct = Math.min(100, bootPct + (bootPct < 70 ? 9 : 5));
+    const bar = $('#bootProgress'), pct = $('#bootPercent');
+    if (bar) bar.style.width = bootPct + '%';
+    if (pct) pct.textContent = bootPct + '%';
+    if (bootPct >= 100) {
       clearInterval(bootTimer);
-      setTimeout(()=>boot.classList.add('done'), 260);
+      setTimeout(() => boot && boot.classList.add('done'), 260);
     }
   }, 70);
 
-  // ---------- Utilities ----------
-  function isReduceMotion(){
-    try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}
+  /* ============================================================
+     主题：调色板（配色）× 明暗（白天 / 夜间），两者独立
+     ============================================================ */
+  function applyPalette(name, persist) {
+    const next = PALETTES.indexOf(name) === -1 ? 'candy' : name;
+    PALETTES.forEach((p) => {
+      const cls = 'pal-' + p;
+      html.classList.toggle(cls, p === next);
+      body.classList.toggle(cls, p === next);
+    });
+    $$('.theme-grid button').forEach((b) => b.classList.toggle('active', b.dataset.palette === next));
+    if (persist) { state.palette = next; store.set('rinsora-palette', next); }
   }
 
-  function updateCursorState(){
-    document.body.classList.toggle('cursor-on', state.settings.cursor && !isReduceMotion());
+  function applyNight(night, persist) {
+    html.classList.toggle('night', night);
+    body.classList.toggle('night', night);
+    if (themeLabel) themeLabel.textContent = night ? '日间模式' : '夜间模式';
+    if (themeBtn) themeBtn.title = night ? '切换日间模式' : '切换夜间模式';
+    const ns = $('#nightSwitch');
+    if (ns) ns.classList.toggle('on', night);
+    if (persist) { state.night = night; store.set('rinsora-theme', night ? 'night' : 'light'); }
   }
 
-  function applyEffects(){
-    document.body.classList.toggle('no-particles', !state.settings.particles);
-    document.body.classList.toggle('cursor-on', state.settings.cursor && !isReduceMotion());
-    document.body.classList.toggle('no-tilt', !state.settings.tilt);
-    $$('.switch').forEach(btn=>btn.classList.toggle('on', !!state.settings[btn.dataset.setting]));
+  function applyHue(deg, persist) {
+    html.style.setProperty('--hue', deg + 'deg');
+    const out = $('#hueValue');
+    if (out) out.textContent = (deg > 0 ? '+' : '') + deg + '°';
+    if (persist) { state.hue = deg; store.set('rinsora-hue', deg); }
   }
 
-  // ---------- Theme ----------
-  function applyTheme(theme, persist=true){
-    document.body.classList.remove('theme-sunset','theme-dream','theme-mint');
-    let isNight = false;
-    if(theme === 'sunset') document.body.classList.add('theme-sunset');
-    if(theme === 'mint') document.body.classList.add('theme-mint');
-    if(theme === 'dream'){
-      document.body.classList.add('theme-dream');
-      isNight = true;
-    }
-    document.body.classList.toggle('night', isNight);
-    document.documentElement.classList.toggle('night', isNight);
-    themeLabel.textContent = isNight ? '日间模式' : '夜间模式';
-    themeBtn.title = isNight ? '切换日间模式' : '切换夜间模式';
-    $$('.theme-grid button').forEach(btn=>btn.classList.toggle('active',btn.dataset.theme===theme));
-    if(persist){
-      state.theme = theme;
-      save('rinsora-v2-theme', theme);
-      save('rinsora-theme', isNight ? 'night' : 'light');
-    }
+  /* 夜间切换：从按钮位置扩散一个圆，把新配色「揭」出来。
+     ① 更新回调里等两帧再 resolve —— 浏览器是等回调 resolve 之后才拍
+        「新」快照的，太快 resolve 会拍到毛玻璃还没按新配色重新合成的
+        那一帧，看起来就像「毛玻璃先消失 → 变色 → 毛玻璃再回来」。
+     ② 外面再挂一个定时器兜底：万一某个环境里视图过渡的回调根本没执行
+        （无头 / 虚拟时间的浏览器就是这样），至少主题要切过去。 */
+  function toggleTheme() {
+    const next = !state.night;
+    if (!document.startViewTransition || reduceMotion()) { applyNight(next, true); return; }
+
+    const r = themeBtn ? themeBtn.getBoundingClientRect() : null;
+    const x = r ? r.left + r.width / 2 : innerWidth / 2;
+    const y = r ? r.top + r.height / 2 : 0;
+    const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 30;
+
+    let applied = false;
+    const once = () => { if (!applied) { applied = true; applyNight(next, true); } };
+
+    const vt = document.startViewTransition(() => new Promise((done) => {
+      once();
+      rAF2(done);
+      setTimeout(done, 180);
+    }));
+    vt.ready.then(() => {
+      html.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${far}px at ${x}px ${y}px)`] },
+        { duration: 680, easing: 'cubic-bezier(.2,.8,.2,1)', pseudoElement: '::view-transition-new(root)' }
+      );
+    }).catch(() => {});
+    setTimeout(once, 220);
+  }
+  themeBtn && themeBtn.addEventListener('click', toggleTheme);
+
+  /* 初始化主题（不写存储，只把已存的读出来套上） */
+  applyPalette(state.palette, false);
+  applyNight(state.night, false);
+  applyHue(state.hue, false);
+
+  /* ============================================================
+     进度条颜色 / 特效开关
+     ============================================================ */
+  function applyEffects() {
+    const fx = state.effects;
+    body.classList.toggle('no-particles', !fx.particles);
+    body.classList.toggle('no-ripple', !fx.ripple);
+    body.classList.toggle('no-tilt', !fx.tilt);
+    body.classList.toggle('cursor-on', fx.cursor && !reduceMotion());
+    /* 只同步「特效开关」，夜间那个 .switch 没有 data-setting，不归这里管 */
+    $$('.switch').forEach((b) => {
+      if (b.dataset.setting) b.classList.toggle('on', !!fx[b.dataset.setting]);
+    });
   }
 
-  themeBtn?.addEventListener('click',()=>{
-    const next = document.body.classList.contains('night') ? 'candy' : 'dream';
-    applyTheme(next,true);
-    toast(next==='dream'?'已切换到梦幻夜景 ✦':'回到糖果白日 ☀');
-  });
-  applyTheme(state.theme,false);
-
-  // ---------- Avatar flight ----------
-  function flyAvatar(){
-    if(isReduceMotion()) return;
-    const from = $('.avatar-glass img', welcome);
+  /* ============================================================
+     进入小窝
+     ------------------------------------------------------------
+     目标位置必须先量准。侧栏是 position:fixed，而 .app 不能带
+     transform，否则它的定位基准会从「视口」变成 .app 本身 ——
+     实测那会把整个侧栏推到首屏下面，头像于是往左下角飞。
+     ============================================================ */
+  function flyAvatar() {
+    if (reduceMotion()) return false;
+    const from = $('.avatar-glass .avatar-large', welcome) || $('.avatar-large', welcome);
     const to = $('.avatar-sidebar', app);
-    if(!from || !to) return;
+    if (!from || !to) return false;
+
     const a = from.getBoundingClientRect();
     const b = to.getBoundingClientRect();
+    if (!a.width || !b.width) return false;
+
+    const cx1 = a.left + a.width / 2, cy1 = a.top + a.height / 2;
+    const cx2 = b.left + b.width / 2, cy2 = b.top + b.height / 2;
+    const dx = cx2 - cx1, dy = cy2 - cy1;
+    const scale = b.width / a.width;              /* 145px → 132px ≈ .91 */
+    const lift = Math.min(48, Math.abs(dx) * .07); /* 中段轻轻上扬，看起来是「飞」而不是「滑」 */
 
     const clone = from.cloneNode(true);
+    clone.removeAttribute('id');
     clone.className = 'avatar-flight';
-    clone.style.left = `${a.left}px`;
-    clone.style.top = `${a.top}px`;
-    clone.style.width = `${a.width}px`;
-    clone.style.height = `${a.height}px`;
-    document.body.appendChild(clone);
+    clone.style.left = a.left + 'px';
+    clone.style.top = a.top + 'px';
+    clone.style.width = a.width + 'px';
+    clone.style.height = a.height + 'px';
+    app.before(clone);                            /* 挂在 .app 之前，层级自然在欢迎页之上 */
 
+    const glowSize = Math.max(a.width * 1.8, 200);
     const glow = document.createElement('div');
     glow.className = 'avatar-flight-glow';
-    glow.style.left = `${a.left + a.width/2 - 115}px`;
-    glow.style.top = `${a.top + a.height/2 - 115}px`;
-    glow.style.width = '230px';
-    glow.style.height = '230px';
-    document.body.appendChild(glow);
+    glow.style.cssText += `width:${glowSize}px;height:${glowSize}px;left:${cx1 - glowSize / 2}px;top:${cy1 - glowSize / 2}px`;
+    app.before(glow);
 
     from.style.opacity = '0';
     to.style.opacity = '0';
 
-    const dx = b.left - a.left;
-    const dy = b.top - a.top;
-    const sx = b.width / a.width;
-    const sy = b.height / a.height;
-
     const anim = clone.animate([
-      {transform:'translate3d(0,0,0) scale(1) rotate(0deg)', filter:'drop-shadow(0 16px 20px rgba(150,100,135,.22))'},
-      {transform:`translate3d(${dx*.45}px,${dy*.25}px,0) scale(${1.18}) rotate(-6deg)`},
-      {transform:`translate3d(${dx}px,${dy}px,0) scale(${sx}) rotate(0deg)`, filter:'drop-shadow(0 18px 28px rgba(220,124,169,.33))'}
-    ],{duration:920,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
+      { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 },
+      { transform: `translate3d(${dx * .34}px,${dy * .52 - lift}px,0) scale(1.09)`, opacity: 1, offset: .44 },
+      { transform: `translate3d(${dx}px,${dy}px,0) scale(${scale})`, opacity: 1 }
+    ], { duration: 960, easing: 'cubic-bezier(.42,.02,.22,1)', fill: 'forwards' });
 
     glow.animate([
-      {transform:'translate3d(0,0,0) scale(.9)',opacity:.8},
-      {transform:`translate3d(${dx*.5}px,${dy*.5}px,0) scale(1.2)`,opacity:.35},
-      {transform:`translate3d(${dx}px,${dy}px,0) scale(.55)`,opacity:0}
-    ],{duration:920,easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards'});
+      { transform: 'translate3d(0,0,0) scale(.7)', opacity: .8 },
+      { transform: `translate3d(${dx * .45}px,${dy * .4 - lift * .6}px,0) scale(1.05)`, opacity: .42 },
+      { transform: `translate3d(${dx}px,${dy}px,0) scale(.6)`, opacity: 0 }
+    ], { duration: 960, easing: 'cubic-bezier(.42,.02,.22,1)', fill: 'forwards' });
 
-    anim.finished?.then(()=>{
-      clone.remove(); glow.remove();
-      from.style.opacity='';
-      to.style.opacity='';
-    }).catch(()=>{
-      clone.remove(); glow.remove(); from.style.opacity=''; to.style.opacity='';
-    });
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clone.remove();
+      glow.remove();
+      from.style.opacity = '';
+      to.style.opacity = '';
+      to.classList.remove('arriving');
+      void to.offsetWidth;                        /* 强制重排，动画才会从 0 开始 */
+      to.classList.add('arriving');
+      setTimeout(() => to.classList.remove('arriving'), 720);
+    };
+    /* 收尾必须有一条「无条件」路径：动画的 finished 在页面被切到后台、
+       或浏览器对 WAAPI 降频时可能永远不 resolve，那样 to.style.opacity
+       会永远停在 0 —— 侧栏头像就彻底看不见了。finish 自身幂等，兜底无害。 */
+    try { anim.finished.then(finish).catch(finish); } catch (e) { /* 老浏览器没有 finished */ }
+    setTimeout(finish, 1080);
+    return true;
   }
 
-  function enterApp(instant=false){
-    try{window.RinsoraMusic?.collapse?.()}catch(e){}
-    if(!instant) flyAvatar();
-    landingPlayer?.classList.add('exit');
-    welcome?.classList.add('hidden');
-    app?.classList.add('visible');
-    const show = ()=>floatingPlayer?.classList.add('visible');
-    instant ? show() : setTimeout(show, 390);
-  }
-  enterBtn?.addEventListener('click',()=>enterApp(false));
+  let entered = false;
+  function enterApp(instant) {
+    if (entered) return;
+    entered = true;
+    try { window.RinsoraMusic && window.RinsoraMusic.collapse && window.RinsoraMusic.collapse(); } catch (e) {}
 
-  // ---------- Navigation ----------
-  const titles = {about:'个人简介', blog:'博客 / 随笔', projects:'项目展示'};
-  function showSection(id, push=true){
-    if(!titles[id]) id='about';
-    state.section = id;
-    $$('.page-section').forEach(s=>s.classList.toggle('active', s.id===id));
-    $$('.radial-item').forEach(b=>b.classList.toggle('active', b.dataset.target===id));
-    $$('.mobile-nav button').forEach(b=>b.classList.toggle('active', b.dataset.target===id));
-    $('#sectionTitle').textContent=titles[id];
-    const widths={about:33,blog:66,projects:100};
-    pageProgress.style.width=(widths[id]||33)+'%';
-    document.title = `${titles[id]} · 空凛 · Rinsora`;
-    if(push && history.replaceState) history.replaceState(null,'','#'+id);
-    window.scrollTo({top:0,behavior:isReduceMotion()?'auto':'smooth'});
-  }
+    const flying = !instant && flyAvatar();
+    if (!flying && !instant) {
+      const to = $('.avatar-sidebar', app);
+      if (to) { to.style.opacity = ''; }
+    }
 
-  function routeHash(){
-    const h=(location.hash||'').replace(/^#/,'').toLowerCase();
-    if(h==='admin'||h==='write'||h==='editor'){location.href='editor.html';return;}
-    if(h==='project'||h==='newproject'){location.href='project-editor.html';return;}
-    if(titles[h]){
-      enterApp(true);
-      showSection(h,false);
+    if (landingPlayer) landingPlayer.classList.add('exit');
+    if (welcome) { welcome.classList.add('hidden'); welcome.setAttribute('aria-hidden', 'true'); }
+    if (enterBtn) { enterBtn.disabled = true; enterBtn.setAttribute('aria-disabled', 'true'); }
+    if (app) app.classList.add('visible');
+
+    /* 右下播放器的淡入：必须等 .visible 这一帧真的提交过再切，
+       然后隔一个定时器 + 双 rAF —— 同一帧里改两次类名会被合并，
+       transition 不会触发，表现就是「直接出现」而不是「向上淡入」。 */
+    if (floatingPlayer) {
+      void floatingPlayer.offsetHeight;
+      const at = instant ? 60 : (flying ? 700 : 220);
+      setTimeout(() => {
+        rAF2(() => floatingPlayer.classList.add('visible'));
+      }, at);
+      /* 同上：双 rAF 是为了「先让 .visible 那一帧提交过」，但如果 rAF 被
+         节流（后台标签页 / 无头渲染）就永远等不到 —— 补一条定时兜底，
+         保证最终一定会淡入，而不是一直停在 opacity:0。 */
+      setTimeout(() => floatingPlayer.classList.add('visible'), at + 260);
     }
   }
+  enterBtn && enterBtn.addEventListener('click', () => enterApp(false));
 
-  $$('.radial-item,.mobile-nav button').forEach(btn=>{
-    btn.addEventListener('click',e=>{
+  /* ============================================================
+     导航
+     ============================================================ */
+  const TITLES = { about: '个人简介', blog: '博客 / 随笔', projects: '项目展示' };
+  const WIDTHS = { about: 33, blog: 66, projects: 100 };
+
+  function showSection(id, push) {
+    if (!TITLES[id]) id = 'about';
+    state.section = id;
+    $$('.page-section').forEach((s) => s.classList.toggle('active', s.id === id));
+    $$('.radial-item').forEach((b) => b.classList.toggle('active', b.dataset.target === id));
+    $$('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.target === id));
+    const title = $('#sectionTitle');
+    if (title) title.textContent = TITLES[id];
+    if (pageProgress) pageProgress.style.width = (WIDTHS[id] || 33) + '%';
+    document.title = TITLES[id] + ' · 空凛 · Rinsora 的小窝';
+    if (push !== false && history.replaceState) history.replaceState(null, '', '#' + id);
+    window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  }
+
+  $$('.radial-item,.mobile-nav button').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      showSection(btn.dataset.target,true);
-      navWrap.classList.remove('open','nav-closed');
+      showSection(btn.dataset.target);
+      closeNav();
     });
   });
-  avatarButton?.addEventListener('click',e=>{
+
+  function openNav(on) {
+    if (!navWrap) return;
+    navWrap.classList.toggle('open', on);
+    navWrap.classList.remove('nav-closed');   /* 主动展开时清掉「已被显式收起」的抑制类 */
+  }
+  function closeNav(soft) {
+    if (!navWrap) return;
+    navWrap.classList.remove('open');
+    /* soft=true：点空白收起，顺手压住 :hover 的自动展开；鼠标离开就复位 */
+    navWrap.classList.toggle('nav-closed', !!soft);
+  }
+  avatarButton && avatarButton.addEventListener('click', (e) => {
     e.stopPropagation();
-    navWrap.classList.toggle('open');
-    navWrap.classList.remove('nav-closed');
+    if (navWrap.classList.contains('open')) closeNav(true);
+    else openNav(true);
   });
-  navWrap?.addEventListener('mouseleave',()=>navWrap.classList.remove('nav-closed'));
-  document.addEventListener('click',e=>{
-    if(!e.target.closest('#avatarNavWrap')) navWrap?.classList.remove('open','nav-closed');
+  navWrap && navWrap.addEventListener('mouseleave', () => navWrap.classList.remove('nav-closed'));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest || !e.target.closest('#avatarNavWrap')) closeNav(true);
   });
-  window.addEventListener('hashchange',routeHash);
 
-  // ---------- Settings ----------
-  function openSettings(){settingsPanel?.classList.add('open');settingsMask?.classList.add('open')}
-  function closeSettings(){settingsPanel?.classList.remove('open');settingsMask?.classList.remove('open')}
-  $$('.settings-open').forEach(b=>b.addEventListener('click',openSettings));
-  $('#settingsClose')?.addEventListener('click',closeSettings);
-  settingsMask?.addEventListener('click',closeSettings);
+  /* 直达链接：#about / #blog / #projects 直接跳过欢迎页，
+     #admin / #write / #editor / #project 跳后台页 */
+  function routeHash() {
+    const h = (location.hash || '').replace(/^#/, '').toLowerCase();
+    if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
+    if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
+    if (TITLES[h]) { enterApp(true); showSection(h, false); return true; }
+    return false;
+  }
+  window.addEventListener('hashchange', () => { if (!routeHash()) return; });
 
-  $$('.set-tab').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      $$('.set-tab').forEach(x=>x.classList.remove('active'));
-      $$('.set-pane').forEach(x=>x.classList.remove('active'));
+  /* ============================================================
+     外观设置抽屉
+     ============================================================ */
+  function openSettings() {
+    settingsPanel && settingsPanel.classList.add('open');
+    settingsMask && settingsMask.classList.add('open');
+  }
+  function closeSettings() {
+    settingsPanel && settingsPanel.classList.remove('open');
+    settingsMask && settingsMask.classList.remove('open');
+  }
+  $$('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
+  $('#settingsClose') && $('#settingsClose').addEventListener('click', closeSettings);
+  settingsMask && settingsMask.addEventListener('click', closeSettings);
+
+  $$('.set-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $$('.set-tab').forEach((x) => x.classList.remove('active'));
+      $$('.set-pane').forEach((x) => x.classList.remove('active'));
       btn.classList.add('active');
-      $(`.set-pane[data-pane="${btn.dataset.tab}"]`)?.classList.add('active');
+      const pane = $('.set-pane[data-pane="' + btn.dataset.tab + '"]');
+      pane && pane.classList.add('active');
     });
   });
 
-  $$('.theme-grid button').forEach(btn=>btn.addEventListener('click',()=>{
-    const t=btn.dataset.theme;
-    applyTheme(t,true);
-    toast(`已换上「${btn.textContent.trim()}」`);
-  }));
-
-  $('#hueRange')?.addEventListener('input',e=>{
-    state.hue=Number(e.target.value||0);
-    $('#hueValue').textContent = (state.hue>=0?'+':'') + state.hue + '°';
-    document.documentElement.style.setProperty('--hue', `${state.hue}deg`);
-    save('rinsora-effect-hue',state.hue);
+  $$('.theme-grid button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      applyPalette(btn.dataset.palette, true);
+      toast('已换上「' + btn.textContent.trim() + '」 ✦');
+    });
   });
-  $('#hueRange').value=state.hue; $('#hueValue').textContent=(state.hue>=0?'+':'')+state.hue+'°';
-  document.documentElement.style.setProperty('--hue', `${state.hue}deg`);
 
-  $$('.switch').forEach(btn=>btn.addEventListener('click',()=>{
-    const k=btn.dataset.setting;
-    state.settings[k]=!state.settings[k];
-    save('rinsora-effect-'+k, state.settings[k]?'on':'off');
-    applyEffects();
-  }));
+  const hueRange = $('#hueRange');
+  if (hueRange) {
+    hueRange.value = state.hue;
+    hueRange.addEventListener('input', (e) => applyHue(Number(e.target.value) || 0, true));
+  }
+
+  $$('.switch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.setting;
+      if (!k) return;                        /* 夜间开关走 toggleTheme，不在这里 */
+      state.effects[k] = !state.effects[k];
+      store.set('rinsora-effect-' + k, state.effects[k] ? 'on' : 'off');
+      applyEffects();
+      if (k === 'particles') starfield.start();
+    });
+  });
+  const nightSwitch = $('#nightSwitch');
+  nightSwitch && nightSwitch.addEventListener('click', toggleTheme);
   applyEffects();
 
-  // ---------- Clock / time ----------
-  const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  function updateClock(){
-    const now=new Date();
-    const hh=String(now.getHours()).padStart(2,'0');
-    const mm=String(now.getMinutes()).padStart(2,'0');
-    const ss=String(now.getSeconds()).padStart(2,'0');
-    $('#liveClock').textContent=`${hh}:${mm}`;
-    $('#liveDate').textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} · ${dayNames[now.getDay()]}`;
-    const pct=((now.getHours()*3600+now.getMinutes()*60+now.getSeconds())/86400)*100;
-    $('#timeProgress').style.width=pct.toFixed(2)+'%';
-    $('#dayPercent').textContent=Math.floor(pct)+'%';
-    $('#sidePresence').textContent=now.getHours()>=0 ? 'ONLINE' : 'AWAY';
-  }
-  updateClock(); setInterval(updateClock,1000);
+  /* ============================================================
+     星尘（真 canvas，不是一堆 ✦）
+     ============================================================ */
+  const starfield = (() => {
+    const canvas = $('#starCanvas');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    let dpr = 1, w = 0, h = 0, raf = 0, dots = [];
+    const COLORS = [[255, 150, 194], [255, 213, 127], [195, 178, 255], [159, 225, 210], [154, 206, 255]];
+    const rand = (a, b) => Math.random() * (b - a) + a;
 
-  // ---------- Moments ----------
-  const moments=[
-    ['2026.09.22','终于把小窝的 V2 认真规划起来了。现在开始研究，怎么把“网页”做得像一间房间。','🌸'],
-    ['2026.09.21','又折腾了一晚上 AI Agent。很多东西其实没那么有用，但做出来的时候总是很开心。','🤖'],
-    ['2026.09.10','Minecraft 服务器又出现了新的问题。嗯……很正常。','⛏']
+    function resize() {
+      if (!ctx) return;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = innerWidth; h = innerHeight;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const n = w <= 760 ? 60 : 110;
+      dots = Array.from({ length: n }, () => ({
+        x: rand(0, w), y: rand(0, h),
+        vx: rand(-.12, .12), vy: rand(-.10, .10),
+        r: rand(.9, 2.4), a: rand(.34, .88),
+        phase: rand(0, Math.PI * 2), speed: rand(.004, .012),
+        star: Math.random() < .34,
+        col: COLORS[Math.floor(Math.random() * COLORS.length)]
+      }));
+    }
+
+    function star(p, pulse) {
+      const rr = p.r * (1.2 + pulse * .55);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.phase);
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const ang = -Math.PI / 2 + i * Math.PI / 4;
+        const rad = i % 2 === 0 ? rr : rr * .35;
+        ctx[i === 0 ? 'moveTo' : 'lineTo'](Math.cos(ang) * rad, Math.sin(ang) * rad);
+      }
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${Math.min(.95, p.a * pulse)})`;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${Math.min(.6, p.a)})`;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function frame(t) {
+      if (!state.effects.particles || reduceMotion()) { ctx.clearRect(0, 0, w, h); raf = 0; return; }
+      ctx.clearRect(0, 0, w, h);
+      for (const p of dots) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < -12) p.x = w + 12; else if (p.x > w + 12) p.x = -12;
+        if (p.y < -12) p.y = h + 12; else if (p.y > h + 12) p.y = -12;
+        const pulse = .72 + .28 * Math.sin(p.phase + t * p.speed * 60);
+        if (p.star) { star(p, pulse); continue; }
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},${Math.min(.82, p.a * pulse)})`;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = `rgba(${p.col[0]},${p.col[1]},${p.col[2]},.28)`;
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(frame);
+    }
+
+    function start() {
+      if (!ctx) return;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      if (!state.effects.particles || reduceMotion()) { ctx.clearRect(0, 0, w, h); return; }
+      raf = requestAnimationFrame(frame);
+    }
+
+    if (ctx) {
+      resize();
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else start();
+      });
+      window.addEventListener('resize', () => { resize(); }, { passive: true });
+    }
+    return { start: ctx ? start : () => {} };
+  })();
+  starfield.start();
+
+  /* ============================================================
+     时钟 / 碎碎念 / 最近发布
+     ============================================================ */
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function updateClock() {
+    const now = new Date();
+    const clock = $('#liveClock'), date = $('#liveDate');
+    if (clock) clock.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    if (date) {
+      date.textContent = now.getFullYear() + '.' + pad(now.getMonth() + 1) + '.' + pad(now.getDate()) +
+        ' · ' + DAY_NAMES[now.getDay()];
+    }
+    const pct = ((now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400) * 100;
+    const bar = $('#timeProgress'), label = $('#dayPercent');
+    if (bar) bar.style.width = pct.toFixed(2) + '%';
+    if (label) label.textContent = Math.floor(pct) + '%';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  /* 碎碎念：直接改这个数组就行，越靠前越新 */
+  const MOMENTS = [
+    ['2026.09.22', '终于把小窝的 V2 认真规划起来了。现在开始研究，怎么把「网页」做得像一间房间。', '🌸'],
+    ['2026.09.21', '又折腾了一晚上 AI Agent。很多东西其实没那么有用，但做出来的时候总是很开心。', '🤖'],
+    ['2026.09.10', 'Minecraft 服务器又出现了新的问题。嗯……很正常。', '⛏']
   ];
-  function renderMoments(){
-    const host=$('#momentsGrid'); if(!host)return;
-    host.innerHTML=moments.map(m=>`<article class="moment-card card tilt-card"><div class="moment-date">${m[0]}</div><p>${esc(m[1])}</p><span class="moment-icon">${m[2]}</span></article>`).join('');
-    wireTilt();
-  }
-  renderMoments();
+  (function renderMoments() {
+    const host = $('#momentsGrid');
+    if (!host) return;
+    host.innerHTML = MOMENTS.map((m) =>
+      '<article class="moment-card card tilt-card">' +
+        '<div class="moment-date">' + m[0] + '</div>' +
+        '<p>' + esc(m[1]) + '</p>' +
+        '<span class="moment-icon">' + m[2] + '</span>' +
+      '</article>'
+    ).join('');
+  })();
 
-  // ---------- Recent feed ----------
-  function readRecentPosts(limit=3){
-    return $$('#blog .blog-grid .blog-card').map(card=>{
-      const a=$('.card-title-link',card), d=$('.date',card), p=card.querySelector('p');
-      return a?{title:a.textContent.trim(),href:a.getAttribute('href')||'#',date:d?.textContent.trim()||'',desc:p?.textContent.trim()||''}:null;
-    }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,limit);
+  /* 最近发布：博客直接从首页卡片里读（不另存一份数据），项目读 RINSORA_PROJECTS */
+  function readRecentPosts(limit) {
+    return $$('#blog .blog-grid .blog-card').map((card) => {
+      const a = $('.card-title-link', card), d = $('.date', card), p = card.querySelector('p');
+      if (!a) return null;
+      return { title: a.textContent.trim(), href: a.getAttribute('href') || '#', date: d ? d.textContent.trim() : '', desc: p ? p.textContent.trim() : '' };
+    }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit || 3);
   }
-  function readRecentProjects(limit=3){
-    const raw=window.RINSORA_PROJECTS||{};
-    const items=Array.isArray(raw.items)?raw.items.slice():[];
-    const sorter=window.RinsoraProjects?.newestFirst||(list=>list.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))));
-    return sorter(items).slice(0,limit);
+  function readRecentProjects(limit) {
+    const raw = window.RINSORA_PROJECTS || {};
+    const items = Array.isArray(raw.items) ? raw.items.slice() : [];
+    const sorter = (window.RinsoraProjects && window.RinsoraProjects.newestFirst) ||
+      ((list) => list.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))));
+    return sorter(items).slice(0, limit || 3);
   }
-  function latestUpdate(){
-    const ds=[];
-    $$('#blog .blog-grid .blog-card .date').forEach(x=>ds.push(x.textContent.trim()));
-    (window.RINSORA_PROJECTS?.items||[]).forEach(x=>x?.date&&ds.push(String(x.date)));
-    ds.sort();return ds.at(-1)||'';
+  function latestUpdate() {
+    const dates = [];
+    $$('#blog .blog-grid .blog-card .date').forEach((x) => dates.push(x.textContent.trim()));
+    ((window.RINSORA_PROJECTS || {}).items || []).forEach((x) => { if (x && x.date) dates.push(String(x.date)); });
+    dates.sort();
+    return dates.length ? dates[dates.length - 1] : '';
   }
-  function buildRecent(){
-    const host=$('#recentFeed'); if(!host)return;
-    const posts=readRecentPosts(), projs=readRecentProjects();
-    if(!posts.length&&!projs.length){host.innerHTML='';return;}
-    let html='<div class="section-heading fancy-heading"><span>✧</span><h3>最近发布</h3><small>RECENT</small><span class="line"></span></div>';
-    if(posts.length){
-      html+='<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新博客<span class="rt-line"></span></div><div class="recent-grid">';
-      html+=posts.map(p=>`<a class="recent-card" href="${esc(p.href)}"><span class="rc-kind">BLOG</span><b class="rc-title">${esc(p.title)}</b><span class="rc-desc">${esc(p.desc)}</span><span class="rc-foot"><span>${esc(p.date)}</span><span>READ MORE ↗</span></span></a>`).join('');
-      html+='</div></div>';
-    }
-    if(projs.length){
-      html+='<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新项目<span class="rt-line"></span></div><div class="recent-grid">';
-      html+=projs.map(p=>{
-        const tag=p.url?'a':'div';const attr=p.url?` href="${esc(p.url)}" target="_blank" rel="noopener"`:'';
-        return `<${tag} class="recent-card"${attr}><span class="rc-kind k-proj">PROJECT</span><b class="rc-title">${esc(p.name||'Untitled')}</b><span class="rc-desc">${esc(p.desc||'')}</span><span class="rc-foot"><span>${esc(p.date||'')}</span><span>${p.url?'OPEN ↗':''}</span></span></${tag}>`;
-      }).join('');
-      html+='</div></div>';
-    }
-    host.innerHTML=html;
-  }
-  function addRecentStyles(){
-    if($('#v2RecentStyles'))return;
-    const s=document.createElement('style');s.id='v2RecentStyles';s.textContent=`
-      .recent-grid-wrap{margin:0 0 16px}.recent-sub{display:flex;align-items:center;gap:8px;color:#ad97a8;font-size:8px;letter-spacing:.14em;margin-bottom:9px}.recent-sub i{width:6px;height:6px;border-radius:50%;background:#ef9fbc}.rt-line{height:1px;flex:1;background:linear-gradient(90deg,rgba(213,180,198,.35),transparent)}.recent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.recent-card{display:flex;flex-direction:column;gap:7px;padding:14px 15px;border-radius:18px;transition:transform .25s var(--ease),background .2s}.recent-card:hover{transform:translateY(-4px);background:var(--glass-h)}.rc-kind{font-size:7px;letter-spacing:.18em;color:#d07f9f;font-weight:1000}.rc-kind.k-proj{color:#8e84cf}.rc-title{font-size:11px;line-height:1.4}.rc-desc{font-size:9px;color:#a28f9e;line-height:1.7;min-height:30px}.rc-foot{display:flex;justify-content:space-between;margin-top:auto;color:#ae99a8;font-size:7px;gap:8px}.rc-foot span:last-child{color:#cd86a2;font-weight:900}@media(max-width:860px){.recent-grid{grid-template-columns:1fr}}`;
-    document.head.appendChild(s);
-  }
-  addRecentStyles();buildRecent();
+  function buildRecent() {
+    const host = $('#recentFeed');
+    if (!host) return;
+    const posts = readRecentPosts(3);
+    const projects = readRecentProjects(3);
+    if (!posts.length && !projects.length) { host.innerHTML = ''; return; }
 
-  // ---------- Blog filter ----------
-  function buildBlogFilter(){
-    const host=$('#blogFilter'); if(!host)return;
-    const cats=[...new Set(blogCards().map(c=>(c.dataset.cat||'').trim()).filter(Boolean))];
-    if(cats.length<2){host.innerHTML='';return;}
-    host.innerHTML=['全部',...cats].map((c,i)=>`<button class="bf-chip${i===0?' active':''}" type="button" data-cat="${esc(i?c:'')}">${esc(c)}</button>`).join('');
-    host.onclick=e=>{
-      const btn=e.target.closest('.bf-chip');if(!btn)return;
-      $$('.bf-chip',host).forEach(x=>x.classList.remove('active'));btn.classList.add('active');
-      applyBlogFilter(btn.dataset.cat||'');
+    let out = '<div class="section-heading fancy-heading"><span>✧</span><h3>最近发布</h3><small>RECENT</small><span class="line"></span></div>';
+    if (posts.length) {
+      out += '<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新博客<span class="rt-line"></span></div><div class="recent-grid">' +
+        posts.map((p) =>
+          '<a class="recent-card" href="' + esc(p.href) + '">' +
+            '<span class="rc-kind">BLOG</span>' +
+            '<b class="rc-title">' + esc(p.title) + '</b>' +
+            '<span class="rc-desc">' + esc(p.desc) + '</span>' +
+            '<span class="rc-foot"><span>' + esc(p.date) + '</span><span>READ MORE ↗</span></span>' +
+          '</a>').join('') + '</div>';
+    }
+    if (projects.length) {
+      out += '<div class="recent-grid-wrap"><div class="recent-sub"><i class="k-proj"></i>最新项目<span class="rt-line"></span></div><div class="recent-grid">' +
+        projects.map((p) => {
+          const tag = p.url ? 'a' : 'div';
+          const attr = p.url ? ' href="' + esc(p.url) + '" target="_blank" rel="noopener noreferrer"' : '';
+          return '<' + tag + ' class="recent-card"' + attr + '>' +
+            '<span class="rc-kind k-proj">PROJECT</span>' +
+            '<b class="rc-title">' + esc(p.name || '未命名') + '</b>' +
+            '<span class="rc-desc">' + esc(p.desc || '') + '</span>' +
+            '<span class="rc-foot"><span>' + esc(p.date || '') + '</span><span>' + (p.url ? 'OPEN ↗' : '') + '</span></span>' +
+          '</' + tag + '>';
+        }).join('') + '</div>';
+    }
+    host.innerHTML = out;
+  }
+  buildRecent();
+
+  /* ============================================================
+     博客分类筛选（分类从卡片上收集，加文章只要卡片带 data-cat）
+     ============================================================ */
+  function blogCards() { return $$('#blog .blog-grid .blog-card'); }
+  function applyBlogFilter(cat) {
+    let visible = 0;
+    blogCards().forEach((card) => {
+      const hit = !cat || (card.dataset.cat || '') === cat;
+      card.hidden = !hit;
+      if (hit) visible++;
+    });
+    const empty = $('#blogEmpty');
+    if (empty) empty.hidden = visible > 0;
+  }
+  function buildBlogFilter() {
+    const host = $('#blogFilter');
+    if (!host) return;
+    const cats = Array.from(new Set(blogCards().map((c) => (c.dataset.cat || '').trim()).filter(Boolean)));
+    if (cats.length < 2) { host.innerHTML = ''; return; }
+    host.innerHTML = ['全部'].concat(cats).map((c, i) =>
+      '<button class="bf-chip' + (i === 0 ? ' active' : '') + '" type="button" data-cat="' + esc(i ? c : '') + '">' + esc(c) + '</button>'
+    ).join('');
+    host.onclick = (e) => {
+      const btn = e.target.closest('.bf-chip');
+      if (!btn) return;
+      $$('.bf-chip', host).forEach((x) => x.classList.remove('active'));
+      btn.classList.add('active');
+      applyBlogFilter(btn.dataset.cat || '');
     };
     applyBlogFilter('');
   }
-  function blogCards(){return $$('#blog .blog-grid .blog-card')}
-  function applyBlogFilter(cat){
-    let count=0;
-    blogCards().forEach(card=>{const hit=!cat||(card.dataset.cat||'')===cat;card.hidden=!hit;if(hit)count++});
-    const empty=$('#blogEmpty');if(empty)empty.hidden=count>0;
-  }
   buildBlogFilter();
 
-  // ---------- Tilt ----------
-  function wireTilt(){
-    if(state.settings.tilt && !isReduceMotion()){
-      $$('.tilt-card').forEach(card=>{
-        if(card.dataset.tiltBound)return;
-        card.dataset.tiltBound='1';
-        card.addEventListener('pointermove',e=>{
-          if(e.pointerType==='touch')return;
-          const r=card.getBoundingClientRect();
-          const x=(e.clientX-r.left)/r.width-.5;
-          const y=(e.clientY-r.top)/r.height-.5;
-          card.style.transform=`perspective(800px) rotateX(${(-y*4).toFixed(2)}deg) rotateY(${(x*5).toFixed(2)}deg) translateY(-2px)`;
-        });
-        card.addEventListener('pointerleave',()=>{card.style.transform='';});
-      });
+  /* ============================================================
+     鼠标：卡片倾斜 / 光晕 / 涟漪
+     ============================================================ */
+  const cursorDot = $('#cursorDot'), cursorRing = $('#cursorRing'), ambientGlow = $('#ambientGlow');
+  let mx = innerWidth / 2, my = innerHeight / 2, rx = mx, ry = my;
+
+  document.addEventListener('pointermove', (e) => {
+    mx = e.clientX; my = e.clientY;
+    if (cursorDot) { cursorDot.style.left = mx + 'px'; cursorDot.style.top = my + 'px'; }
+    if (ambientGlow) { ambientGlow.style.left = mx + 'px'; ambientGlow.style.top = my + 'px'; }
+
+    const card = e.target.closest && e.target.closest('.tilt-card');
+    if (card && state.effects.tilt && !reduceMotion() && e.pointerType !== 'touch') {
+      const r = card.getBoundingClientRect();
+      if (r.width && r.height) {
+        const px = (e.clientX - r.left) / r.width - .5;
+        const py = (e.clientY - r.top) / r.height - .5;
+        card.style.transform = 'perspective(900px) rotateX(' + (-py * 3.4).toFixed(2) + 'deg) rotateY(' + (px * 4.2).toFixed(2) + 'deg) translateY(-3px)';
+      }
     }
-  }
-  wireTilt();
+  }, { passive: true });
 
-  // ---------- Cursor ----------
-  const dot=$('#cursorDot'), ring=$('#cursorRing'), glow=$('#ambientGlow');
-  let cx=innerWidth/2,cy=innerHeight/2, rx=cx,ry=cy;
-  function moveCursor(e){
-    cx=e.clientX;cy=e.clientY;
-    if(dot){dot.style.left=cx+'px';dot.style.top=cy+'px'}
-    if(glow){glow.style.left=cx+'px';glow.style.top=cy+'px'}
-  }
-  document.addEventListener('pointermove',moveCursor,{passive:true});
-  function cursorLoop(){
-    rx+=(cx-rx)*.18;ry+=(cy-ry)*.18;
-    if(ring){ring.style.left=rx+'px';ring.style.top=ry+'px'}
+  document.addEventListener('pointerout', (e) => {
+    const card = e.target.closest && e.target.closest('.tilt-card');
+    if (!card) return;
+    if (e.relatedTarget && card.contains(e.relatedTarget)) return;
+    card.style.transform = '';
+  }, { passive: true });
+
+  (function cursorLoop() {
+    rx += (mx - rx) * .18;
+    ry += (my - ry) * .18;
+    if (cursorRing) { cursorRing.style.left = rx + 'px'; cursorRing.style.top = ry + 'px'; }
     requestAnimationFrame(cursorLoop);
+  })();
+
+  document.addEventListener('pointerover', (e) => {
+    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip')) {
+      body.classList.add('cursor-hover');
+    }
+  });
+  document.addEventListener('pointerout', (e) => {
+    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip')) {
+      body.classList.remove('cursor-hover');
+    }
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!state.effects.ripple || reduceMotion() || e.button !== 0) return;
+    if (e.target.closest && e.target.closest('input,textarea,select')) return;
+    const el = document.createElement('span');
+    el.className = 'click-ripple';
+    el.style.left = e.clientX + 'px';
+    el.style.top = e.clientY + 'px';
+    body.appendChild(el);
+    setTimeout(() => el.remove(), 650);
+  }, { passive: true });
+
+  /* ============================================================
+     提示条 / 键盘
+     ============================================================ */
+  let toastEl, toastTimer;
+  function toast(msg) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'blog-toast';
+      body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.className = 'blog-toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.className = 'blog-toast'; }, 2400);
   }
-  cursorLoop();
-  document.addEventListener('pointerover',e=>{
-    if(e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item')) document.body.classList.add('cursor-hover');
-  });
-  document.addEventListener('pointerout',e=>{
-    if(e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item')) document.body.classList.remove('cursor-hover');
-  });
 
-  // ---------- Ripple ----------
-  document.addEventListener('pointerdown',e=>{
-    if(!state.settings.ripple||isReduceMotion()||e.button===2)return;
-    const el=document.createElement('span');el.className='click-ripple';el.style.left=e.clientX+'px';el.style.top=e.clientY+'px';document.body.appendChild(el);
-    setTimeout(()=>el.remove(),650);
-  });
-
-  // ---------- Keyboard ----------
-  document.addEventListener('keydown',e=>{
-    const key=e.key.toLowerCase();
-    if((e.ctrlKey||e.metaKey)&&key==='k'){e.preventDefault();openSettings();}
-    if(key==='1')showSection('about');
-    if(key==='2')showSection('blog');
-    if(key==='3')showSection('projects');
-    if(key==='escape')closeSettings();
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toLowerCase();
+    const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSettings(); return; }
+    if (e.key === 'Escape') {
+      closeSettings();
+      if (window.RinsoraMusicUpload && window.RinsoraMusicUpload.close) window.RinsoraMusicUpload.close();
+      return;
+    }
+    if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === '1') showSection('about');
+    if (e.key === '2') showSection('blog');
+    if (e.key === '3') showSection('projects');
   });
 
-  // ---------- Toast ----------
-  let toastEl,toastTimer;
-  function toast(msg){
-    if(!toastEl){toastEl=document.createElement('div');toastEl.className='blog-toast';document.body.appendChild(toastEl)}
-    toastEl.textContent=msg;toastEl.className='blog-toast show';
-    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.className='blog-toast',2500);
-  }
-
-  // ---------- External module hook ----------
+  /* ============================================================
+     对外接口 + 初始化
+     ============================================================ */
   window.RinsoraHome = {
-    refreshRecent:()=>{buildRecent();$('#nowUpdate').textContent=latestUpdate()||'—';wireTilt()},
-    refreshBlogFilter:buildBlogFilter,
-    showSection
+    refreshRecent() {
+      buildRecent();
+      const n = $('#nowUpdate');
+      if (n) n.textContent = latestUpdate() || '—';
+    },
+    refreshBlogFilter: buildBlogFilter,
+    showSection,
+    enterApp,
+    openSettings,
+    closeSettings,
+    setPalette: (p) => applyPalette(p, true),
+    setNight: (n) => applyNight(!!n, true),
+    state
   };
 
-  $('#nowUpdate').textContent=latestUpdate()||'—';
+  const nowUpdate = $('#nowUpdate');
+  if (nowUpdate) nowUpdate.textContent = latestUpdate() || '—';
 
-  // ---------- Hash / initial ----------
-  if(location.hash){
-    setTimeout(routeHash, 50);
-  }
+  if (location.hash) setTimeout(routeHash, 50);
 })();

@@ -22,16 +22,20 @@
   <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
   <title>空凛 · Rinsora 的小窝</title>
   <link rel="stylesheet" href="style.css">
+  <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色 -->
+  <script>
+  try{
+    var root=document.documentElement;
+    var pal=localStorage.getItem('rinsora-palette');
+    if(['candy','sunset','lilac','mint'].indexOf(pal)===-1) pal='candy';
+    root.classList.add('pal-'+pal);
+    if(localStorage.getItem('rinsora-theme')==='night') root.classList.add('night');
+    var hue=localStorage.getItem('rinsora-hue');
+    if(hue) root.style.setProperty('--hue', hue+'deg');
+  }catch(e){}
+  </script>
 </head>
 <body>
-<script>
-try{
-  const mode=localStorage.getItem('rinsora-theme');
-  if(mode==='night'){
-    document.documentElement.classList.add('night');
-  }
-}catch(e){}
-</script>
 
 <div class="scene" aria-hidden="true">
   <div class="aurora aurora-a"></div>
@@ -39,12 +43,9 @@ try{
   <div class="aurora aurora-c"></div>
   <div class="aurora aurora-d"></div>
   <div class="grid-floor"></div>
-  <div class="stars">
-    <span>✦</span><span>✧</span><span>·</span><span>✦</span><span>·</span><span>✧</span>
-    <span>·</span><span>✦</span><span>✧</span><span>·</span><span>✦</span><span>·</span>
-  </div>
   <div class="scene-noise"></div>
 </div>
+<canvas id="starCanvas" aria-hidden="true"></canvas>
 <div class="ambient-glow" id="ambientGlow" aria-hidden="true"></div>
 <div class="cursor-dot" id="cursorDot" aria-hidden="true"></div>
 <div class="cursor-ring" id="cursorRing" aria-hidden="true"><span>♡</span></div>
@@ -53,7 +54,7 @@ try{
 <div class="boot-screen" id="bootScreen">
   <div class="boot-orbit" aria-hidden="true"></div>
   <div class="boot-card">
-    <div class="boot-mark">R</div>
+    <div class="boot-mark"><span aria-hidden="true">R</span><img src="assets/avatar.png" alt="" onerror="this.remove()"></div>
     <p class="boot-kicker">RINSORA SYSTEM</p>
     <h1>正在打开空凛的小世界</h1>
     <p class="boot-sub">loading my little world...</p>
@@ -341,15 +342,18 @@ try{
       <div class="set-block">
         <label>主题配色</label>
         <div class="theme-grid">
-          <button data-theme="candy" type="button"><i class="swatch sw-candy"></i><span>糖果粉黄</span></button>
-          <button data-theme="sunset" type="button"><i class="swatch sw-sunset"></i><span>蜜桃晚霞</span></button>
-          <button data-theme="dream" type="button"><i class="swatch sw-dream"></i><span>梦幻紫蓝</span></button>
-          <button data-theme="mint" type="button"><i class="swatch sw-mint"></i><span>薄荷汽水</span></button>
+          <button data-palette="candy" type="button"><i class="swatch sw-candy"></i><span>糖果粉黄</span></button>
+          <button data-palette="sunset" type="button"><i class="swatch sw-sunset"></i><span>蜜桃晚霞</span></button>
+          <button data-palette="lilac" type="button"><i class="swatch sw-lilac"></i><span>梦幻紫蓝</span></button>
+          <button data-palette="mint" type="button"><i class="swatch sw-mint"></i><span>薄荷汽水</span></button>
         </div>
       </div>
       <div class="set-block">
         <label>主题色相 <output id="hueValue">0°</output></label>
-        <input id="hueRange" type="range" min="-20" max="40" value="0">
+        <input id="hueRange" type="range" min="-30" max="40" value="0">
+      </div>
+      <div class="set-block">
+        <div class="set-toggle"><span><b>夜间模式</b><small>把整个小窝调成深色</small></span><button class="switch" id="nightSwitch" type="button" aria-label="夜间模式"><i></i></button></div>
       </div>
     </div>
 
@@ -363,7 +367,7 @@ try{
     <div class="set-pane" data-pane="aboutSite">
       <div class="lab-card">
         <span>VERSION</span><strong>Rinsora Home V2</strong>
-        <p>把小窝做得更像一个“真的房间”：动态壁纸、玻璃 UI、角色导航、歌词播放器与微交互。</p>
+        <p>把小窝做得更像一个「真的房间」：动态壁纸、玻璃 UI、角色导航、歌词播放器与微交互。配色与特效只存在你自己的浏览器里，不会写进仓库。</p>
       </div>
       <div class="lab-list">
         <div><span>DESIGN</span><b>Candy / Anime / Acrylic</b></div>
@@ -392,6 +396,5 @@ try{
 <script src="projects.js"></script>
 <script src="blog-admin.js"></script>
 <script src="script.js"></script>
-<script src="rinsora-v2.1-fix.js"></script>
 </body>
 </html>
