@@ -28,6 +28,15 @@ window.RINSORA_MUSIC = {
       "src": "music/demo.wav",
       "lrc": "[00:00.00]♪ 欢迎来到空凛的小窝 ♪\n[00:03.00]这里收藏一点喜欢的东西\n[00:06.00]也记录一些正在发生的故事\n[00:09.00]以后再一起慢慢变得更可爱吧 ♡",
       "date": "2026-09-21"
+    },
+    {
+      "id": "shelter",
+      "title": "Shelter (乐器版)",
+      "artist": "Porter Robinson & Madeon",
+      "cover": "assets/music/shelter-cover.png",
+      "src": "assets/music/shelter.mp3",
+      "lrc": "",
+      "date": "2026-09-21"
     }
   ]
 };
