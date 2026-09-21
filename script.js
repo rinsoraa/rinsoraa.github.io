@@ -26,6 +26,11 @@ const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/* 博客卡片是「最近发布」和「分类筛选」共用的数据源，声明必须放在最前面：
+   文件中部就会调用用到它的函数，而 const 有暂时性死区，
+   写在后面会当场 ReferenceError，整段脚本跟着停摆。 */
+const blogCards = ()=>$$('#blog .blog-grid .blog-card');
+
 /* ---------------------------------------------------------- 进入小窝 ---- */
 
 function enterApp(instant){
@@ -245,6 +250,75 @@ function buildRecent(){
 }
 
 buildRecent();
+paintNowUpdate();
+
+/* ------------------------------------------------ 博客分类筛选 ----
+   分类不写死在代码里：直接从卡片的 data-cat 上收集，所以写作台/本地脚本
+   新发的文章只要卡片带上 data-cat，筛选项就会自动多出来一项。
+   只有一个分类时不渲染筛选条（「全部」和它本身没区别）。 */
+
+function applyBlogFilter(cat){
+  let shown = 0;
+  blogCards().forEach(card=>{
+    const hit = !cat || (card.dataset.cat || '').trim() === cat;
+    card.hidden = !hit;
+    if(hit) shown++;
+  });
+  const empty = document.getElementById('blogEmpty');
+  if(empty) empty.hidden = shown > 0;
+}
+
+function buildBlogFilter(){
+  const host = document.getElementById('blogFilter');
+  if(!host) return;
+
+  const cats = [];
+  blogCards().forEach(card=>{
+    const c = (card.dataset.cat || '').trim();
+    if(c && cats.indexOf(c) === -1) cats.push(c);
+  });
+
+  if(cats.length < 2){ host.innerHTML = ''; return; }
+
+  host.innerHTML = ['全部'].concat(cats).map((c,i)=>
+    `<button class="bf-chip${i === 0 ? ' active' : ''}" type="button"` +
+    ` data-cat="${esc(i === 0 ? '' : c)}">${esc(c)}</button>`
+  ).join('');
+
+  host.addEventListener('click',(e)=>{
+    const btn = e.target.closest ? e.target.closest('.bf-chip') : null;
+    if(!btn) return;
+    $$('.bf-chip', host).forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    applyBlogFilter(btn.dataset.cat || '');
+  });
+
+  applyBlogFilter('');
+}
+
+buildBlogFilter();
+
+/* 「最后更新」＝博客和项目里最新的那个日期（YYYY.MM.DD 定宽，比字符串就是比时间） */
+function latestUpdate(){
+  const ds = [];
+  blogCards().forEach(card=>{
+    const d = card.querySelector('.date');
+    if(d) ds.push(d.textContent.trim());
+  });
+  const raw = window.RINSORA_PROJECTS || {};
+  (Array.isArray(raw.items) ? raw.items : []).forEach(it=>{
+    if(it && it.date) ds.push(String(it.date).trim());
+  });
+  ds.sort();
+  return ds.length ? ds[ds.length - 1] : '';
+}
+
+function paintNowUpdate(){
+  const el = document.getElementById('nowUpdate');
+  if(!el) return;
+  const s = latestUpdate();
+  if(s) el.textContent = s;
+}
 
 /* ------------------------------------------------------ 鼠标点击涟漪 ----
    在指针位置放一个会扩散淡出的小圆，自动清理，不拦截任何事件。
@@ -282,5 +356,8 @@ function syncFromHash(){
 })();
 window.addEventListener('hashchange',syncFromHash);
 
-/* 给别的模块留个口子：内容变了可以重刷「最近发布」 */
-window.RinsoraHome = { refreshRecent: buildRecent };
+/* 给别的模块留个口子：内容变了可以重刷「最近发布」和「最后更新」 */
+window.RinsoraHome = {
+  refreshRecent: ()=>{ buildRecent(); paintNowUpdate(); },
+  refreshBlogFilter: buildBlogFilter
+};

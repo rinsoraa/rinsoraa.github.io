@@ -46,7 +46,7 @@
   /* 卡片在 index.html 里是「一行一张」，所以按行剔除最稳 */
   function dropCardLine(html, slug) {
     return html.split('\n').filter(function (line) {
-      if (line.indexOf('<article class="blog-card card">') === -1) return true;
+      if (line.indexOf('<article class="blog-card card"') === -1) return true;
       return line.indexOf('posts/' + slug + '.html') === -1;
     }).join('\n');
   }

@@ -26,6 +26,8 @@
     status: $('#saveStatus'), toast: $('#toast')
   };
 
+  var SITE = 'https://rinsora.dpdns.org';
+
   var state = { slug: '', existing: null, cards: {} };
 
   /* ====================================================== 工具 ==== */
@@ -230,6 +232,14 @@
     '  <meta name="theme-color" content="#ffb6d5">',
     '  <title>__TITLE__ · \u7a7a\u51db · Rinsora \u7684\u5c0f\u7a9d</title>',
     '  <meta name="description" content="__SUMMARY__">',
+    '  <link rel="canonical" href="__URL__">',
+    '  <meta property="og:type" content="article">',
+    '  <meta property="og:site_name" content="\u7a7a\u51db \u00b7 Rinsora \u7684\u5c0f\u7a9d">',
+    '  <meta property="og:title" content="__TITLE__ \u00b7 \u7a7a\u51db \u00b7 Rinsora \u7684\u5c0f\u7a9d">',
+    '  <meta property="og:description" content="__SUMMARY__">',
+    '  <meta property="og:url" content="__URL__">',
+    '  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">',
+    '  <meta name="twitter:card" content="summary_large_image">',
     '  <link rel="icon" href="../favicon.ico" sizes="any">',
     '  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">',
     '  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">',
@@ -237,7 +247,7 @@
     '  <link rel="stylesheet" href="post.css">',
     '</head>',
     '<body>',
-    "  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</" + 'script>',
+    "  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</" + 'script>',
     '',
     '  <div class="bg-decor" aria-hidden="true">',
     '    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>',
@@ -249,7 +259,7 @@
     '    <article class="post-card glass">',
     '      <div class="post-top">',
     '        <a class="post-back" href="../index.html#blog">\u2190 \u56de\u5230\u535a\u5ba2\u5217\u8868</a>',
-    '        <span class="post-brand">Rinsora</span>',
+    '        <span class="post-brand">空凛 / Rinsora</span>',
     '      </div>',
     '',
     '      <p class="post-kicker">__KICKER__</p>',
@@ -303,11 +313,25 @@
       .replace('__TITLE__', esc(f.title))
       .replace('__TITLE__', esc(f.title))
       .replace('__SUMMARY__', esc(f.summary))
+      .replace('__URL__', SITE + '/posts/' + f.slug + '.html')
       .replace('__KICKER__', esc(f.kicker))
       .replace('__DATE__', esc(f.date))
       .replace('__READING__', readingTime(f.md))
       .replace('__BODY__', mdToHtml(f.md))
       .replace('__TAGS__', tags);
+  }
+
+  /* \u5206\u7c7b = kicker \u659c\u6760\u540e\u9762\u90a3\u4e00\u6bb5(BLOG / \u5de5\u4f5c\u6d41 -> \u5de5\u4f5c\u6d41)
+     \u9996\u9875\u5361\u7247\u4e0a\u7684 data-cat \u7528\u7684\u5c31\u662f\u5b83,\u5206\u7c7b\u7b5b\u9009\u6761\u4f1a\u81ea\u52a8\u591a\u51fa\u6765\u4e00\u9879 */
+  function catOf(f) {
+    var s = String(f.kicker || '').split('/');
+    return String(s[s.length - 1] || '').trim() || '\u968f\u7b14';
+  }
+
+  /* \u5361\u7247\u4e0a\u53ea\u8981\u6570\u5b57 (\u7ea6 3 \u5206\u949f -> 3 min) */
+  function minOf(f) {
+    var m = /(\d+)/.exec(readingTime(f.md));
+    return m ? m[1] : '1';
   }
 
   function parsePost(html) {
@@ -334,10 +358,16 @@
     return m ? m[1] + m[2] + m[3] : '00000000';
   }
 
-  function cardLine(slug, title, date, summary) {
-    return '            <article class="blog-card card"><span class="date">' + esc(date) + '</span>' +
+  function cardLine(slug, title, date, summary, cat, min) {
+    cat = cat || '\u968f\u7b14';
+    min = min || '1';
+    return '            <article class="blog-card card" data-cat="' + esc(cat) + '" data-min="' + esc(min) + '">' +
+      '<span class="date">' + esc(date) + '</span>' +
       '<h4><a class="card-title-link" href="posts/' + slug + '.html">' + esc(title) + '</a></h4>' +
-      '<p>' + esc(summary) + '</p><span class="read-more">READ MORE \u2192</span></article>';
+      '<p>' + esc(summary) + '</p>' +
+      '<div class="blog-foot"><span class="bm-cat">' + esc(cat) + '</span>' +
+      '<span class="bm-min">' + esc(min) + ' min</span>' +
+      '<span class="read-more">READ MORE \u2192</span></div></article>';
   }
 
   function findGrid(lines) {
@@ -352,7 +382,7 @@
     return null;
   }
 
-  function upsertCard(html, slug, title, date, summary) {
+  function upsertCard(html, slug, title, date, summary, cat, min) {
     var lines = html.split('\n');
     var g = findGrid(lines);
     if (!g) return null;
@@ -363,7 +393,7 @@
       return l.indexOf('posts/' + slug + '.html') === -1;
     });
 
-    var fresh = cardLine(slug, title, date, summary);
+    var fresh = cardLine(slug, title, date, summary, cat, min);
     var items = cards.map(function (l) { return { d: cdateOf(l), n: 0, l: l }; });
     items.push({ d: cdateOf(fresh), n: 1, l: fresh });
     items.sort(function (a, b) {
@@ -587,7 +617,7 @@
       return GH.getFile('index.html');
     }).then(function (idx) {
       if (!idx) throw new Error('\u8bfb\u4e0d\u5230 index.html');
-      var next = upsertCard(idx.text, f.slug, f.title, f.date, f.summary);
+      var next = upsertCard(idx.text, f.slug, f.title, f.date, f.summary, catOf(f), minOf(f));
       if (!next) throw new Error('index.html \u91cc\u6ca1\u627e\u5230 .blog-grid\uff0c\u5361\u7247\u9700\u8981\u624b\u52a8\u52a0');
       if (next === idx.text) return null;
       return GH.putFile('index.html', next, '\u66f4\u65b0\u9996\u9875\u5361\u7247\uff1a' + f.title, idx.sha);

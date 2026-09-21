@@ -16,6 +16,7 @@
                     tags     小标签数组，会显示在预览卡片上
                     icon     卡片左侧的图标（一个字符）
                     date     添加日期
+     status   可选。项目状态，比如 Active / 维护中 / 已归档；留空则不显示徽章
    ============================================================ */
 window.RINSORA_PROJECTS = {
   "version": 1,
@@ -36,7 +37,8 @@ window.RINSORA_PROJECTS = {
         "JavaScript"
       ],
       "icon": "📦",
-      "date": "2026.09.21"
+      "date": "2026.09.21",
+      "status": "Active"
     },
     {
       "id": "trayhider",
@@ -48,7 +50,8 @@ window.RINSORA_PROJECTS = {
         "C#"
       ],
       "icon": "📦",
-      "date": "2026.09.21"
+      "date": "2026.09.21",
+      "status": "Active"
     },
     {
       "id": "rinsoraa-rinsoraa-github-io",
@@ -62,7 +65,8 @@ window.RINSORA_PROJECTS = {
         "rinsoraa"
       ],
       "icon": "📦",
-      "date": "2026.09.21"
+      "date": "2026.09.21",
+      "status": "维护中"
     }
   ]
 };

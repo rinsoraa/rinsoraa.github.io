@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="editor.css">
 </head>
 <body class="editor-page">
-  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</script>
 
   <div class="bg-decor" aria-hidden="true">
     <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>

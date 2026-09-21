@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffb6d5">
   <meta name="robots" content="noindex,nofollow">
-  <title>项目编辑台 · 罐头商铺</title>
+  <title>项目编辑台 · 空凛 · Rinsora 的小窝</title>
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="editor.css">
 </head>
 <body class="editor-page">
-  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</script>
 
   <div class="bg-decor" aria-hidden="true">
     <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
@@ -106,6 +106,17 @@
           <label class="field full"><span>小标签（逗号分隔）</span>
             <input id="fTags" placeholder="Python, 自动化" autocomplete="off">
             <small>会显示在项目展示页的预览卡片上。</small>
+          </label>
+
+          <label class="field"><span>状态（可选）</span>
+            <input id="fStatus" list="statusPicks" placeholder="Active / 维护中 / 已归档" autocomplete="off">
+            <datalist id="statusPicks">
+              <option value="Active"></option>
+              <option value="WIP"></option>
+              <option value="维护中"></option>
+              <option value="已归档"></option>
+            </datalist>
+            <small>显示成卡片上的状态徽章；留空就不显示。</small>
           </label>
         </div>
 

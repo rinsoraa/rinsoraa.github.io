@@ -63,6 +63,7 @@
     '                    tags     小标签数组，会显示在预览卡片上',
     '                    icon     卡片左侧的图标（一个字符）',
     '                    date     添加日期',
+    '                    status   可选。项目状态，比如 Active / 维护中 / 已归档；留空则不显示徽章',
     '   ============================================================ */',
     ''
   ].join('\n');
@@ -96,7 +97,8 @@
       desc: String(raw.desc || '').trim(),
       tags: tags.map(function (t) { return String(t == null ? '' : t).trim(); }).filter(Boolean),
       icon: String(raw.icon || '').trim() || DEFAULT_ICON,
-      date: String(raw.date || '').trim()
+      date: String(raw.date || '').trim(),
+      status: String(raw.status || '').trim()
     };
   }
 
@@ -139,23 +141,47 @@
     return { version: 1, categories: cats, items: items };
   }
 
+  /* 状态徽章：状态文字会变成一个小圆点 + 文字。
+     常见状态各有一种颜色（点一下就知道是在跑还是收起来了），
+     不认识的写法统一走中性灰，不会因为多打一个词就变成一坨默认色。 */
+  var STATUS_TONE = {
+    'active': 'run', 'online': 'run', '维护中': 'run', '进行中': 'run',
+    'wip': 'wip', '开发中': 'wip', 'beta': 'wip',
+    'paused': 'idle', '已归档': 'idle', 'archived': 'idle', '暂停': 'idle',
+    'done': 'done', '已完成': 'done', 'stable': 'done'
+  };
+  function statusHtml(status) {
+    var s = String(status || '').trim();
+    if (!s) return '';
+    var tone = STATUS_TONE[s.toLowerCase()] || STATUS_TONE[s] || 'other';
+    return '<span class="pt-status is-' + tone + '"><i></i>' + esc(s) + '</span>';
+  }
+
   /* ------------------------------------------- 单张项目卡 HTML --- */
 
   function itemHtml(raw) {
     var it = cleanItem(raw);
     var hasUrl = !!it.url;
-    var ext = hasUrl ? '<i class="pt-ext">\u2197</i>' : '';
     var desc = it.desc ? '<span class="pt-desc">' + esc(it.desc) + '</span>' : '';
     var tags = it.tags.length
       ? '<span class="pt-tags">' + it.tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('') + '</span>'
+      : '';
+    /* 状态 + 日期 + 跳转指示凑成一行；整行本身已经是 <a>，
+       所以这里的箭头只是个视觉提示，不能再套一个真链接。 */
+    var foot = (it.status || it.date || hasUrl)
+      ? '<span class="pt-foot">' +
+          statusHtml(it.status) +
+          (it.date ? '<span class="pt-date">' + esc(it.date) + '</span>' : '') +
+          (hasUrl ? '<span class="pt-go" aria-hidden="true">\u2197</span>' : '') +
+        '</span>'
       : '';
 
     return '<li class="pt-item" data-id="' + esc(it.id) + '" data-name="' + esc(it.name) + '">' +
       '<a class="pt-link"' + (hasUrl ? ' href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer"' : '') + '>' +
         '<span class="pt-icon" aria-hidden="true">' + esc(it.icon) + '</span>' +
         '<span class="pt-info">' +
-          '<span class="pt-name">' + esc(it.name || '未命名') + ext + '</span>' +
-          desc + tags +
+          '<span class="pt-name">' + esc(it.name || '未命名') + '</span>' +
+          desc + tags + foot +
         '</span>' +
       '</a>' +
       '</li>';

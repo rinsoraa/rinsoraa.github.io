@@ -4,21 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#ffb6d5">
-  <meta name="description" content="罐头商铺 ——世界里小小的一隅">
-  <title>罐头商铺 ——世界里小小的一隅</title>
+
+  <!-- ============================================================
+       身份与标题
+       ------------------------------------------------------------
+       主身份是「空凛 / Rinsora」（人），「罐头商铺」是这个小窝的名字。
+       标题里用 · 把两者串起来，读起来是「空凛 的小窝，叫罐头商铺」，
+       不会让人以为是两个不同的站点。
+       ============================================================ -->
+  <title>空凛 · Rinsora 的小窝</title>
+  <meta name="description" content="空凛 / Rinsora 的个人小窝「罐头商铺」——记录 AI、Minecraft、Web 和日常折腾。">
+  <link rel="canonical" href="https://rinsora.dpdns.org/">
 
   <!-- 图标 -->
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
-  <!-- 分享卡片（OG）。 -->
+  <!-- 分享卡片（OG）：og:image / og:url 必须是绝对地址，
+       不然发到 QQ、微信、Discord、Telegram 里抓不到图 -->
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="罐头商铺">
-  <meta property="og:title" content="罐头商铺 ——世界里小小的一隅">
-  <meta property="og:description" content="一个喜欢折腾各种奇奇怪怪没啥用小项目的人的个人小窝。">
-  <meta property="og:image" content="apple-touch-icon.png">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:site_name" content="空凛 · Rinsora 的小窝">
+  <meta property="og:title" content="空凛 · Rinsora 的小窝">
+  <meta property="og:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
+  <meta property="og:url" content="https://rinsora.dpdns.org/">
+  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+  <meta property="og:locale" content="zh_CN">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="空凛 · Rinsora 的小窝">
+  <meta name="twitter:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
+  <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -44,9 +59,13 @@
         <span class="status-dot" title="在线"></span>
       </div>
 
-      <p class="eyebrow">✿ HELLO, WELCOME TO MY LITTLE HOME ✿</p>
-      <h1>罐头商铺<span class="brand-sub">——世界里小小的一隅</span></h1>
-      <p class="welcome-bio">一个喜欢折腾各种奇奇怪怪没啥用小项目的人。<br>这里是我的个人小窝，欢迎进来坐坐 ♡</p>
+      <!-- 门口：只放头像、名字、一句话、音乐和「进入小窝」。
+           名字层级是 空凛（主）→ Rinsora（英文名）→ 罐头商铺（小窝名），
+           三层各司其职，不再互相抢戏。 -->
+      <p class="eyebrow">✿ WELCOME TO MY LITTLE HOME ✿</p>
+      <h1 class="welcome-name">空凛<span class="brand-sub">Rinsora</span></h1>
+      <p class="welcome-nest">罐头商铺 · 世界里小小的一隅</p>
+      <p class="welcome-bio">记录一些喜欢的东西，也记录正在成为的自己。<br>这里是我的个人小窝，欢迎进来坐坐 ♡</p>
 
       <!-- 欢迎页的音乐播放器：内容由 music.js 渲染。
            收起时只是一张会自转的封面唱片，鼠标移上去才平滑展开完整详情。 -->
@@ -74,7 +93,7 @@
           <button class="radial-item" data-target="projects" style="--i:2"><span>✦</span><b>项目展示</b></button>
         </nav>
       </div>
-      <div class="side-name">罐头商铺<small>——世界里小小的一隅</small></div>
+      <div class="side-name">空凛<small>Rinsora · 罐头商铺</small></div>
       <div class="side-status"><span></span> currently online</div>
     </aside>
 
@@ -129,21 +148,34 @@
           <div id="recentFeed"></div>
 
           <div class="section-heading"><span>✦</span><h3>最近在做什么</h3><span class="line"></span></div>
-          <div class="now-grid">
-            <div class="now-card card"><b>AI / Agent</b><span>研究 AI 工具，vibe coding</span><i>🤖</i></div>
-            <div class="now-card card"><b>Minecraft</b><span>折腾MC整合包、服务器与小工具</span><i>⛏</i></div>
-            <div class="now-card card"><b>Web</b><span>把自己的想法变成漂亮的网页</span><i>🌸</i></div>
+          <!-- 不作为「技能列表」，而当成一条会变的个人动态：
+               四条状态 + 在线 / 最后更新，改内容只要改这几行文字 -->
+          <div class="now-panel card">
+            <div class="now-head">
+              <span class="now-kicker">✦ NOW PLAYING</span>
+              <span class="now-live"><i></i>Online<span class="now-sep">·</span>Last update <b id="nowUpdate">—</b></span>
+            </div>
+            <ul class="now-list">
+              <li><span class="now-label">正在折腾</span><span class="now-val">AI Agent</span><i aria-hidden="true">🤖</i></li>
+              <li><span class="now-label">最近沉迷</span><span class="now-val">Minecraft</span><i aria-hidden="true">⛏</i></li>
+              <li><span class="now-label">正在制作</span><span class="now-val">Rinsora's Home</span><i aria-hidden="true">🌸</i></li>
+              <li class="is-blank"><span class="now-label">下一件想做</span><span class="now-val">？？？</span><i aria-hidden="true">✦</i></li>
+            </ul>
           </div>
         </section>
 
         <section class="page-section" id="blog">
           <div class="section-heading"><span>✿</span><h3>博客 / 随笔</h3><span class="line"></span></div>
+          <p class="section-sub">一些折腾记录、想法和技术笔记。</p>
+          <!-- 分类筛选：由 script.js 从下面卡片上的 data-cat 收集生成，加文章不用改这里 -->
+          <div class="blog-filter" id="blogFilter"></div>
           <div class="blog-grid">
-            <article class="blog-card card"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/hello.html">Hello</a></h4><p>罐头</p><span class="read-more">READ MORE →</span></article>
-            <article class="blog-card card"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/why-i-made-my-own-home.html">为什么我想做一个属于自己的小窝</a></h4><p>从“想有个主页”开始，慢慢把喜欢的东西装进去……</p><span class="read-more">READ MORE →</span></article>
-            <article class="blog-card card"><span class="date">2026.09.18</span><h4><a class="card-title-link" href="posts/ai-workflow.html">把 AI 工具变成日常工作流</a></h4><p>一些正在尝试的自动化思路、工具组合和踩坑记录。</p><span class="read-more">READ MORE →</span></article>
-            <article class="blog-card card"><span class="date">2026.09.10</span><h4><a class="card-title-link" href="posts/minecraft-server-log.html">Minecraft 服务器折腾日志</a></h4><p>整合包、联机、端口、Mod……总会有下一件要修的事。</p><span class="read-more">READ MORE →</span></article>
+            <article class="blog-card card" data-cat="随笔" data-min="1"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/hello.html">Hello</a></h4><p>罐头</p><div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">1 min</span><span class="read-more">READ MORE →</span></div></article>
+            <article class="blog-card card" data-cat="随笔" data-min="3"><span class="date">2026.09.21</span><h4><a class="card-title-link" href="posts/why-i-made-my-own-home.html">为什么我想做一个属于自己的小窝</a></h4><p>从“想有个主页”开始，慢慢把喜欢的东西装进去……</p><div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">3 min</span><span class="read-more">READ MORE →</span></div></article>
+            <article class="blog-card card" data-cat="工作流" data-min="4"><span class="date">2026.09.18</span><h4><a class="card-title-link" href="posts/ai-workflow.html">把 AI 工具变成日常工作流</a></h4><p>一些正在尝试的自动化思路、工具组合和踩坑记录。</p><div class="blog-foot"><span class="bm-cat">工作流</span><span class="bm-min">4 min</span><span class="read-more">READ MORE →</span></div></article>
+            <article class="blog-card card" data-cat="捣鼓日志" data-min="4"><span class="date">2026.09.10</span><h4><a class="card-title-link" href="posts/minecraft-server-log.html">Minecraft 服务器折腾日志</a></h4><p>整合包、联机、端口、Mod……总会有下一件要修的事。</p><div class="blog-foot"><span class="bm-cat">捣鼓日志</span><span class="bm-min">4 min</span><span class="read-more">READ MORE →</span></div></article>
           </div>
+          <p class="blog-empty" id="blogEmpty" hidden>这个分类下还没有文章 ✦</p>
         </section>
 
         <section class="page-section" id="projects">

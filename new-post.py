@@ -42,6 +42,7 @@ except Exception:
 ROOT = os.path.dirname(os.path.abspath(__file__))
 POSTS = os.path.join(ROOT, "posts")
 INDEX = os.path.join(ROOT, "index.html")
+SITE = "https://rinsora.dpdns.org"
 
 # ---------------------------------------------------------------- 模板 ----
 
@@ -53,6 +54,14 @@ PAGE = """<!doctype html>
   <meta name="theme-color" content="#ffb6d5">
   <title>@@TITLE@@ · 空凛 · Rinsora 的小窝</title>
   <meta name="description" content="@@SUMMARY@@">
+  <link rel="canonical" href="@@URL@@">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="空凛 · Rinsora 的小窝">
+  <meta property="og:title" content="@@TITLE@@ · 空凛 · Rinsora 的小窝">
+  <meta property="og:description" content="@@SUMMARY@@">
+  <meta property="og:url" content="@@URL@@">
+  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
@@ -60,7 +69,7 @@ PAGE = """<!doctype html>
   <link rel="stylesheet" href="post.css">
 </head>
 <body>
-  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night'){document.documentElement.classList.add('night');document.body.classList.add('night')}}catch(e){}</script>
 
   <div class="bg-decor" aria-hidden="true">
     <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
@@ -72,7 +81,7 @@ PAGE = """<!doctype html>
     <article class="post-card glass">
       <div class="post-top">
         <a class="post-back" href="../index.html#blog">\u2190 回到博客列表</a>
-        <span class="post-brand">Rinsora</span>
+        <span class="post-brand">空凛 / Rinsora</span>
       </div>
 
       <p class="post-kicker">@@KICKER@@</p>
@@ -99,9 +108,13 @@ PAGE = """<!doctype html>
 """
 
 CARD = (
-    '            <article class="blog-card card"><span class="date">@@DATE@@</span>'
+    '            <article class="blog-card card" data-cat="@@CAT@@" data-min="@@MIN@@">'
+    '<span class="date">@@DATE@@</span>'
     '<h4><a class="card-title-link" href="posts/@@SLUG@@.html">@@TITLE@@</a></h4>'
-    '<p>@@SUMMARY@@</p><span class="read-more">READ MORE \u2192</span></article>'
+    '<p>@@SUMMARY@@</p>'
+    '<div class="blog-foot"><span class="bm-cat">@@CAT@@</span>'
+    '<span class="bm-min">@@MIN@@ min</span>'
+    '<span class="read-more">READ MORE \u2192</span></div></article>'
 )
 
 PLACEHOLDER_BODY = (
@@ -256,7 +269,7 @@ def plain(md, limit=46):
 # ------------------------------------------------------------ 首页卡片 ----
 
 
-def update_index(slug, title, date, summary, dry=False):
+def update_index(slug, title, date, summary, cat="随笔", minutes=1, dry=False):
     s = io.open(INDEX, encoding="utf-8").read()
     m = re.search(r'(<div class="blog-grid">\n)(.*?)(\n\s*</div>)', s, re.S)
     if not m:
@@ -270,7 +283,9 @@ def update_index(slug, title, date, summary, dry=False):
     card = (CARD.replace("@@DATE@@", date)
                 .replace("@@SLUG@@", slug)
                 .replace("@@TITLE@@", htmllib.escape(title))
-                .replace("@@SUMMARY@@", htmllib.escape(summary)))
+                .replace("@@SUMMARY@@", htmllib.escape(summary))
+                .replace("@@CAT@@", htmllib.escape(cat))
+                .replace("@@MIN@@", str(minutes)))
 
     def cdate(line):
         mm = re.search(r'<span class="date">(\d{4})\.(\d{2})\.(\d{2})</span>', line)
@@ -387,7 +402,13 @@ def main():
     body = md_to_html(md) if md else PLACEHOLDER_BODY
     reading = estimate_reading(md) if md else "\u7ea6 1 \u5206\u949f"
 
+    # 分类取 kicker 里斜杠后面那一段（BLOG / 工作流 → 工作流），时长从「约 N 分钟」里抽数字
+    cat = kicker.split("/")[-1].strip() or "随笔"
+    _m = re.search(r"(\d+)", reading)
+    minutes = int(_m.group(1)) if _m else 1
+
     page = (PAGE.replace("@@TITLE@@", htmllib.escape(title))
+                .replace("@@URL@@", "%s/posts/%s.html" % (SITE, slug))
                 .replace("@@SUMMARY@@", htmllib.escape(summary))
                 .replace("@@KICKER@@", htmllib.escape(kicker))
                 .replace("@@DATE@@", date)
@@ -415,7 +436,7 @@ def main():
     io.open(out_file, "w", encoding="utf-8", newline="\n").write(page)
     print(("  \u5df2\u8986\u76d6 " if overwrite else "  \u5df2\u751f\u6210 ") + "posts/%s.html" % slug)
 
-    if update_index(slug, title, date, summary):
+    if update_index(slug, title, date, summary, cat, minutes):
         print("  \u5df2\u66f4\u65b0 index.html \u7684\u535a\u5ba2\u5217\u8868\uff08\u6309\u65e5\u671f\u5012\u5e8f\uff09")
 
     print()

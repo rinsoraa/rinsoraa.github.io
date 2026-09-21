@@ -2,6 +2,31 @@
 
 可直接部署到 GitHub Pages 的静态个人主页 + 博客。纯 HTML / CSS / JS，无构建步骤、无后端依赖。
 
+## 身份与标题：三个名字各司其职
+
+站里出现过「空凛」「Rinsora」「罐头商铺」三个名字，它们不是三套品牌，而是**人 → 英文名 → 小窝名**：
+
+| 层级 | 名字 | 用在哪 |
+|---|---|---|
+| 第一层（人） | **空凛** | `<h1>` 主标题、侧栏站名、文章作者 |
+| 第二层（英文名） | **Rinsora** | `<h1>` 副行、标题 `<title>` 里的 `· Rinsora ·` |
+| 第三层（小窝名） | **罐头商铺** | 欢迎页 `「罐头商铺 · 世界里小小的一隅」`、侧栏小字 |
+
+所以：
+
+- 页面标题是 `空凛 · Rinsora 的小窝`，读起来是「空凛的小窝」，不会再让人以为是两三个不同的站；
+- **「罐头商铺」只在欢迎页和侧栏做小窝名出现，不参与主标题**；
+- 分享卡片（OG）的 `og:site_name` / `og:title` 也统一成 `空凛 · Rinsora 的小窝`。
+
+改这几个字的位置（一共 7 处，改的时候一起改）：
+
+```
+index.html        <title> / description / og:* / h1.welcome-name / .welcome-nest / .side-name
+editor.js         PAGE 模板的 <title>
+new-post.py       PAGE 模板的 <title>
+posts/*.html      文章页的 <title> 与 og:*
+```
+
 ## 目录结构
 
 ```
@@ -11,10 +36,10 @@
 ├── .nojekyll               # 让 GitHub Pages 跳过 Jekyll 处理
 ├── favicon.ico             # 站点图标（内含 16 / 32 / 48 三个尺寸）
 ├── favicon-32.png          # 浏览器标签页备用图标
-├── apple-touch-icon.png    # iOS「添加到主屏幕」图标（180×180）
+├── apple-touch-icon.png    # iOS「添加到主屏幕」图标（180×180），同时当分享卡片的大图
 ├── style.css               # 全站视觉：马卡龙风、亚克力卡片材质（--acr-*）、响应式、夜间模式
 ├── script.js               # 入场动画、径向导航、主题记忆与切换动画、hash 直达、
-│                           #   主页「最近发布」、鼠标点击涟漪（不碰播放器）
+│                           #   主页「最近发布」、博客分类筛选、鼠标点击涟漪（不碰播放器）
 │
 │   ── 音乐播放器（欢迎页 + 桌面态右下角两个实例，共用同一个 <audio>）──
 ├── music-data.js           # 曲库数据源：{ version, tracks[] }，唯一需要改的文件
@@ -284,6 +309,36 @@ python -m http.server 8000
 
 ## 界面细节
 
+### 「最近在做什么」是一块状态面板，不是技能列表
+
+主页那块用的是 `✦ NOW PLAYING` 的写法，四条状态 + 一行在线信息：
+
+```
+正在折腾    AI Agent
+最近沉迷    Minecraft
+正在制作    Rinsora's Home
+下一件想做  ？？？
+                          🟢 Online · Last update 2026.09.21
+```
+
+- 四条文字直接写在 `index.html` 的 `.now-list` 里，想改就改这几行；
+- 「最后更新」由 `script.js` 的 `latestUpdate()` 算出来：**遍历博客卡片的日期和
+  `RINSORA_PROJECTS.items` 的日期，取最大的那个**，所以发了新文章或加了新项目它会自己变。
+  `YYYY.MM.DD` 是定宽写法，比字符串就等于比时间。发版后调用
+  `window.RinsoraHome.refreshRecent()` 可以立刻重算。
+
+### 博客分类筛选
+
+博客板块标题下那排 `[全部] [随笔] [工作流] [捣鼓日志]` 不是写死的：
+
+- `script.js` 的 `buildBlogFilter()` 从卡片上的 **`data-cat`** 收集分类，再渲染筛选条。
+  分类只有 1 个时整条不渲染（「全部」和它本身没区别）。
+- 卡片底部还有 `data-min`（阅读时长）→ 渲染成 `3 min` 那个小字。
+- 所以**加文章时卡片只要带上 `data-cat` / `data-min`，筛选条就自动多一项**。
+  写作台（`editor.js`）和本地脚本（`new-post.py`）的卡片模板都已经带上这两个属性：
+  分类取 `kicker` 里斜杠后面那段（`✿ BLOG / 工作流` → `工作流`），时长从「约 N 分钟」里抽数字。
+- 筛完没有内容会显示 `#blogEmpty` 占位。
+
 ### 主页的「最近发布」
 
 主页（原「个人简介」，导航里已改名为**主页**）在「最近在做什么」上面多了一块
@@ -320,6 +375,41 @@ window.RinsoraProjects.newestFirst(list)
 > 只改渲染顺序，**不动 `projects-data.js` 里的数组顺序**——数据文件保持「追加」的原始顺序，
 > 编辑台的编辑 / 删除是靠 `data-id` 认人的，所以排序不会串行。
 > 大分类本身的先后仍然由 `categories` 数组决定（不参与排序）。
+
+### 项目的状态徽章
+
+每个项目行底部是 **状态徽章 + 日期 + 外链箭头**，像一张张「收藏卡」：
+
+```
+[📦] rinsoraa/rinsoraa.github.io
+     就是这个网页的源码
+     [JavaScript] [GitHub] [rinsoraa]
+     ● 维护中        2026.09.21            ↗
+```
+
+- 状态来自 `items[]` 里的 **可选字段 `status`**，**留空就不显示徽章**，老数据不受影响。
+- 颜色按状态词自动分档（认不出来就中性灰）：
+
+  | 状态写法 | 颜色 |
+  |---|---|
+  | `Active` / `Online` / `维护中` / `进行中` | 绿（运行中） |
+  | `WIP` / `开发中` / `Beta` | 黄（在做） |
+  | `Done` / `已完成` / `Stable` | 蓝（已定） |
+  | `Paused` / `已归档` / `Archived` / 其他 | 灰 |
+
+- 项目编辑台里已经加了「状态（可选）」输入框，带 `Active / WIP / 维护中 / 已归档` 的候选下拉。
+- `status` 排在 `ORDER` 数组的最后，所以从旧版编辑台保存过的数据文件只会多出末尾一行，diff 很干净。
+
+### SEO 与分享卡片
+
+- `index.html` 里有完整的 `<title>` / `description` / `canonical` / `og:*` / `twitter:card`。
+- **`og:url` 和 `og:image` 必须是绝对地址**（`https://rinsora.dpdns.org/...`）。
+  写相对路径时，发到 QQ / 微信 / Discord / Telegram 里抓不到图，只有本站能正常显示。
+- 分享大图直接复用 `apple-touch-icon.png`；想换成专门的封面图，改 `og:image` 四处即可。
+- 文章页的 `canonical` / `og:*` 由写作台与 `new-post.py` 的模板自动生成，
+  已经发出去的四篇也补过了。
+- ⚠️ **http 目前还没强制跳 https**（`http://rinsora.dpdns.org/` 直接返回 200）。
+  需要在仓库 `Settings → Pages` 里勾上 **Enforce HTTPS**，或在 DNS 侧做跳转。
 
 ### 亚克力（Acrylic）材质
 
@@ -490,8 +580,16 @@ python new-post.py "标题" --dry-run         # 只预览，不写任何文件
 #### 方式四：纯手工
 
 1. 复制 `posts/` 里任意一个 `.html`，改成新文件名
-2. 改 `<title>`、`<meta name="description">`、`.post-kicker` 小标题、`.post-title`、`.post-meta` 里的日期、`.post-body` 正文、`.post-tags` 标签
+2. 改 `<title>`、`<meta name="description">`、`<link rel="canonical">` 与 `og:*` 里的 URL、
+   `.post-kicker` 小标题、`.post-title`、`.post-meta` 里的日期、`.post-body` 正文、`.post-tags` 标签
 3. 在 `index.html` 的 `.blog-grid` 里加一张卡片，把 `.card-title-link` 的 `href` 指向 `posts/新文件.html`
+
+卡片建议照抄现成的那一行，只改四处（**`data-cat` 和 `data-min` 别漏**，
+不然博客分类筛选条认不出这篇）：
+
+```html
+<article class="blog-card card" data-cat="随笔" data-min="3"><span class="date">2026.09.25</span><h4><a class="card-title-link" href="posts/新文件.html">标题</a></h4><p>一句话摘要</p><div class="blog-foot"><span class="bm-cat">随笔</span><span class="bm-min">3 min</span><span class="read-more">READ MORE →</span></div></article>
+```
 
 #### 修改 / 删除已有文章
 
