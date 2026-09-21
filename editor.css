@@ -233,3 +233,53 @@ body.night .pane-badge.edit{background:rgba(255,157,198,.2);color:#f7b8d4}
   .editor-actions{margin-left:0;width:100%}
   .md-input,.md-preview{min-height:320px}
 }
+
+
+/* ============================================================
+   项目编辑台（project-editor.html）专用
+   写作台那份样式是共用的，这里只补它没有的几块
+   ============================================================ */
+
+.pane-head .pe-tip{font-size:11.5px;line-height:1.7;color:var(--muted)}
+
+/* 输入框 + 按钮排一行 */
+.field .inline-row{
+  display:flex;gap:8px;align-items:center;
+  font-size:12px;font-weight:400;letter-spacing:0;color:inherit;
+}
+.field .inline-row input{flex:1;min-width:0}
+.field .inline-row #fIcon{flex:0 0 62px;text-align:center}
+.field .inline-row .btn-ghost{flex:0 0 auto;white-space:nowrap;min-height:38px;padding:0 14px}
+
+/* 「自动识别」下方的小字状态 */
+.pe-hint{display:block;min-height:15px}
+.pe-hint.ok{color:#3f9a6e}
+.pe-hint.err{color:#c9536a}
+.pe-hint.busy{color:#b58aa4}
+
+/* 图标快选 */
+.icon-picks{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0}
+.icon-pick{
+  width:27px;height:27px;display:grid;place-items:center;cursor:pointer;padding:0;
+  border-radius:9px;border:1px solid rgba(255,255,255,.85);background:rgba(255,255,255,.7);
+  font-size:14px;line-height:1;color:#a9829c;
+  transition:transform .18s var(--ease),background .18s,color .18s;
+}
+.icon-pick:hover{transform:translateY(-2px);background:#fff;color:#d97ba8}
+body.night .icon-pick{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);color:#e9cede}
+body.night .icon-pick:hover{background:rgba(255,255,255,.2);color:#f7b8d4}
+
+/* 左侧列表里的分类小标题 */
+.pe-sub{
+  font-size:10px;font-weight:900;letter-spacing:.14em;
+  color:#b083a3;padding:12px 4px 4px;
+}
+.pe-sub:first-child{padding-top:2px}
+body.night .pe-sub{color:#f3a6c5}
+
+/* 实时预览：直接复用项目展示页那套 .pt-* 样式 */
+.pe-preview{display:flex;flex-direction:column;gap:10px;margin-top:2px}
+.pe-preview-title{margin:0;font-size:11px;font-weight:800;letter-spacing:.08em;color:#b083a3}
+body.night .pe-preview-title{color:#f3a6c5}
+.pe-preview .pt-head{cursor:default}
+.pe-preview .pt-group:hover{box-shadow:none}

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffb6d5">
+  <meta name="robots" content="noindex,nofollow">
+  <title>项目编辑台 · 罐头商铺</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body class="editor-page">
+  <script>try{if(localStorage.getItem('rinsora-theme')==='night')document.body.classList.add('night')}catch(e){}</script>
+
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+
+  <main class="editor-shell">
+
+    <header class="editor-top glass">
+      <a class="editor-back" href="index.html#projects">← 返回项目展示</a>
+      <div class="editor-title"><span>★</span> Rinsora 项目编辑台</div>
+      <div class="editor-actions">
+        <button class="soft-btn" id="btnNew" type="button" title="添加一个新项目">＋ 新项目</button>
+        <button class="soft-btn" id="btnSetup" type="button" title="仓库与 Token 设置">⚙ 设置</button>
+      </div>
+    </header>
+
+    <!-- 连接设置 -->
+    <section class="editor-setup glass" id="setupPanel" hidden>
+      <h3><span>⚙</span> 连接你的 GitHub 仓库</h3>
+      <p class="hint">
+        网页要往仓库里写文件，得借你的 Token。建议去
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained token 页面</a>
+        新建一个：<b>Repository access</b> 只勾这一仓库，<b>Permissions → Contents</b> 选 <code>Read and write</code>，
+        有效期按需（可以设 1 年）。生成后粘到下面。
+        <br>
+        和写作台共用同一个令牌，配过一次这里就不用再配了。
+        它只存在你这台浏览器的 localStorage 里，只会发给 <code>api.github.com</code>。
+      </p>
+      <div class="setup-grid">
+        <label class="field"><span>用户名 / 组织</span><input id="cfgOwner" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>仓库名</span><input id="cfgRepo" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>分支</span><input id="cfgBranch" autocomplete="off" spellcheck="false"></label>
+        <label class="field full"><span>Personal Access Token</span><input id="cfgToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_… 或 ghp_…"></label>
+      </div>
+      <div class="pane-foot">
+        <button class="btn-primary" id="btnSaveCfg" type="button">保存并测试连接</button>
+        <button class="btn-ghost danger" id="btnForget" type="button">清除 Token</button>
+        <span class="pane-status" id="cfgStatus"></span>
+      </div>
+    </section>
+
+    <div class="editor-main">
+
+      <!-- 左侧：已有项目 -->
+      <aside class="editor-side glass">
+        <div class="side-head"><span>已有项目</span><span id="projCount">–</span></div>
+        <ul class="post-list" id="projList"></ul>
+      </aside>
+
+      <!-- 右侧：编辑区 -->
+      <section class="editor-pane glass">
+        <div class="pane-head">
+          <span class="pane-badge" id="modeBadge">新建</span>
+          <span class="pe-tip">填好链接点「自动识别」，标题和简介会自动带出来，之后随便改。</span>
+        </div>
+
+        <div class="field-grid">
+          <div class="field full">
+            <span>链接 URL</span>
+            <div class="inline-row">
+              <input id="fUrl" autocomplete="off" spellcheck="false" placeholder="https://github.com/you/repo">
+              <button class="btn-ghost" id="btnProbe" type="button">自动识别</button>
+            </div>
+            <small id="probeStatus"></small>
+          </div>
+
+          <label class="field full"><span>项目名称</span>
+            <input id="fName" placeholder="Myspace" autocomplete="off">
+          </label>
+
+          <label class="field"><span>大分类</span>
+            <select id="fCat"></select>
+            <small>分类里没有项目时，「项目展示」页不会显示它。</small>
+          </label>
+
+          <div class="field">
+            <span>图标（一个字符）</span>
+            <div class="inline-row">
+              <input id="fIcon" maxlength="4" value="✦" spellcheck="false">
+              <span class="icon-picks" id="iconPicks"></span>
+            </div>
+          </div>
+
+          <label class="field full"><span>简介</span>
+            <textarea id="fDesc" rows="3" placeholder="一句话说明这个项目是做什么的"></textarea>
+          </label>
+
+          <label class="field full"><span>小标签（逗号分隔）</span>
+            <input id="fTags" placeholder="Python, 自动化" autocomplete="off">
+            <small>会显示在项目展示页的预览卡片上。</small>
+          </label>
+        </div>
+
+        <div class="pane-foot">
+          <button class="btn-primary" id="btnSave" type="button">保存并发布</button>
+          <button class="btn-ghost" id="btnReset" type="button">清空</button>
+          <button class="btn-ghost danger" id="btnDelete" type="button" hidden>删除这个项目</button>
+          <span class="pane-status" id="saveStatus"></span>
+        </div>
+
+        <!-- 实时预览：用的就是项目展示页的那套样式 -->
+        <div class="pe-preview">
+          <p class="pe-preview-title">在「项目展示」里的样子</p>
+          <section class="pt-group pt-cat-0 open" id="previewGroup">
+            <div class="pt-head" id="previewHead">
+              <span class="pt-caret" aria-hidden="true">▾</span>
+              <span class="pt-title" id="previewCat">Github项目</span>
+              <span class="pt-count">1</span>
+              <span class="pt-line" aria-hidden="true"></span>
+            </div>
+            <div class="pt-body"><ul class="pt-list" id="previewList"></ul></div>
+          </section>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div class="editor-toast" id="toast"></div>
+
+  <script src="gh-api.js"></script>
+  <script src="projects-data.js"></script>
+  <script src="projects.js"></script>
+  <script src="project-editor.js"></script>
+</body>
+</html>
