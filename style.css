@@ -1288,23 +1288,30 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{an
    position:fixed，加了会把它们的包含块改成 .app。
    ============================================================ */
 
-/* —— reveal 光晕层：fixed 全屏，从头像中心向四周扩散的梦幻光 —— */
+/* —— reveal 光晕层：fixed 全屏，从头像中心向四周扩散的梦幻光 ——
+   中心用白色柔光（而非高饱和黄），峰值透明度压到 ~0.46、加 blur 柔化，
+   避免「全屏彩色闪光弹」那种晃眼感。 */
 .room-reveal{
   position:fixed;inset:0;z-index:45;pointer-events:none;
   opacity:0;visibility:hidden;
   background:radial-gradient(circle at var(--reveal-x,50%) var(--reveal-y,42%),
-    var(--accent-secondary) 0%, var(--accent-primary) 40%, var(--accent-tertiary) 70%, transparent 85%);
+    rgba(255,255,255,.88) 0%,
+    var(--accent-secondary) 30%,
+    var(--accent-primary) 58%,
+    var(--accent-tertiary) 82%,
+    transparent 100%);
+  filter:blur(20px);
   transform-origin:var(--reveal-x,50%) var(--reveal-y,42%);
   will-change:transform,opacity;
 }
 body.room-entering .room-reveal{
   visibility:visible;
-  animation:roomReveal .8s cubic-bezier(.22,.9,.32,1) .16s forwards;
+  animation:roomReveal .7s var(--ease) .18s forwards;
 }
 @keyframes roomReveal{
-  0%{opacity:0;transform:scale(.06);filter:saturate(1)}
-  46%{opacity:.9;transform:scale(1);filter:saturate(1.3)}
-  100%{opacity:0;transform:scale(1.4);filter:saturate(.85)}
+  0%{opacity:0;transform:scale(.05)}
+  38%{opacity:.46;transform:scale(1)}
+  100%{opacity:0;transform:scale(1.3)}
 }
 
 /* —— 粒子画布：固定全屏，只画一小段「中央头像 → 侧栏头像」的引导线 —— */
