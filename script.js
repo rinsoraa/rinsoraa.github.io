@@ -291,7 +291,7 @@
   /* ============================================================
      导航
      ============================================================ */
-  const TITLES = { about: '个人简介', blog: '博客 / 随笔', projects: '项目展示' };
+  const TITLES = { about: '主页', blog: '博客 / 随笔', projects: '项目' };
   const WIDTHS = { about: 33, blog: 66, projects: 100 };
 
   function showSection(id, push) {
