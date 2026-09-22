@@ -81,6 +81,17 @@
     }
   }, 70);
 
+  /* 走直达链接（#about / #blog / #projects）进来时，开屏加载页整段跳过：
+     停掉进度计时器 + 关掉过渡 + 立刻按掉。CSS 的 .no-boot 负责兜住第一帧，
+     这里负责把还在跑的计时器收掉，免得它在后台把进度条推到 100%。 */
+  function skipBoot() {
+    clearInterval(bootTimer);
+    if (!boot) return;
+    boot.style.transition = 'none';
+    boot.classList.add('done');
+    setTimeout(() => { boot.style.display = 'none'; }, 20);
+  }
+
   /* ============================================================
      主题：调色板（配色）× 明暗（白天 / 夜间），两者独立
      ============================================================ */
@@ -328,7 +339,7 @@
     const h = (location.hash || '').replace(/^#/, '').toLowerCase();
     if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
     if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
-    if (TITLES[h]) { enterApp(true); showSection(h, false); return true; }
+    if (TITLES[h]) { skipBoot(); enterApp(true); showSection(h, false); return true; }
     return false;
   }
   window.addEventListener('hashchange', () => { if (!routeHash()) return; });

@@ -103,6 +103,13 @@ PAGE = """<!doctype html>
       </div>
     </article>
   </main>
+
+  <audio id="audio" preload="metadata"></audio>
+  <aside id="floatingPlayer" aria-label="音乐播放器"></aside>
+  <script src="../gh-api.js"></script>
+  <script src="../music-data.js"></script>
+  <script src="../music.js"></script>
+  <script src="../music-upload.js"></script>
 </body>
 </html>
 """

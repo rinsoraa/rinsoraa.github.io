@@ -11,8 +11,17 @@
 
 .post-wrap{
   position:relative;z-index:30;min-height:100vh;
-  padding:56px 28px 90px;display:flex;justify-content:center;align-items:flex-start;
+  /* 底部留 130px：右下角那个常驻音乐播放器是 fixed 覆盖层，别压住结尾 */
+  padding:56px 28px 130px;display:flex;justify-content:center;align-items:flex-start;
 }
+/* 歌词栏一登场就再让一截，正文结尾不会被它盖住 */
+body.lyrics-on .post-wrap{padding-bottom:230px}
+
+/* 文章页也挂着「右下角播放器 + 底部歌词栏」（见下方 .post-footer 之后的引入说明）。
+   它们的 z-index 是 21 / 19，而 .post-wrap 是 30 —— 不抬起来的话，
+   卡片会把这两个覆盖层整个盖住。 */
+#floatingPlayer{z-index:60}
+.lyricbar{z-index:58}
 
 .post-card{
   width:min(820px,100%);padding:50px 56px 44px;border-radius:36px;position:relative;
@@ -102,7 +111,15 @@
   margin-top:38px;padding-top:26px;border-top:1px dashed rgba(177,145,163,.3);
   display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
 }
-.post-footer .enter-btn{text-decoration:none;margin-top:0}
+/* ⚠️ .enter-btn 的基线样式是给欢迎页那颗「图标 40px + 文字 + ENTER MY ROOM」
+   三列按钮写的（grid-template-columns:40px auto auto）。文章页这里只放了
+   两个子元素，于是「看更多文章」被塞进那个 40px 宽的窄列里、和箭头挤成一团
+   —— 就是「字体都堆积到按钮卡片左侧」。这里改成两列自然宽。 */
+.post-footer .enter-btn{
+  text-decoration:none;margin-top:0;
+  min-width:0;padding:12px 18px;
+  grid-template-columns:auto auto;gap:10px;font-size:13px;
+}
 .post-tags{display:flex;gap:7px;flex-wrap:wrap}
 .post-tags span{
   font-size:10px;background:rgba(255,255,255,.64);border:1px solid rgba(255,255,255,.8);
@@ -124,7 +141,8 @@ body.night .post-body pre code{color:#efe2f0}
 body.night .post-tags span{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);color:#cbb6c4}
 
 @media (max-width:760px){
-  .post-wrap{padding:26px 16px 70px}
+  .post-wrap{padding:26px 16px 110px}
+  body.lyrics-on .post-wrap{padding-bottom:210px}
   .post-card{padding:30px 20px 28px;border-radius:26px}
   .post-top{margin-bottom:22px}
   .post-brand{display:none}

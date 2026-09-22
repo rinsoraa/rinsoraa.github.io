@@ -32,6 +32,9 @@
     if(localStorage.getItem('rinsora-theme')==='night') root.classList.add('night');
     var hue=localStorage.getItem('rinsora-hue');
     if(hue) root.style.setProperty('--hue', hue+'deg');
+    /* 走「直达某个分栏」的链接进来（文章页的「回到博客列表」就是 #blog）：
+       开屏加载页没必要再放一遍，首帧直接按掉，免得先闪一下。 */
+    if(/^#(about|blog|projects)$/i.test(location.hash||'')) root.classList.add('no-boot');
   }catch(e){}
   </script>
 </head>

@@ -172,6 +172,10 @@ body.cursor-hover .cursor-ring span{opacity:1}
 .boot-screen{position:fixed;inset:0;z-index:500;display:grid;place-items:center;background:#fff9fd;overflow:hidden;transition:opacity .75s var(--ease),visibility .75s}
 body.night .boot-screen{background:#17121f}
 .boot-screen.done{opacity:0;visibility:hidden;pointer-events:none}
+/* 直达 #about / #blog / #projects（含文章页的「回到博客列表」）时，
+   index.html 的首帧内联脚本会给 <html> 挂上这个类：加载页从第一帧
+   起就不渲染，不会出现「先闪一下、再被脚本按掉」。 */
+.no-boot .boot-screen{display:none}
 .boot-orbit{position:absolute;width:52vw;height:52vw;max-width:720px;max-height:720px;border:1px dashed rgba(239,143,182,.22);border-radius:50%;animation:spin 18s linear infinite}
 .boot-orbit:before,.boot-orbit:after{content:"";position:absolute;border-radius:50%}
 .boot-orbit:before{width:16px;height:16px;left:12%;top:17%;background:var(--yellow);box-shadow:0 0 28px rgba(255,228,143,.75)}
@@ -528,11 +532,15 @@ body.night .moment-card:nth-child(3){background:linear-gradient(135deg,rgba(160,
 .section-display span{color:#ed89b0}
 .section-sub{max-width:660px;color:#a18d9f;font-size:15px;line-height:1.82;margin:16px 0 0}
 body.night .section-sub{color:#c3b2c2}
-.hero-orbit,.project-mascot{width:150px;height:150px;border-radius:50%;position:relative;display:grid;place-items:center;border:1px dashed rgba(227,155,184,.45);color:#cf8ea9;flex:0 0 auto}
+/* 圆环里那枚 ✦ 原本是「绝对定位 + 网格居中」——不给 top/left 时它落在
+   静态位置，也就是正中间，于是正好压在文字「BLOG」/「BUILD」上，
+   看起来就是「文字被星星符号遮挡」。改成 flex 竖排：
+   星星 order:-1 提到上面，和文字各占一行，任何尺寸下都不会再叠。 */
+.hero-orbit,.project-mascot{width:150px;height:150px;border-radius:50%;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px dashed rgba(227,155,184,.45);color:#cf8ea9;flex:0 0 auto}
 .hero-orbit:before,.project-mascot:before{content:"";position:absolute;inset:14px;border-radius:50%;border:1px solid rgba(255,255,255,.55);animation:spin 18s linear infinite}
-.hero-orbit span,.project-mascot span{font-size:10px;letter-spacing:.2em}
-.hero-orbit i,.project-mascot strong{position:absolute;font-size:24px;color:#ef9dbd}
-.project-mascot em{position:absolute;bottom:25px;font-style:normal;font-size:9px;letter-spacing:.4em}
+.hero-orbit span,.project-mascot span{font-size:10px;letter-spacing:.2em;line-height:1}
+.hero-orbit i,.project-mascot strong{position:static;order:-1;font-size:20px;line-height:1;color:#ef9dbd}
+.project-mascot em{position:absolute;bottom:22px;font-style:normal;font-size:9px;letter-spacing:.4em}
 
 .blog-filter{display:flex;gap:7px;flex-wrap:wrap;margin:18px 0 14px}
 .bf-chip{padding:8px 13px;border-radius:999px;background:rgba(255,255,255,.3);border:1px solid var(--bd-2);font-size:11px;color:#9e8797;transition:all .2s}
@@ -813,12 +821,15 @@ body:not(.mp-playing) .mp-eq i,body:not(.mp-playing) .lb-eq i{animation-play-sta
    必须是等高的一行（34px），改 --bar-h 或行高要同时改这两个数。
    ============================================================ */
 .lyricbar{
-  /* 桌面端是一条「浮起来的小长方形」，不是贴着底边和侧栏的大托盘：
-     左边缘从侧栏再让出 22px（不再紧贴导航栏），右边缘固定给右下角
-     播放器留出 446px，所以两边永远不重叠 —— 正因为不重叠，播放器
-     也就不需要为了显示歌词而向上挪（见 #floatingPlayer）。 */
-  position:fixed;left:calc(var(--rail) + 22px);bottom:18px;z-index:19;
-  width:min(720px,calc(100% - var(--rail) - 446px));
+  /* 桌面端是一条「浮起来的小长方形」，水平居中贴屏幕正下方：
+     left:50% + translateX(-50%) 是唯一不用跟着视口宽度重算的居中写法。
+     宽度 660px 封顶、左右各留 100px —— 右下角那个**收起态**播放器
+     （56px 唱片，默认就是它）永远压不到条子，所以播放器不必为歌词上移。
+     鼠标悬停把播放器展开成 360px 时，会盖住条子最右边一小截；
+     但那一刻人正在操作播放器、而且在它之上，属于可接受范围。
+     注意：这里不再吃 --rail —— 文章页没有侧栏，用视口居中反而两边通用。 */
+  position:fixed;left:50%;bottom:18px;z-index:19;transform:translateX(-50%);
+  width:min(660px,calc(100% - 200px));
   height:0;opacity:0;pointer-events:none;overflow:hidden;
   border:1px solid transparent;border-radius:26px;
   background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,250,252,.9));
@@ -1104,7 +1115,9 @@ body.night .sticker{background:#6d5540;color:#ffe6b8}
   .page-progress{margin-bottom:22px}
   .section-display{font-size:38px}
   .section-hero-row{align-items:flex-start}
-  .hero-orbit,.project-mascot{width:106px;height:106px}
+  .hero-orbit,.project-mascot{width:106px;height:106px;gap:4px}
+  .hero-orbit i,.project-mascot strong{font-size:17px}
+  .project-mascot em{bottom:15px}
   .blog-grid{grid-template-columns:1fr}
   .about-lower,.moments-grid,.recent-grid{grid-template-columns:1fr}
   .recent-grid-wrap{margin-bottom:14px}
@@ -1114,7 +1127,7 @@ body.night .sticker{background:#6d5540;color:#ffe6b8}
   /* 手机端：歌词栏整条贴底（上沿两个圆角保留），播放器被它顶到上面 */
   #floatingPlayer{right:14px;left:auto;bottom:14px;width:calc(100vw - 28px)}
   body.lyrics-on #floatingPlayer{bottom:112px}
-  .lyricbar{left:0;right:auto;bottom:0;width:100%;border-radius:20px 20px 0 0;border-bottom:0}
+  .lyricbar{left:0;right:auto;bottom:0;width:100%;transform:none;border-radius:20px 20px 0 0;border-bottom:0}
   .lb-inner,.lb-view{height:var(--bar-h)}
   .lb-side{display:none}
   .lb-scroll{padding:0 16px;transform:translateY(calc(var(--bar-h) / 2 - 16px - var(--i,0) * 32px))}

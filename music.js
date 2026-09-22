@@ -24,6 +24,24 @@
   var DATA_PATH = 'music-data.js';
   var STATE_KEY = 'rinsora-music-state';
 
+  /* 曲目里的 src / cover 是按「相对站点根目录」写的（assets/music/xxx）。
+     文章页在 /posts/ 下，原样用会让浏览器去找 /posts/assets/... -> 404：
+     封面掉回默认唱片、点了播放没有声音。这里按当前页面的目录深度补 ../，
+     幂等（已经是 ../ 或 http/绝对路径就原样返回），所以首页那边毫无影响。 */
+  var BASE = (function () {
+    var dir = String(w.location.pathname || '/').replace(/\/[^/]*$/, '/');
+    var depth = dir.split('/').filter(function (x) { return x; }).length;
+    return depth ? new Array(depth + 1).join('../') : '';
+  })();
+
+  function res(p) {
+    var s = String(p == null ? '' : p);
+    if (!s) return s;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s) || s.charAt(0) === '/' ||
+        s.charAt(0) === '#' || s.indexOf('..') === 0) return s;
+    return BASE + s;
+  }
+
   var TRACK_ORDER = ['id', 'title', 'artist', 'cover', 'src', 'lrc', 'date'];
   var MODES = ['order', 'shuffle', 'loop'];
   var MODE_LABEL = { order: '顺序播放', shuffle: '随机播放', loop: '单曲循环' };
@@ -444,7 +462,8 @@
       p.title.textContent = t.title;
       p.artist.textContent = t.artist;
       if (t.cover) {
-        if (p.cover.getAttribute('src') !== t.cover) p.cover.setAttribute('src', t.cover);
+        var cv = res(t.cover);
+        if (p.cover.getAttribute('src') !== cv) p.cover.setAttribute('src', cv);
         p.disc.classList.add('has-cover');
       } else {
         p.disc.classList.remove('has-cover');
@@ -583,7 +602,7 @@
     saveState();
     var t = current();
 
-    audio.src = t.src;
+    audio.src = res(t.src);
     audio.load();
 
     buildLines();
@@ -643,7 +662,7 @@
     state.data = read();
     if (state.index >= state.data.tracks.length) state.index = 0;
     var t = current();
-    if (t) audio.src = t.src;
+    if (t) audio.src = res(t.src);
     buildLines();
     renderAll();
   }
@@ -706,6 +725,24 @@
     var flt = mountPlayer($('#floatingPlayer'), 'float');
     if (!land && !flt) return;
 
+    /* 文章页这种「没有欢迎页、也没有 .app 外壳」的页面只有右下角这一个
+       播放器。给它加 .visible 原本是 script.js 的 enterApp() 干的活，
+       那些页面不加载 script.js，所以这里自己淡入一次；
+       两个播放器都挂载（首页）时仍交给 enterApp，避免两边抢着改类名。
+       双 rAF 是为了「先让 .visible 那一帧提交过」，定时器再兜一层。 */
+    if (flt && !land) {
+      var froot = $('#floatingPlayer');
+      setTimeout(function () {
+        if (!froot) return;
+        void froot.offsetHeight;
+        var show = function () { froot.classList.add('visible'); };
+        if (w.requestAnimationFrame) {
+          w.requestAnimationFrame(function () { w.requestAnimationFrame(show); });
+        }
+        setTimeout(show, 300);
+      }, 80);
+    }
+
     loadState();
     state.data = read();
 
@@ -719,7 +756,7 @@
 
     if (state.index >= state.data.tracks.length) state.index = 0;
     var t = current();
-    if (t) audio.src = t.src;
+    if (t) audio.src = res(t.src);
     buildLines();
     renderAll();
     setPlayingUi(false);
