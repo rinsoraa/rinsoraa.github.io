@@ -1,1 +1,67 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><link rel="stylesheet" href="style.css"><title>404 · 空凛的小窝</title></head><body><main style="min-height:100vh;display:grid;place-items:center;padding:24px"><section class="card" style="max-width:620px;padding:40px;border-radius:32px;text-align:center"><p class="eyebrow">404 / LOST IN THE ROOM</p><h1 style="font-size:64px;margin:0 0 8px;letter-spacing:-.06em">呀，走丢了 ♡</h1><p style="color:#9a8997;line-height:1.9">这个页面可能已经搬家，或者从来就不存在。<br>回到空凛的小窝继续逛吧。</p><a class="enter-btn" href="/" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center">↗ 回到首页</a></section></main></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<base href="/">
+<title>404 · 走丢了 · 空凛 · Rinsora 的小窝</title>
+<meta name="description" content="这个页面可能已经搬家，或者从来就不存在。回到空凛的小窝继续逛吧。">
+<meta name="theme-color" content="#ffd2e5">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="canonical" href="https://rinsora.dpdns.org/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="空凛 · Rinsora 的小窝">
+<meta property="og:title" content="404 · 走丢了">
+<meta property="og:description" content="这个页面可能已经搬家，或者从来就不存在。">
+<meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="v3.css">
+<script>
+/* 和首页同一套首帧主题兜底：先按存档把配色写到根元素，别先闪一下默认色。
+   这段必须无依赖、不抛错 —— 它在 head 里同步跑，报错整页就不渲染了。 */
+try{
+  var root=document.documentElement;
+  var PAL={'candy':'candy','sunset':'sunset','lavender':'lavender','lilac':'lavender','mint':'mint'};
+  var pal=PAL[localStorage.getItem('rinsora-palette')]; if(!pal) pal='candy';
+  var night=localStorage.getItem('rinsora-theme')==='night';
+  root.setAttribute('data-theme', night?'night':pal);
+  root.classList.add('pal-'+(pal==='lavender'?'lilac':pal));
+  if(night) root.classList.add('night');
+}catch(e){}
+</script>
+<style>
+/* 404 只有这一屏，样式就近写在这里，不往 style.css 里塞一次性规则 */
+.lost{min-height:100vh;display:grid;place-items:center;padding:clamp(20px,5vw,48px)}
+.lost-card{max-width:640px;width:100%;padding:clamp(28px,5vw,48px);border-radius:34px;text-align:center}
+.lost-mascot{font-size:34px;line-height:1;margin-bottom:6px;color:var(--accent-primary)}
+.lost-code{
+  font-size:clamp(64px,16vw,118px);line-height:.92;margin:0 0 4px;font-weight:1000;letter-spacing:-.07em;
+  background:linear-gradient(120deg,var(--accent-primary),var(--accent-secondary) 55%,var(--accent-tertiary));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.lost-title{font-size:clamp(20px,4vw,26px);margin:0 0 12px}
+.lost-copy{color:var(--muted);line-height:1.95;font-size:15px;margin:0 0 26px}
+.lost-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.lost-actions a{text-decoration:none;min-width:0;margin-top:0}
+</style>
+</head>
+<body>
+<main class="lost">
+  <section class="lost-card card">
+    <div class="lost-mascot" aria-hidden="true">✦</div>
+    <p class="eyebrow">404 / LOST IN THE ROOM</p>
+    <p class="lost-code">404</p>
+    <h1 class="lost-title">呀，走丢了 ♡</h1>
+    <p class="lost-copy">这个页面可能已经搬家，或者从来就不存在。<br>回到空凛的小窝继续逛吧。</p>
+    <div class="lost-actions">
+      <a class="enter-btn" href="/">↗ 回到首页</a>
+      <a class="enter-btn" href="/#blog">✎ 看看博客</a>
+    </div>
+  </section>
+</main>
+</body>
+</html>

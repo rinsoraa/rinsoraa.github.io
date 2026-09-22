@@ -22,31 +22,51 @@
   <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
   <title>空凛 · Rinsora 的小窝</title>
   <link rel="stylesheet" href="style.css">
+  <!-- V3 组件 / 动画层：必须排在 style.css 之后（同名选择器靠后写者胜） -->
+  <link rel="stylesheet" href="v3.css">
   <!-- 文章排版：真实文章页用它，首页点进文章时的 #spaPost 浮层也复用它 -->
   <link rel="stylesheet" href="posts/post.css">
-  <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色 -->
+  <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色。
+       ⚠️ 这一段必须保持「无依赖 + 不抛错」：它在 head 里同步执行，
+       一旦报错整个 body 都不会渲染。所以全部包在 try 里。
+       注意：注释里不要出现 head / body 标签的字面量 —— 回归装置的注入
+       锚点靠「标签在文档里唯一」来定位，文案撞上就会让探针整片报红。 -->
   <script>
   try{
     var root=document.documentElement;
-    var pal=localStorage.getItem('rinsora-palette');
-    if(['candy','sunset','lilac','mint'].indexOf(pal)===-1) pal='candy';
-    root.classList.add('pal-'+pal);
-    if(localStorage.getItem('rinsora-theme')==='night') root.classList.add('night');
+    var PAL={'candy':'candy','sunset':'sunset','lavender':'lavender','lilac':'lavender','mint':'mint'};
+    var pal=PAL[localStorage.getItem('rinsora-palette')];
+    if(!pal) pal='candy';
+    var night=localStorage.getItem('rinsora-theme')==='night';
+    /* data-theme 是 V3 的正式写法；night 本身就是第 5 套配色，不是叠加 */
+    var theme=night?'night':pal;
+    root.setAttribute('data-theme',theme);
+    var legacy=(pal==='lavender')?'lilac':pal;
+    root.classList.add('pal-'+legacy);
+    if(night) root.classList.add('night');
     var hue=localStorage.getItem('rinsora-hue');
     if(hue) root.style.setProperty('--hue', hue+'deg');
+
+    /* 跨文档转场：上一个页面在离场时留了这个标记，
+       本页首帧就把遮罩放上场（由一条纯 CSS 动画掀开，不依赖 JS）。 */
+    try{ if(sessionStorage.getItem('rinsora-nav')) root.setAttribute('data-enter','1'); }catch(e){}
+
     /* 走「直达某个分栏」的链接进来（文章页的「回到博客列表」就是 #blog）：
        ① 开屏加载页没必要再放一遍，首帧直接按掉；
        ② 只渲染目标那一栏 —— 否则脚本要 50ms 后才跑，中间会先闪一下「主页」。
        两件事都靠 CSS 兜第一帧（.no-boot / [data-pre-section]），
        脚本接管后再把 data-pre-section 撤掉。 */
     var hs = location.hash || '';
-    if (/^#(about|blog|projects)$/i.test(hs)) root.setAttribute('data-pre-section', hs.slice(1).toLowerCase());
+    if (/^#(about|blog|projects|moments)$/i.test(hs)) root.setAttribute('data-pre-section', hs.slice(1).toLowerCase());
     else if (/^#\/post\//i.test(hs)) root.setAttribute('data-pre-section', 'blog');
     if (root.hasAttribute('data-pre-section')) root.classList.add('no-boot');
   }catch(e){}
   </script>
 </head>
 <body>
+<a class="skip-link" href="#mainContent">跳到主内容</a>
+<!-- 跨文档转场遮罩：平时 opacity:0；离场时 .on，新文档首帧由 data-enter 掀开 -->
+<div class="page-cover" id="pageCover" aria-hidden="true"></div>
 
 <div class="scene" aria-hidden="true">
   <div class="aurora aurora-a"></div>
@@ -131,10 +151,13 @@
       <button class="avatar-button" id="avatarButton" aria-label="打开导航">
         <img class="avatar avatar-sidebar" src="assets/avatar.png" alt="空凛" onerror="this.onerror=null;this.src='assets/avatar.svg'">
       </button>
-      <nav class="radial-nav" id="radialNav" aria-label="主导航">
-        <button class="radial-item active" data-target="about" style="--i:0" type="button"><span>♡</span><b>主页</b><small>ABOUT</small></button>
-        <button class="radial-item" data-target="blog" style="--i:1" type="button"><span>✎</span><b>博客</b><small>BLOG</small></button>
-        <button class="radial-item" data-target="projects" style="--i:2" type="button"><span>✦</span><b>项目</b><small>PROJECTS</small></button>
+      <nav class="radial-nav no-js" id="radialNav" aria-label="主导航">
+        <!-- 位置由 script.js 按极坐标算好写进 --nx/--ny/--nr，节点数量随便加。
+             .no-js 里那份是「脚本没跑起来」时的兜底扇形。 -->
+        <button class="radial-item active" data-target="about" type="button"><span>♡</span><b>主页</b><small>ABOUT</small></button>
+        <button class="radial-item" data-target="blog" type="button"><span>✎</span><b>博客</b><small>BLOG</small></button>
+        <button class="radial-item" data-target="projects" type="button"><span>✦</span><b>项目</b><small>PROJECTS</small></button>
+        <button class="radial-item" data-target="moments" type="button"><span>☁</span><b>碎碎念</b><small>MOMENTS</small></button>
       </nav>
     </div>
 
@@ -243,15 +266,44 @@
           <article class="time-card card">
             <div class="time-top"><span>TIME IN MY LITTLE WORLD</span><b id="liveClock">--:--</b></div>
             <div class="time-date" id="liveDate">2026.09.22 · Tuesday</div>
-            <div class="time-track"><i id="timeProgress"></i></div>
-            <div class="time-foot"><span>今日进度</span><b id="dayPercent">0%</b></div>
+            <!-- 四条真实周期进度（按自然日 / 周 / 月 / 年算，不是估算值），每秒刷新 -->
+            <div class="time-rows">
+              <div class="time-row"><span class="tr-label">TODAY</span><span class="tr-bar"><i id="dayBar"></i></span><b class="tr-pct" id="dayBarPct">0%</b></div>
+              <div class="time-row"><span class="tr-label">WEEK</span><span class="tr-bar"><i id="weekBar"></i></span><b class="tr-pct" id="weekBarPct">0%</b></div>
+              <div class="time-row"><span class="tr-label">MONTH</span><span class="tr-bar"><i id="monthBar"></i></span><b class="tr-pct" id="monthBarPct">0%</b></div>
+              <div class="time-row"><span class="tr-label">YEAR</span><span class="tr-bar"><i id="yearBar"></i></span><b class="tr-pct" id="yearBarPct">0%</b></div>
+            </div>
+            <div class="time-foot"><span id="todayLine">Tuesday · 22 Sep</span><span id="timeZone">local time</span></div>
+            <!-- 旧版的单条今日进度：保留 DOM，兼容老样式与老脚本 -->
+            <div class="time-track" hidden><i id="timeProgress"></i></div>
+            <div class="time-foot" hidden><span>今日进度</span><b id="dayPercent">0%</b></div>
           </article>
         </div>
 
         <div class="section-heading fancy-heading">
           <span>☁</span><h3>一点碎碎念</h3><small>MOMENTS</small><span class="line"></span>
+          <a class="soft-btn" href="#moments" style="margin-left:10px">看全部 →</a>
         </div>
-        <div class="moments-grid" id="momentsGrid"></div>
+        <!-- 主页只放最新的三条（脚本按日期排序后 slice 3），完整时间线在 #moments -->
+        <div class="moments-grid" id="momentsTeaser"></div>
+      </section>
+
+      <!-- MOMENTS -->
+      <section class="page-section" id="moments">
+        <div class="section-hero-row moments-head">
+          <div>
+            <div class="section-kicker">☁ MOMENTS / 04</div>
+            <h3 class="section-display">一些还没有长成文章的<br><span>碎碎念。</span></h3>
+            <p class="section-sub">不够详细写成一篇，但又不想让它就这么过去。</p>
+          </div>
+          <div class="moments-stat">
+            <div><b id="momentsCount">0</b>条记录</div>
+            <div><b id="momentsLast">—</b>最近一次</div>
+          </div>
+        </div>
+
+        <div class="section-heading"><span>☁</span><h3>时间线</h3><small>TIMELINE</small><span class="line"></span></div>
+        <div class="timeline" id="momentsGrid"></div>
       </section>
 
       <!-- BLOG -->
@@ -351,40 +403,51 @@
 
     <div class="set-pane active" data-pane="appearance">
       <div class="set-block">
-        <label>主题配色</label>
+        <label>主题配色 <output id="themeNow">candy</output></label>
+        <!-- data-theme 是 V3 的主题名；夜间本身就是第 5 套配色，
+             不是「在别的配色上叠一层深色」，所以它和另外四个是平级的。 -->
         <div class="theme-grid">
-          <button data-palette="candy" type="button"><i class="swatch sw-candy"></i><span>糖果粉黄</span></button>
-          <button data-palette="sunset" type="button"><i class="swatch sw-sunset"></i><span>蜜桃晚霞</span></button>
-          <button data-palette="lilac" type="button"><i class="swatch sw-lilac"></i><span>梦幻紫蓝</span></button>
-          <button data-palette="mint" type="button"><i class="swatch sw-mint"></i><span>薄荷汽水</span></button>
+          <button data-theme="candy" type="button"><i class="swatch sw-candy"></i><span>糖果粉黄</span><em>CANDY</em></button>
+          <button data-theme="sunset" type="button"><i class="swatch sw-sunset"></i><span>蜜桃晚霞</span><em>SUNSET</em></button>
+          <button data-theme="lavender" type="button"><i class="swatch sw-lavender"></i><span>梦幻紫蓝</span><em>LAVENDER</em></button>
+          <button data-theme="mint" type="button"><i class="swatch sw-mint"></i><span>薄荷汽水</span><em>MINT</em></button>
+          <button data-theme="night" type="button"><i class="swatch sw-night"></i><span>深夜紫黑</span><em>NIGHT</em></button>
         </div>
+        <p class="set-note">主题会一起换掉背景、极光、玻璃卡片、按钮、导航、歌词高亮与项目标签 —— 不只是变个底色。</p>
       </div>
       <div class="set-block">
         <label>主题色相 <output id="hueValue">0°</output></label>
         <input id="hueRange" type="range" min="-30" max="40" value="0">
+        <p class="set-note">色相只作用在背景场景层，不会污染文字与按钮的配色。</p>
       </div>
       <div class="set-block">
-        <div class="set-toggle"><span><b>夜间模式</b><small>把整个小窝调成深色</small></span><button class="switch" id="nightSwitch" type="button" aria-label="夜间模式"><i></i></button></div>
+        <div class="set-toggle"><span><b>夜间模式</b><small>快速在日间 / 夜间之间切换</small></span><button class="switch" id="nightSwitch" type="button" aria-label="夜间模式"><i></i></button></div>
       </div>
     </div>
 
     <div class="set-pane" data-pane="effects">
-      <div class="set-toggle"><span><b>星尘粒子</b><small>让背景有一点点流动</small></span><button class="switch on" data-setting="particles" type="button"><i></i></button></div>
-      <div class="set-toggle"><span><b>鼠标光晕</b><small>光圈会追着你的指针</small></span><button class="switch on" data-setting="cursor" type="button"><i></i></button></div>
-      <div class="set-toggle"><span><b>卡片倾斜</b><small>悬停时产生轻微 3D 反光</small></span><button class="switch on" data-setting="tilt" type="button"><i></i></button></div>
-      <div class="set-toggle"><span><b>点击涟漪</b><small>点击页面时留下一个小水波</small></span><button class="switch on" data-setting="ripple" type="button"><i></i></button></div>
+      <div class="set-toggle"><span><b>星尘粒子</b><small>背景里漂浮的小光点（Canvas，不是一堆 DOM）</small></span><button class="switch on" data-setting="particles" type="button" aria-label="星尘粒子"><i></i></button></div>
+      <div class="set-toggle"><span><b>极光光晕</b><small>背景里缓慢游动的几团色雾</small></span><button class="switch on" data-setting="aurora" type="button" aria-label="极光光晕"><i></i></button></div>
+      <div class="set-toggle"><span><b>装饰元素</b><small>网格地面、噪点、漂浮的小星星</small></span><button class="switch on" data-setting="decor" type="button" aria-label="装饰元素"><i></i></button></div>
+      <div class="set-toggle"><span><b>鼠标光晕</b><small>光圈会追着你的指针（仅桌面）</small></span><button class="switch on" data-setting="cursor" type="button" aria-label="鼠标光晕"><i></i></button></div>
+      <div class="set-toggle"><span><b>卡片倾斜</b><small>悬停时产生轻微 3D 反光</small></span><button class="switch on" data-setting="tilt" type="button" aria-label="卡片倾斜"><i></i></button></div>
+      <div class="set-toggle"><span><b>点击涟漪</b><small>点击时留下一圈水波和几颗小心心</small></span><button class="switch on" data-setting="ripple" type="button" aria-label="点击涟漪"><i></i></button></div>
+      <p class="set-note">在系统里开启「减少动态效果」时，这些会自动降级成静态，不会强行播放。</p>
     </div>
 
     <div class="set-pane" data-pane="aboutSite">
       <div class="lab-card">
-        <span>VERSION</span><strong>Rinsora Home V2</strong>
-        <p>把小窝做得更像一个「真的房间」：动态壁纸、玻璃 UI、角色导航、歌词播放器与微交互。配色与特效只存在你自己的浏览器里，不会写进仓库。</p>
+        <span>VERSION</span><strong>Rinsora Home V3</strong>
+        <p>把小窝从「几个页面」变成一个连续的空间：统一的状态机与转场、五套可换的主题引擎、分层动态背景、极坐标扇形导航、时间线与更稳的播放器。</p>
       </div>
       <div class="lab-list">
-        <div><span>DESIGN</span><b>Candy / Anime / Acrylic</b></div>
-        <div><span>STACK</span><b>HTML · CSS · JavaScript</b></div>
-        <div><span>HOST</span><b>GitHub Pages</b></div>
+        <div><span>DESIGN</span><b>Candy / Macaron / Acrylic</b></div>
+        <div><span>STACK</span><b>HTML · CSS · 原生 JavaScript</b></div>
+        <div><span>HOST</span><b>GitHub Pages（无构建）</b></div>
+        <div><span>THEMES</span><b>candy · sunset · lavender · mint · night</b></div>
       </div>
+      <p class="set-note">所有偏好（主题、色相、特效开关）只存在你自己的浏览器里，不会写进仓库。</p>
+      <p class="set-note">快捷键：<code>1</code>~<code>4</code> 切分栏 · <code>Ctrl/⌘ + K</code> 开设置 · <code>Esc</code> 收起一切</p>
     </div>
 
     <div class="settings-foot">changes are saved locally ♡</div>
@@ -395,6 +458,7 @@
     <button class="active" data-target="about" type="button"><span>♡</span>主页</button>
     <button data-target="blog" type="button"><span>✎</span>博客</button>
     <button data-target="projects" type="button"><span>✦</span>项目</button>
+    <button data-target="moments" type="button"><span>☁</span>碎碎念</button>
   </nav>
 
   <!-- 站内打开文章：内容换掉、文档不换 —— <audio> 才不会被销毁，音乐一直播下去。
@@ -417,6 +481,7 @@
 <script src="music-upload.js"></script>
 <script src="projects-data.js"></script>
 <script src="projects.js"></script>
+<script src="moments-data.js"></script>
 <script src="blog-admin.js"></script>
 <script src="script.js"></script>
 </body>

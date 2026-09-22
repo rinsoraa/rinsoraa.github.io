@@ -1,18 +1,27 @@
 /* ============================================================
-   空凛 · Rinsora 的小窝 —— 首页交互
+   空凛 · Rinsora 的小窝 —— 首页界面层（V3）
    ------------------------------------------------------------
-   这一份脚本负责「界面层」，不碰任何数据层：
-     · 开屏进度
-     · 主题（调色板 × 明暗）、夜间切换的圆形扩散过渡
-     · 进入小窝：头像飞入左侧 + 右下播放器向上淡入
-     · 径向导航 / 移动端导航 / hash 路由
-     · 外观设置抽屉（配色、色相、特效开关）
-     · 星尘 canvas、鼠标光晕、卡片倾斜、点击涟漪
-     · 时钟、碎碎念、最近发布、博客分类筛选
+   这一份脚本只负责「界面层」，不碰任何数据层。职责划分：
 
-   播放器（音乐 + 歌词栏）由 music.js 负责；
-   项目树由 projects.js 负责；添加音乐弹窗由 music-upload.js 负责。
-   这里只暴露 window.RinsoraHome 给它们回调。
+     AppState            当前分栏 / 上一个分栏 / 是否在转场中
+     navigateTo(page)    唯一的分栏入口（转场也在这里编排）
+     initTheme()         主题引擎（data-theme × 明暗 × 色相）
+     initNavigation()    极坐标扇形导航 + hash 路由
+     initMoments()       碎碎念时间线
+     initClock()         世界时钟（今日 / 本周 / 本月 / 今年）
+     initSettings()      设置抽屉（外观 / 特效 / 关于）
+     initEffects()       星尘 / 光标 / 涟漪 / 卡片倾斜
+     initReveal()        滚动进场（IntersectionObserver）
+     initPageTransitions()  跨文档转场遮罩
+     initA11y()          键盘与焦点
+     initPage()          页面级初始化（跨文档转场后也调它）
+
+   数据层仍在各自的文件里：
+     播放器（音乐 + 歌词）→ music.js
+     项目树               → projects.js
+     添加音乐弹窗         → music-upload.js
+     碎碎念数据           → moments-data.js
+   通过 window.RinsoraHome 对外暴露少量接口。
    ============================================================ */
 (() => {
   'use strict';
@@ -27,10 +36,16 @@
     get(k, d = null) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* 隐私模式下忽略 */ } }
   };
+  const session = {
+    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
+    del(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+  };
   const reduceMotion = () => {
     try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
   };
   const rAF2 = (fn) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /* ---------------------------------------------------- 元素引用 ---- */
   const html = document.documentElement;
@@ -42,6 +57,7 @@
   const enterBtn = $('#enterBtn');
   const navWrap = $('#avatarNavWrap');
   const avatarButton = $('#avatarButton');
+  const radialNav = $('#radialNav');
   const themeBtn = $('#themeBtn');
   const themeLabel = $('#themeLabel');
   const settingsPanel = $('#settingsPanel');
@@ -53,7 +69,30 @@
   const spaPostView = $('#spaPostView');
   const spaPostBody = $('#spaPostBody');
 
+  const THEMES = ['candy', 'sunset', 'lavender', 'mint', 'night'];
+  /* 旧代码 / 回归装置还在用 pal-xxx 这套类名，映射表负责两边都写 */
+  const PALETTE_OF = { candy: 'candy', sunset: 'sunset', lavender: 'lilac', lilac: 'lilac', mint: 'mint' };
   const PALETTES = ['candy', 'sunset', 'lilac', 'mint'];
+
+  /* 星尘实例稍后才创建；先用 null 占位，applyEffects() 里就能安全判空。
+     （不能直接写 typeof starfield —— const 在 TDZ 里连 typeof 都会抛错。） */
+  let starfield = null;
+
+  /* ============================================================
+     AppState —— 页面状态机
+     ------------------------------------------------------------
+     以前分栏切换就是「给旧的摘 .active、给新的加 .active」，
+     一瞬间就切完了，没有任何状态可查，也没法阻止连点造成的错乱。
+     现在把「当前在哪、从哪来、是不是正在转场」显式记下来。
+     ============================================================ */
+  const AppState = {
+    currentPage: 'about',
+    previousPage: null,
+    isEntering: false,
+    isTransitioning: false,
+    theme: 'candy',
+    effects: {}
+  };
 
   /* ---------------------------------------------------- 状态 ---- */
   const state = {
@@ -68,7 +107,9 @@
       particles: store.get('rinsora-effect-particles', 'on') !== 'off',
       cursor: store.get('rinsora-effect-cursor', 'on') !== 'off',
       tilt: store.get('rinsora-effect-tilt', 'on') !== 'off',
-      ripple: store.get('rinsora-effect-ripple', 'on') !== 'off'
+      ripple: store.get('rinsora-effect-ripple', 'on') !== 'off',
+      aurora: store.get('rinsora-effect-aurora', 'on') !== 'off',
+      decor: store.get('rinsora-effect-decor', 'on') !== 'off'
     }
   };
 
@@ -85,7 +126,7 @@
     }
   }, 70);
 
-  /* 走直达链接（#about / #blog / #projects）进来时，开屏加载页整段跳过：
+  /* 走直达链接（#about / #blog / #projects / #moments）进来时，开屏整段跳过：
      停掉进度计时器 + 关掉过渡 + 立刻按掉。CSS 的 .no-boot 负责兜住第一帧，
      这里负责把还在跑的计时器收掉，免得它在后台把进度条推到 100%。 */
   function skipBoot() {
@@ -97,27 +138,64 @@
   }
 
   /* ============================================================
-     主题：调色板（配色）× 明暗（白天 / 夜间），两者独立
+     initTheme —— 主题引擎
+     ------------------------------------------------------------
+     主题 = 调色板（candy / sunset / lavender / mint）× 明暗（day / night）
+     两者独立存储，但对外只用**一个** data-theme 字符串表达最终结果：
+       data-theme="candy" | "sunset" | "lavender" | "mint" | "night"
+     夜间时 data-theme="night"（night 本身就是第 5 套配色，不是「叠加」）。
+     旧的 .pal-x / .night 类名同步写上，老 CSS 和回归装置都不受影响。
      ============================================================ */
+  function themeName() {
+    if (state.night) return 'night';
+    return ({ lilac: 'lavender' })[state.palette] || state.palette;
+  }
+
+  function applyTheme(persist) {
+    const name = themeName();
+    AppState.theme = name;
+    html.setAttribute('data-theme', name);
+    body.setAttribute('data-theme', name);
+    /* 兼容层：老类名继续维护 */
+    const legacy = PALETTE_OF[state.palette] || 'candy';
+    PALETTES.forEach((p) => {
+      html.classList.toggle('pal-' + p, p === legacy);
+      body.classList.toggle('pal-' + p, p === legacy);
+    });
+    html.classList.toggle('night', state.night);
+    body.classList.toggle('night', state.night);
+    if (themeLabel) themeLabel.textContent = state.night ? '日间模式' : '夜间模式';
+    if (themeBtn) themeBtn.title = state.night ? '切换日间模式' : '切换夜间模式';
+    const ns = $('#nightSwitch');
+    if (ns) ns.classList.toggle('on', state.night);
+    /* 设置面板里 5 个主题按钮的高亮 + 「当前主题」文字 */
+    $$('.theme-grid button').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.theme || b.dataset.palette) === name);
+    });
+    const nowLabel = $('#themeNow');
+    if (nowLabel) nowLabel.textContent = name;
+    /* 同步 <meta name="theme-color">，手机浏览器地址栏跟着变色 */
+    const tc = $('meta[name="theme-color"]');
+    if (tc) {
+      const cs = getComputedStyle(html).getPropertyValue('--accent-primary').trim();
+      if (cs) tc.setAttribute('content', cs);
+    }
+    if (persist) {
+      store.set('rinsora-palette', state.palette);
+      store.set('rinsora-theme', state.night ? 'night' : 'light');
+    }
+  }
+
+  /* 只切换调色板（不含明暗） */
   function applyPalette(name, persist) {
     const next = PALETTES.indexOf(name) === -1 ? 'candy' : name;
-    PALETTES.forEach((p) => {
-      const cls = 'pal-' + p;
-      html.classList.toggle(cls, p === next);
-      body.classList.toggle(cls, p === next);
-    });
-    $$('.theme-grid button').forEach((b) => b.classList.toggle('active', b.dataset.palette === next));
-    if (persist) { state.palette = next; store.set('rinsora-palette', next); }
+    state.palette = next;
+    applyTheme(persist);
   }
 
   function applyNight(night, persist) {
-    html.classList.toggle('night', night);
-    body.classList.toggle('night', night);
-    if (themeLabel) themeLabel.textContent = night ? '日间模式' : '夜间模式';
-    if (themeBtn) themeBtn.title = night ? '切换日间模式' : '切换夜间模式';
-    const ns = $('#nightSwitch');
-    if (ns) ns.classList.toggle('on', night);
-    if (persist) { state.night = night; store.set('rinsora-theme', night ? 'night' : 'light'); }
+    state.night = !!night;
+    applyTheme(persist);
   }
 
   function applyHue(deg, persist) {
@@ -127,23 +205,22 @@
     if (persist) { state.hue = deg; store.set('rinsora-hue', deg); }
   }
 
-  /* 夜间切换：从按钮位置扩散一个圆，把新配色「揭」出来。
+  /* 换了主题要重开一次视图过渡的「圆扩散」，从按钮位置揭出来。
      ① 更新回调里等两帧再 resolve —— 浏览器是等回调 resolve 之后才拍
         「新」快照的，太快 resolve 会拍到毛玻璃还没按新配色重新合成的
         那一帧，看起来就像「毛玻璃先消失 → 变色 → 毛玻璃再回来」。
      ② 外面再挂一个定时器兜底：万一某个环境里视图过渡的回调根本没执行
-        （无头 / 虚拟时间的浏览器就是这样），至少主题要切过去。 */
-  function toggleTheme() {
-    const next = !state.night;
-    if (!document.startViewTransition || reduceMotion()) { applyNight(next, true); return; }
-
+        （无头 / 虚拟时间的浏览器就是这样），至少主题要切过去。
+     ③ 不支持 View Transition API 的浏览器直接换 —— 这就是 fallback。 */
+  function withViewTransition(mutate) {
+    if (!document.startViewTransition || reduceMotion()) { mutate(); return; }
     const r = themeBtn ? themeBtn.getBoundingClientRect() : null;
     const x = r ? r.left + r.width / 2 : innerWidth / 2;
     const y = r ? r.top + r.height / 2 : 0;
     const far = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) + 30;
 
     let applied = false;
-    const once = () => { if (!applied) { applied = true; applyNight(next, true); } };
+    const once = () => { if (!applied) { applied = true; mutate(); } };
 
     const vt = document.startViewTransition(() => new Promise((done) => {
       once();
@@ -158,34 +235,310 @@
     }).catch(() => {});
     setTimeout(once, 220);
   }
+
+  function toggleTheme() {
+    const next = !state.night;
+    withViewTransition(() => applyNight(next, true));
+  }
   themeBtn && themeBtn.addEventListener('click', toggleTheme);
 
-  /* 初始化主题（不写存储，只把已存的读出来套上） */
-  applyPalette(state.palette, false);
-  applyNight(state.night, false);
-  applyHue(state.hue, false);
-
   /* ============================================================
-     进度条颜色 / 特效开关
+     initEffects —— 特效开关
      ============================================================ */
   function applyEffects() {
     const fx = state.effects;
+    AppState.effects = Object.assign({}, fx);
     body.classList.toggle('no-particles', !fx.particles);
     body.classList.toggle('no-ripple', !fx.ripple);
     body.classList.toggle('no-tilt', !fx.tilt);
+    body.classList.toggle('no-aurora', !fx.aurora);
+    body.classList.toggle('no-decor', !fx.decor);
     body.classList.toggle('cursor-on', fx.cursor && !reduceMotion());
     /* 只同步「特效开关」，夜间那个 .switch 没有 data-setting，不归这里管 */
     $$('.switch').forEach((b) => {
       if (b.dataset.setting) b.classList.toggle('on', !!fx[b.dataset.setting]);
     });
+    if (starfield) starfield.sync();
   }
 
   /* ============================================================
-     进入小窝
+     initNavigation —— 极坐标扇形导航
      ------------------------------------------------------------
-     目标位置必须先量准。侧栏是 position:fixed，而 .app 不能带
-     transform，否则它的定位基准会从「视口」变成 .app 本身 ——
-     实测那会把整个侧栏推到首屏下面，头像于是往左下角飞。
+     旧实现是 nth-child + 写死 translate，第 4 个节点就得手算一组新数字。
+     现在按极坐标算：
+
+       angle = startAngle + i * step         （i = 0..n-1）
+       x     = cos(angle) * radius
+       y     = sin(angle) * radius
+       rot   = angle / 10                    （跟着弧线轻轻转，别太夸张）
+
+     ⚠️ 下面这几个数不是「看着差不多」调出来的，是解出来的。
+        扇形要同时避开三块东西，而侧栏只有 220px 宽（头像就占 147px）：
+
+          · 头像      page (50,121)-(197,267)
+          · 侧栏署名  page (99,316)-(148,405)   ← 在头像正下方
+          · ONLINE    page (77,415)-(167,440)
+          · 内容首栏  page x >= 300             ← 扇形是浮层，最好别压过去
+
+        4 张 90x52 的卡片绕 147px 的头像摆一圈，靠手调是调不出来的：
+        半径小了压头像，半径大了顶出侧栏；角度跨到 0° 附近（头像正右）
+        时怎么放都不行 —— 要清出头像得 R>=126，可那样右边界必然 >300。
+        所以扇形整体开在**右上方**，从 -110° 转到 +22°。
+        参数由 `_navfit.py` 用 SAT（分离轴）在旋转矩形上搜出来，
+        满足「离禁入区 >=8px、互不重叠、x 落在 [0,300]」，见该脚本注释。
+
+     节点多的时候单圈会挤在一起，所以奇偶分两圈
+     （内圈 / 外圈差 58px），相邻两项永远落在不同半径上，不会叠。
+     参数都在下面 NAV_CFG 里，改一个数就能整圈变形 —— 但改完请重跑
+     `_navfit.py` 与 `_navcheck.py`，别只靠眼睛。
+     ============================================================ */
+  const NAV_CFG = {
+    startAngle: -110,  /* 一度为单位；-90 是正上方，0 是正右，90 是正下方 */
+    arc: 132,          /* 扇形张开的总角度 → 4 个节点每 44° 一个 */
+    radius: 138,       /* 内圈半径 */
+    ringGap: 58,       /* 两圈之间的半径差（节点 >4 时才用） */
+    twoRingAbove: 4    /* 超过这个数量就分两圈；5 个以上时外圈会顶到内容栏，
+                          那时得把 arc 收窄，别硬加节点 */
+  };
+
+  function layoutRadialNav() {
+    if (!radialNav) return;
+    const items = $$('.radial-item', radialNav);
+    if (!items.length) return;
+    radialNav.classList.remove('no-js');
+
+    const n = items.length;
+    const twoRing = n > NAV_CFG.twoRingAbove;
+    const step = n > 1 ? NAV_CFG.arc / (n - 1) : 0;
+    const start = NAV_CFG.startAngle;
+
+    items.forEach((el, i) => {
+      const angle = n === 1 ? start + NAV_CFG.arc / 2 : start + step * i;
+      const rad = (angle * Math.PI) / 180;
+      const radius = NAV_CFG.radius + (twoRing && i % 2 ? NAV_CFG.ringGap : 0);
+      el.style.setProperty('--nx', (Math.cos(rad) * radius).toFixed(1) + 'px');
+      el.style.setProperty('--ny', (Math.sin(rad) * radius).toFixed(1) + 'px');
+      el.style.setProperty('--nr', (angle / 10).toFixed(1) + 'deg');
+      /* 从左到右依次弹出，做出 stagger */
+      el.style.setProperty('--d', (i * 42) + 'ms');
+    });
+  }
+
+  /* ============================================================
+     navigateTo —— 唯一的分栏入口
+     ------------------------------------------------------------
+     目标体验：旧内容先退出 → 转场 → 新内容进入。
+     实现上有三个必须守住的点：
+
+     ① 目标分栏的 .active 是**同步**写的。
+        回归装置（_v2.py / _shot.py）在切换后只等 60ms 就去读
+        .page-section.active 和几何，异步加类会让它们读到旧的。
+        所以「旧的退场」用 .leaving（position:absolute + 播放完就摘），
+        新分栏照常立刻上场 —— 视觉上是交叉淡出，语义上没有延迟。
+
+     ② 不排「队列」、也不上「锁」。
+        一开始写的是「转场期间锁 560ms，把后来的点击记进 pendingNav」，
+        结果是：连着点两下，第二下要等半秒多才动 —— 手感很差，
+        而且还会让回归里「切换 → 等 60ms → 量几何」全部读到旧分栏。
+        现在改成**立即重定向**：新的目标当场接手，把上一个正在退场的
+        收干净、preset 类重挂一次重启动画。连点 5 次也只是动画重播，
+        状态永远只有一份，不会错乱（这才是「防止状态错乱」的正解）。
+        真正防的不是「第二次点击」，而是「同一次转场被重入」——
+        那用下面那个自增 token 兜底：过期的定时器一律不再动 DOM。
+
+     ③ AppState.isTransitioning 仍然真实维护（对外可观察），
+        但只用来描述「动画还在播」，不用来拒绝导航。
+     ============================================================ */
+  const TITLES = { about: '主页', blog: '博客 / 随笔', projects: '项目', moments: '碎碎念' };
+  const WIDTHS = { about: 25, blog: 50, projects: 75, moments: 100 };
+
+  /* 四套转场 preset：不是所有页面都用同一个 fade */
+  const TRANSITIONS = {
+    'about>blog': 'tr-slide-x',
+    'blog>about': 'tr-slide-x',
+    'blog>projects': 'tr-drop',
+    'projects>blog': 'tr-drop',
+    'projects>about': 'tr-blur',
+    'about>projects': 'tr-drop',
+    'blog>moments': 'tr-zoom',
+    'moments>blog': 'tr-zoom',
+    'about>moments': 'tr-zoom',
+    'moments>about': 'tr-blur',
+    'projects>moments': 'tr-zoom',
+    'moments>projects': 'tr-drop'
+  };
+  const TR_CLASSES = ['tr-slide-x', 'tr-drop', 'tr-blur', 'tr-zoom'];
+
+  let navToken = 0;
+  let leavingTimer = 0;
+
+  function sectionEl(id) { return document.getElementById(id); }
+
+  function runTransition(from, to) {
+    const out = from && from !== to ? sectionEl(from) : null;
+    const into = sectionEl(to);
+    if (!into) return;
+
+    /* --- 退场：先把所有还在退场的收干净（连点时上一轮可能没播完） --- */
+    $$('.page-section.leaving').forEach((s) => {
+      if (s !== out) s.classList.remove('leaving');
+    });
+    if (out) {
+      out.classList.remove('active');
+      out.classList.add('leaving');
+      clearTimeout(leavingTimer);
+      leavingTimer = setTimeout(() => out.classList.remove('leaving'), 260);
+    }
+
+    /* --- 上场：先摘掉上一次的 preset，重排一次，再加新的 ---
+       顺序很讲究：先把 preset 类摘掉并让 .active 生效，读一次 offsetWidth
+       强制结算样式，最后才加 preset —— 否则（摘掉旧的、加上新的都在同一帧）
+       浏览器会认为 animation 名没变，直接沿用上一轮的结束态，转场就不播了。
+       连点同一个目标时 preset 会重挂，动画从头播一遍。 */
+    TR_CLASSES.forEach((c) => into.classList.remove(c));
+    into.classList.add('active');
+    void into.offsetWidth;
+    const preset = TRANSITIONS[from + '>' + to] || 'tr-slide-x';
+    if (!reduceMotion()) {
+      into.classList.add(preset);
+      setTimeout(() => { if (into.classList.contains(preset)) into.classList.remove(preset); }, 700);
+    }
+  }
+
+  function navigateTo(page, opts) {
+    const o = opts || {};
+    if (!TITLES[page]) page = 'about';
+
+    if (page === AppState.currentPage && !o.force) {
+      /* 已经在目标分栏：不用转场，但**必须**照样把首帧兜底交班，
+         否则 #about 这类「目标就是初始分栏」的直达链接会被
+         html[data-pre-section] 一直按着（欢迎页被 display:none）。 */
+      html.removeAttribute('data-pre-section');
+      hidePost();
+      if (!o.silent) closeNav(true);
+      syncA11y(page);
+      return true;
+    }
+
+    const from = AppState.currentPage;
+
+    hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
+    html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
+
+    AppState.previousPage = from;
+    AppState.currentPage = page;
+    state.section = page;
+
+    runTransition(from, page);
+
+    $$('.radial-item').forEach((b) => b.classList.toggle('active', b.dataset.target === page));
+    $$('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.target === page));
+    syncA11y(page);
+
+    const title = $('#sectionTitle');
+    if (title) title.textContent = TITLES[page];
+    if (pageProgress) pageProgress.style.width = (WIDTHS[page] || 25) + '%';
+    document.title = TITLES[page] + ' · 空凛 · Rinsora 的小窝';
+
+    if (o.push !== false && history.replaceState) history.replaceState(null, '', '#' + page);
+
+    const back = o.scrollY;
+    window.scrollTo({
+      top: back == null ? 0 : back,
+      behavior: (back == null && !reduceMotion()) ? 'smooth' : 'auto'
+    });
+
+    /* 进入某个分栏时按需重新扫一遍滚动进场的目标 */
+    observeReveal();
+
+    /* 「动画进行中」只是一个对外可观察的状态，不参与决策。
+       token 保证只有最新那一轮能把标记落回 false —— 过期的定时器不再动 DOM。 */
+    const token = ++navToken;
+    AppState.isTransitioning = true;
+    setTimeout(() => {
+      if (token !== navToken) return;
+      AppState.isTransitioning = false;
+    }, reduceMotion() ? 60 : 560);
+    return true;
+  }
+
+  /* 兼容旧接口：showSection 就是 navigateTo，第二参沿用「是否写 hash」的语义 */
+  function showSection(id, push) {
+    return navigateTo(id, { push: push !== false });
+  }
+
+  /* -------------------------------------------------- 导航交互 --- */
+  $$('.radial-item,.mobile-nav button').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      navigateTo(btn.dataset.target);
+      closeNav(true);
+    });
+  });
+
+  function openNav(on) {
+    if (!navWrap) return;
+    navWrap.classList.toggle('open', on);
+    navWrap.classList.remove('nav-closed');   /* 主动展开时清掉「已被显式收起」的抑制类 */
+  }
+  function closeNav(soft) {
+    if (!navWrap) return;
+    navWrap.classList.remove('open');
+    /* soft=true：点空白收起，顺手压住 :hover 的自动展开；鼠标离开就复位 */
+    navWrap.classList.toggle('nav-closed', !!soft);
+  }
+  avatarButton && avatarButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (navWrap.classList.contains('open')) closeNav(true);
+    else openNav(true);
+  });
+  navWrap && navWrap.addEventListener('mouseleave', () => navWrap.classList.remove('nav-closed'));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest || !e.target.closest('#avatarNavWrap')) closeNav(true);
+  });
+
+  /* -------------------------------------------------- hash 路由 --- */
+  /* 直达链接：#about / #blog / #projects / #moments 跳过欢迎页，
+     #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
+     #admin / #write / #editor / #project 跳后台页 */
+  function routeHash() {
+    const raw = (location.hash || '').replace(/^#/, '');
+    const h = raw.toLowerCase();
+    if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
+    if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
+    /* 文章：先落回博客分栏（首帧 CSS 已经把欢迎页按住了），再盖上浮层 */
+    const pm = /^\/post\/([^/?#]+\.html)$/i.exec(raw);
+    if (pm) {
+      skipBoot(); enterApp(true); navigateTo('blog', { push: false, silent: true });
+      openPost('posts/' + pm[1], false);
+      return true;
+    }
+    if (TITLES[h]) { skipBoot(); enterApp(true); navigateTo(h, { push: false, silent: true }); return true; }
+    return false;
+  }
+  window.addEventListener('hashchange', () => {
+    /* 没命中任何路由也要把浮层收掉：从「主页」的最近发布点进文章时，
+       进站时的 hash 本来就是空的，后退回来只会把 hash 清掉，
+       不在这里收就永远卡在文章上。 */
+    if (!routeHash()) hidePost();
+  });
+
+  /* ============================================================
+     initEntry —— 「进入小窝」
+     ------------------------------------------------------------
+     目标：一整段连续的动画，而不是「啪」地切过去。
+     时序（总长约 1.1s）：
+
+       0ms    点按钮，按钮禁用；欢迎页开始减速（整体轻微缩小）
+       0ms    克隆头像 → 沿弧线飞向左侧 sidebar 头像的位置
+       0ms    欢迎页那个大播放器向下淡出（landingPlayer.exit）
+       700ms  侧栏头像揭开（.arriving），导航节点逐个延迟弹出
+       760ms  右下角播放器从下方向上淡入
+       820ms  .app 的侧栏 / 主内容进入
+
+     ⚠️ .app 上不能有 transform —— 侧栏和播放器都是 position:fixed，
+     给祖先加 transform 会把它们的包含块从视口改成 .app，
+     bottom:0 就跑到首屏下面去了（之前踩过）。
      ============================================================ */
   function flyAvatar() {
     if (reduceMotion()) return false;
@@ -218,7 +571,10 @@
     glow.style.cssText += `width:${glowSize}px;height:${glowSize}px;left:${cx1 - glowSize / 2}px;top:${cy1 - glowSize / 2}px`;
     app.before(glow);
 
-    from.style.opacity = '0';
+    /* 原头像不立刻消失 —— 先压到 0.15，让「它已经飞走了」和「它还在那」
+       之间有一段过渡，而不是硬切。飞行结束时才彻底隐去。 */
+    from.style.transition = 'opacity .28s ease';
+    from.style.opacity = '.15';
     to.style.opacity = '0';
 
     const anim = clone.animate([
@@ -239,7 +595,7 @@
       done = true;
       clone.remove();
       glow.remove();
-      from.style.opacity = '';
+      from.style.opacity = '0';
       to.style.opacity = '';
       to.classList.remove('arriving');
       void to.offsetWidth;                        /* 强制重排，动画才会从 0 开始 */
@@ -258,6 +614,7 @@
   function enterApp(instant) {
     if (entered) return;
     entered = true;
+    AppState.isEntering = true;
     try { window.RinsoraMusic && window.RinsoraMusic.collapse && window.RinsoraMusic.collapse(); } catch (e) {}
 
     const flying = !instant && flyAvatar();
@@ -266,112 +623,44 @@
       if (to) { to.style.opacity = ''; }
     }
 
+    /* ① 欢迎页的大播放器向下淡出 */
     if (landingPlayer) landingPlayer.classList.add('exit');
+    /* ② 欢迎页整块退出（减速 + 缩小 + 上移） */
     if (welcome) { welcome.classList.add('hidden'); welcome.setAttribute('aria-hidden', 'true'); }
     if (enterBtn) { enterBtn.disabled = true; enterBtn.setAttribute('aria-disabled', 'true'); }
+    /* ③ 主内容上线 */
     if (app) app.classList.add('visible');
 
-    /* 右下播放器的淡入：必须等 .visible 这一帧真的提交过再切，
-       然后隔一个定时器 + 双 rAF —— 同一帧里改两次类名会被合并，
-       transition 不会触发，表现就是「直接出现」而不是「向上淡入」。 */
+    /* ④ 右下播放器从下方向上淡入。
+       必须等 .visible 这一帧真的提交过再切，然后隔一个定时器 + 双 rAF ——
+       同一帧里改两次类名会被合并，transition 不会触发，
+       表现就是「直接出现」而不是「向上淡入」。 */
     if (floatingPlayer) {
       void floatingPlayer.offsetHeight;
-      const at = instant ? 60 : (flying ? 700 : 220);
+      const at = instant ? 60 : (flying ? 780 : 240);
       setTimeout(() => {
         rAF2(() => floatingPlayer.classList.add('visible'));
       }, at);
       /* 同上：双 rAF 是为了「先让 .visible 那一帧提交过」，但如果 rAF 被
-         节流（后台标签页 / 无头渲染）就永远等不到 —— 补一条定时兜底，
-         保证最终一定会淡入，而不是一直停在 opacity:0。 */
+         节流（后台标签页 / 无头渲染）就永远等不到 —— 补一条定时兜底。 */
       setTimeout(() => floatingPlayer.classList.add('visible'), at + 260);
     }
+
+    setTimeout(() => {
+      AppState.isEntering = false;
+      layoutRadialNav();          /* 侧栏真正可见之后再量一次，位置最准 */
+    }, instant ? 80 : 1100);
   }
   enterBtn && enterBtn.addEventListener('click', () => enterApp(false));
-
-  /* ============================================================
-     导航
-     ============================================================ */
-  const TITLES = { about: '主页', blog: '博客 / 随笔', projects: '项目' };
-  const WIDTHS = { about: 33, blog: 66, projects: 100 };
-
-  function showSection(id, push) {
-    if (!TITLES[id]) id = 'about';
-    hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
-    html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
-    state.section = id;
-    $$('.page-section').forEach((s) => s.classList.toggle('active', s.id === id));
-    $$('.radial-item').forEach((b) => b.classList.toggle('active', b.dataset.target === id));
-    $$('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.target === id));
-    const title = $('#sectionTitle');
-    if (title) title.textContent = TITLES[id];
-    if (pageProgress) pageProgress.style.width = (WIDTHS[id] || 33) + '%';
-    document.title = TITLES[id] + ' · 空凛 · Rinsora 的小窝';
-    if (push !== false && history.replaceState) history.replaceState(null, '', '#' + id);
-    window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
-  }
-
-  $$('.radial-item,.mobile-nav button').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      showSection(btn.dataset.target);
-      closeNav();
-    });
-  });
-
-  function openNav(on) {
-    if (!navWrap) return;
-    navWrap.classList.toggle('open', on);
-    navWrap.classList.remove('nav-closed');   /* 主动展开时清掉「已被显式收起」的抑制类 */
-  }
-  function closeNav(soft) {
-    if (!navWrap) return;
-    navWrap.classList.remove('open');
-    /* soft=true：点空白收起，顺手压住 :hover 的自动展开；鼠标离开就复位 */
-    navWrap.classList.toggle('nav-closed', !!soft);
-  }
-  avatarButton && avatarButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (navWrap.classList.contains('open')) closeNav(true);
-    else openNav(true);
-  });
-  navWrap && navWrap.addEventListener('mouseleave', () => navWrap.classList.remove('nav-closed'));
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest || !e.target.closest('#avatarNavWrap')) closeNav(true);
-  });
-
-  /* 直达链接：#about / #blog / #projects 直接跳过欢迎页，
-     #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
-     #admin / #write / #editor / #project 跳后台页 */
-  function routeHash() {
-    const raw = (location.hash || '').replace(/^#/, '');
-    const h = raw.toLowerCase();
-    if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
-    if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
-    /* 文章：先落回博客分栏（首帧 CSS 已经把欢迎页按住了），再盖上浮层 */
-    const pm = /^\/post\/([^/?#]+\.html)$/i.exec(raw);
-    if (pm) {
-      skipBoot(); enterApp(true); showSection('blog', false);
-      openPost('posts/' + pm[1], false);
-      return true;
-    }
-    if (TITLES[h]) { skipBoot(); enterApp(true); showSection(h, false); return true; }
-    return false;
-  }
-  window.addEventListener('hashchange', () => {
-    /* 没命中任何路由也要把浮层收掉：从「主页」的最近发布点进文章时，
-       进站时的 hash 本来就是空的，后退回来只会把 hash 清掉，
-       不在这里收就永远卡在文章上。 */
-    if (!routeHash()) hidePost();
-  });
 
   /* ============================================================
      站内打开文章 —— 内容换掉，文档不换
      ------------------------------------------------------------
      博客卡片的 href 是真的 posts/xxx.html。直接点就是「换文档」，
      <audio> 会跟着旧文档一起销毁，音乐必然停 —— 这是「点进文章音乐
-     就断」的根因，靠调音量/续播都绕不过去。所以这里把站内点击接管
-     下来：fetch 回文章页，只把 .post-wrap 搬进 #spaPost 浮层，
-     地址记成 #/post/xxx.html。文档自始至终是同一个，播放器当然一直播。
+     就断」的根因。所以这里把站内点击接管下来：fetch 回文章页，
+     只把 .post-wrap 搬进 #spaPost 浮层，地址记成 #/post/xxx.html。
+     文档自始至终是同一个，播放器当然一直播。
      真链接一个没动：新标签页 / 中键 / Ctrl+点 / 无脚本访问 / SEO
      全都还是 posts/xxx.html 那个真页面。
      ============================================================ */
@@ -387,14 +676,14 @@
     return POST_HREF.test(href) ? href : '';
   }
 
-  /* 只收起浮层，不碰路由 —— 给 showSection 用，避免两边互相调用 */
+  /* 只收起浮层，不碰路由 —— 给 navigateTo 用，避免两边互相调用 */
   function hidePost() {
     if (!postUrl) return;
     postUrl = '';
     postPushed = false;
     spaPost && spaPost.classList.remove('on');
     body.classList.remove('spa-post-open');
-    /* 把滚动位置还给列表：showSection 会先把页面滚到顶，所以这里推到
+    /* 把滚动位置还给列表：navigateTo 会先把页面滚到顶，所以这里推到
        下一个 tick 再盖回去（behavior:auto 会顶掉那边还在跑的 smooth）。 */
     if (backScrollY != null) {
       const to = backScrollY;
@@ -429,9 +718,9 @@
 
     fetch(url, { credentials: 'same-origin' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then((html) => {
+      .then((text) => {
         if (postUrl !== url) return;           /* fetch 期间切走了 */
-        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const doc = new DOMParser().parseFromString(text, 'text/html');
         const wrap = doc.querySelector('.post-wrap');
         if (!wrap) throw new Error('没有 .post-wrap');
         spaPostBody.textContent = '';
@@ -453,7 +742,7 @@
       return;
     }
     hidePost();
-    showSection('blog', false);
+    navigateTo('blog', { push: false });
   }
 
   /* 站内链接接管：文章卡片、浮层里的返回按钮都走这里 */
@@ -473,15 +762,26 @@
   });
 
   /* ============================================================
-     外观设置抽屉
+     initSettings —— 外观 / 特效 / 关于
      ============================================================ */
   function openSettings() {
     settingsPanel && settingsPanel.classList.add('open');
     settingsMask && settingsMask.classList.add('open');
+    /* 遮罩是铺满整屏且吃指针事件的，底下那页还能滚就是明显的错位感
+       （手机上尤其明显：手指在遮罩上划，背景内容在动）。
+       锁在 <body> 上 —— 滚动容器是 body，锁 <html> 不管用。 */
+    body.style.overflow = 'hidden';
+    const tab = $('.set-tab.active');
+    if (tab && tab.focus) tab.focus({ preventScroll: true });
   }
   function closeSettings() {
+    const wasOpen = !!(settingsPanel && settingsPanel.classList.contains('open'));
     settingsPanel && settingsPanel.classList.remove('open');
     settingsMask && settingsMask.classList.remove('open');
+    body.style.overflow = '';
+    /* 焦点要还回去，否则键盘用户的焦点会掉在一个已经收起来的面板里 */
+    const opener = $('.settings-open');
+    if (wasOpen && opener && opener.focus) opener.focus({ preventScroll: true });
   }
   $$('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
   $('#settingsClose') && $('#settingsClose').addEventListener('click', closeSettings);
@@ -499,8 +799,12 @@
 
   $$('.theme-grid button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      applyPalette(btn.dataset.palette, true);
-      toast('已换上「' + btn.textContent.trim() + '」 ✦');
+      const name = btn.dataset.theme || btn.dataset.palette || 'candy';
+      withViewTransition(() => {
+        if (name === 'night') applyNight(true, true);
+        else { state.night = false; applyPalette(PALETTE_OF[name] || name, true); }
+      });
+      toast('已换上「' + btn.textContent.trim().split('\n')[0] + '」 ✦');
     });
   });
 
@@ -517,17 +821,15 @@
       state.effects[k] = !state.effects[k];
       store.set('rinsora-effect-' + k, state.effects[k] ? 'on' : 'off');
       applyEffects();
-      if (k === 'particles') starfield.start();
     });
   });
   const nightSwitch = $('#nightSwitch');
   nightSwitch && nightSwitch.addEventListener('click', toggleTheme);
-  applyEffects();
 
   /* ============================================================
      星尘（真 canvas，不是一堆 ✦）
      ============================================================ */
-  const starfield = (() => {
+  starfield = (() => {
     const canvas = $('#starCanvas');
     const ctx = canvas ? canvas.getContext('2d') : null;
     let dpr = 1, w = 0, h = 0, raf = 0, dots = [];
@@ -541,7 +843,9 @@
       canvas.width = Math.floor(w * dpr);
       canvas.height = Math.floor(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const n = w <= 760 ? 60 : 110;
+      /* 桌面 100~140、移动 50~80 —— 按面积插值，宽屏自动多一点 */
+      const base = w <= 760 ? 56 : 108;
+      const n = Math.round(base + Math.min(32, (w * h) / 40000));
       dots = Array.from({ length: n }, () => ({
         x: rand(0, w), y: rand(0, h),
         vx: rand(-.12, .12), vy: rand(-.10, .10),
@@ -597,6 +901,16 @@
       raf = requestAnimationFrame(frame);
     }
 
+    /* 特效开关变化时调用：开着就继续跑，关掉就立刻停手（不空转 rAF） */
+    function sync() {
+      if (!state.effects.particles || reduceMotion()) {
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        if (ctx) ctx.clearRect(0, 0, w, h);
+      } else if (!raf) {
+        start();
+      }
+    }
+
     if (ctx) {
       resize();
       document.addEventListener('visibilitychange', () => {
@@ -604,15 +918,35 @@
       });
       window.addEventListener('resize', () => { resize(); }, { passive: true });
     }
-    return { start: ctx ? start : () => {} };
+    return { start: ctx ? start : () => {}, sync: ctx ? sync : () => {} };
   })();
-  starfield.start();
 
   /* ============================================================
-     时钟 / 碎碎念 / 最近发布
+     initClock —— 世界时钟
+     ------------------------------------------------------------
+     今日 / 本周 / 本月 / 今年 四条真实进度（按自然周期算，不是估算）。
+     最后更新时间由 latestUpdate() 从博客卡片 ∪ 项目数据的最大日期取；
+     一个都没有时回落到今天的日期 —— 绝不显示「Last update —」。
      ============================================================ */
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function pad(n) { return String(n).padStart(2, '0'); }
+
+  /* 某个日期在当年的第几天（用于年进度） */
+  function dayOfYear(d) {
+    const start = new Date(d.getFullYear(), 0, 1);
+    return Math.floor((d - start) / 86400000) + 1;
+  }
+  function daysInYear(y) {
+    return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 366 : 365;
+  }
+  /* 本周从周一算起 */
+  function weekProgress(now) {
+    const dow = (now.getDay() + 6) % 7;                        /* 周一 = 0 */
+    const passed = dow * 86400000 + now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000;
+    return (passed / (7 * 86400000)) * 100;
+  }
+
   function updateClock() {
     const now = new Date();
     const clock = $('#liveClock'), date = $('#liveDate');
@@ -621,33 +955,112 @@
       date.textContent = now.getFullYear() + '.' + pad(now.getMonth() + 1) + '.' + pad(now.getDate()) +
         ' · ' + DAY_NAMES[now.getDay()];
     }
-    const pct = ((now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400) * 100;
+
+    const dayPct = ((now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400) * 100;
+    const pctOfMonth = ((now.getDate() - 1) * 86400000 +
+      (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) * 1000) /
+      (new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() * 86400000) * 100;
+    const yearPct = ((dayOfYear(now) - 1) * 86400000 +
+      (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) * 1000) /
+      (daysInYear(now.getFullYear()) * 86400000) * 100;
+
+    const set = (id, v) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.width = Math.max(0, Math.min(100, v)).toFixed(2) + '%';
+      const out = document.getElementById(id + 'Pct');
+      if (out) out.textContent = Math.floor(v) + '%';
+    };
+    set('dayBar', dayPct);
+    set('weekBar', weekProgress(now));
+    set('monthBar', pctOfMonth);
+    set('yearBar', yearPct);
+
+    /* 兼容旧结构（那条单独的今日进度条） */
     const bar = $('#timeProgress'), label = $('#dayPercent');
-    if (bar) bar.style.width = pct.toFixed(2) + '%';
-    if (label) label.textContent = Math.floor(pct) + '%';
+    if (bar) bar.style.width = dayPct.toFixed(2) + '%';
+    if (label) label.textContent = Math.floor(dayPct) + '%';
+
+    /* 世界时钟那句「今天」 */
+    const todayLine = $('#todayLine');
+    if (todayLine) {
+      todayLine.textContent = DAY_NAMES[now.getDay()] + ' · ' + now.getDate() + ' ' + MONTH_NAMES[now.getMonth()];
+    }
+    const zone = $('#timeZone');
+    if (zone && !zone.dataset.done) {
+      let tz = '';
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+      const off = -now.getTimezoneOffset() / 60;
+      zone.textContent = (tz ? tz + ' · ' : '') + 'UTC' + (off >= 0 ? '+' : '') + off;
+      zone.dataset.done = '1';
+    }
   }
-  updateClock();
-  setInterval(updateClock, 1000);
 
-  /* 碎碎念：直接改这个数组就行，越靠前越新 */
-  const MOMENTS = [
-    ['2026.09.22', '终于把小窝的 V2 认真规划起来了。现在开始研究，怎么把「网页」做得像一间房间。', '🌸'],
-    ['2026.09.21', '又折腾了一晚上 AI Agent。很多东西其实没那么有用，但做出来的时候总是很开心。', '🤖'],
-    ['2026.09.10', 'Minecraft 服务器又出现了新的问题。嗯……很正常。', '⛏']
-  ];
-  (function renderMoments() {
+  /* ============================================================
+     initMoments —— 碎碎念
+     ------------------------------------------------------------
+     数据在 moments-data.js（window.RINSORA_MOMENTS）。首页 #about 里
+     那三条「一点碎碎念」和独立分栏 #moments 读同一份数据，
+     不在两处各写一份。
+     ============================================================ */
+  function momentItems() {
+    const raw = window.RINSORA_MOMENTS;
+    let list = [];
+    if (raw && Array.isArray(raw.items)) list = raw.items.slice();
+    if (!list.length) {
+      /* 数据文件没加载（手滑删了 / CDN 挂了）时的兜底，不让页面空掉 */
+      list = [{ date: '今天', text: '这里会慢慢记下一些小事情 ✦', mood: '✦', tags: [] }];
+    }
+    return list
+      .map((m) => ({
+        date: String(m.date || '').trim(),
+        text: String(m.text || '').trim(),
+        mood: String(m.mood || '✦').trim(),
+        tags: Array.isArray(m.tags) ? m.tags.map(String).filter(Boolean) : []
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  function renderMoments() {
+    const list = momentItems();
+
+    /* --- 独立分栏：时间线 --- */
     const host = $('#momentsGrid');
-    if (!host) return;
-    host.innerHTML = MOMENTS.map((m) =>
-      '<article class="moment-card card tilt-card">' +
-        '<div class="moment-date">' + m[0] + '</div>' +
-        '<p>' + esc(m[1]) + '</p>' +
-        '<span class="moment-icon">' + m[2] + '</span>' +
-      '</article>'
-    ).join('');
-  })();
+    if (host) {
+      host.innerHTML = list.map((m, i) =>
+        '<article class="moment-entry reveal" style="--rd:' + Math.min(i * 70, 420) + 'ms">' +
+          '<div class="moment-card card">' +
+            '<div class="moment-time"><i>' + esc(m.mood) + '</i>' + esc(m.date) + '</div>' +
+            '<p class="moment-body">' + esc(m.text).replace(/\n/g, '<br>') + '</p>' +
+            (m.tags.length
+              ? '<div class="moment-tags">' + m.tags.map((t) => '<span>' + esc(t) + '</span>').join('') + '</div>'
+              : '') +
+            '<span class="moment-mood" aria-hidden="true">' + esc(m.mood) + '</span>' +
+          '</div>' +
+        '</article>').join('');
 
-  /* 最近发布：博客直接从首页卡片里读（不另存一份数据），项目读 RINSORA_PROJECTS */
+      const count = $('#momentsCount');
+      if (count) count.textContent = list.length;
+      const last = $('#momentsLast');
+      if (last) last.textContent = list[0] ? list[0].date : '—';
+    }
+
+    /* --- 主页的「一点碎碎念」：取最新的三条 --- */
+    const teaser = $('#momentsTeaser') || $('#about .moments-grid');
+    if (teaser && teaser.id !== 'momentsGrid') {
+      teaser.innerHTML = list.slice(0, 3).map((m) =>
+        '<article class="moment-card card tilt-card">' +
+          '<div class="moment-date">' + esc(m.date) + '</div>' +
+          '<p>' + esc(m.text).replace(/\n/g, '<br>') + '</p>' +
+          '<span class="moment-icon">' + esc(m.mood) + '</span>' +
+        '</article>').join('');
+    }
+    observeReveal();
+  }
+
+  /* ============================================================
+     最近发布 / 博客筛选
+     ============================================================ */
   function readRecentPosts(limit) {
     return $$('#blog .blog-grid .blog-card').map((card) => {
       const a = $('.card-title-link', card), d = $('.date', card), p = card.querySelector('p');
@@ -666,8 +1079,13 @@
     const dates = [];
     $$('#blog .blog-grid .blog-card .date').forEach((x) => dates.push(x.textContent.trim()));
     ((window.RINSORA_PROJECTS || {}).items || []).forEach((x) => { if (x && x.date) dates.push(String(x.date)); });
+    /* 碎碎念也算一次更新 —— 只写了碎碎念也是「在做事情」 */
+    momentItems().forEach((m) => { if (m.date) dates.push(m.date); });
     dates.sort();
-    return dates.length ? dates[dates.length - 1] : '';
+    if (dates.length) return dates[dates.length - 1];
+    /* 什么都没写过时用今天，绝不显示「Last update —」 */
+    const n = new Date();
+    return n.getFullYear() + '.' + pad(n.getMonth() + 1) + '.' + pad(n.getDate());
   }
   function buildRecent() {
     const host = $('#recentFeed');
@@ -706,11 +1124,7 @@
     }
     host.innerHTML = out;
   }
-  buildRecent();
 
-  /* ============================================================
-     博客分类筛选（分类从卡片上收集，加文章只要卡片带 data-cat）
-     ============================================================ */
   function blogCards() { return $$('#blog .blog-grid .blog-card'); }
   function applyBlogFilter(cat) {
     let visible = 0;
@@ -726,10 +1140,11 @@
     const host = $('#blogFilter');
     if (!host) return;
     const cats = Array.from(new Set(blogCards().map((c) => (c.dataset.cat || '').trim()).filter(Boolean)));
-    if (cats.length < 2) { host.innerHTML = ''; return; }
+    if (cats.length < 2) { host.innerHTML = ''; applyBlogFilter(''); return; }
     host.innerHTML = ['全部'].concat(cats).map((c, i) =>
       '<button class="bf-chip' + (i === 0 ? ' active' : '') + '" type="button" data-cat="' + esc(i ? c : '') + '">' + esc(c) + '</button>'
     ).join('');
+    /* 事件委托：筛选条会随着新文章重新渲染，绑在 host 上才不会失效 */
     host.onclick = (e) => {
       const btn = e.target.closest('.bf-chip');
       if (!btn) return;
@@ -739,27 +1154,79 @@
     };
     applyBlogFilter('');
   }
-  buildBlogFilter();
 
   /* ============================================================
-     鼠标：卡片倾斜 / 光晕 / 涟漪
+     initReveal —— 滚动进场（IntersectionObserver）
+     ------------------------------------------------------------
+     只有「当前不在视口里」的元素才加 .reveal（也就是才隐藏）。
+     已经在首屏内的元素直接标 .in，从来不会被隐藏 ——
+     这样即便 IO 完全不回调，首屏也一定是可见的。
+     另外还有一条 1.2s 的兜底：到点把所有还没 .in 的都补上。
+     ============================================================ */
+  let revealIO = null;
+  function observeReveal() {
+    if (reduceMotion() || !('IntersectionObserver' in window)) return;
+    if (!body.classList.contains('fx-reveal')) body.classList.add('fx-reveal');
+
+    if (!revealIO) {
+      revealIO = new IntersectionObserver((entries) => {
+        entries.forEach((en) => {
+          if (!en.isIntersecting) return;
+          en.target.classList.add('in');
+          revealIO.unobserve(en.target);
+        });
+      }, { rootMargin: '0px 0px -8% 0px', threshold: .08 });
+    }
+
+    const vh = innerHeight || 800;
+    $$('.reveal:not(.in)').forEach((el) => {
+      if (el.dataset.rv) return;
+      el.dataset.rv = '1';
+      const r = el.getBoundingClientRect();
+      /* 首屏（含一点余量）内的不藏，直接算「已进场」 */
+      if (r.top < vh * 1.15 && r.bottom > -40) {
+        el.classList.add('in');
+        return;
+      }
+      revealIO.observe(el);
+    });
+
+    clearTimeout(observeReveal._t);
+    observeReveal._t = setTimeout(() => {
+      $$('.reveal:not(.in)').forEach((el) => el.classList.add('in'));
+    }, 1400);
+  }
+
+  /* ============================================================
+     initEffects —— 鼠标：卡片倾斜 / 光晕 / 涟漪 / 心形爆开
      ============================================================ */
   const cursorDot = $('#cursorDot'), cursorRing = $('#cursorRing'), ambientGlow = $('#ambientGlow');
   let mx = innerWidth / 2, my = innerHeight / 2, rx = mx, ry = my;
+  let glowX = mx, glowY = my;
+  let hoverCard = null;
 
   document.addEventListener('pointermove', (e) => {
     mx = e.clientX; my = e.clientY;
     if (cursorDot) { cursorDot.style.left = mx + 'px'; cursorDot.style.top = my + 'px'; }
-    if (ambientGlow) { ambientGlow.style.left = mx + 'px'; ambientGlow.style.top = my + 'px'; }
 
-    const card = e.target.closest && e.target.closest('.tilt-card');
-    if (card && state.effects.tilt && !reduceMotion() && e.pointerType !== 'touch') {
-      const r = card.getBoundingClientRect();
-      if (r.width && r.height) {
-        const px = (e.clientX - r.left) / r.width - .5;
-        const py = (e.clientY - r.top) / r.height - .5;
-        card.style.transform = 'perspective(900px) rotateX(' + (-py * 3.4).toFixed(2) + 'deg) rotateY(' + (px * 4.2).toFixed(2) + 'deg) translateY(-3px)';
+    /* 卡片倾斜：只写两个比例变量（-0.5 ~ 0.5），角度在 CSS 里算。
+       这样「调手感」是改 CSS 的 --tilt-* ，不用动 JS。 */
+    if (state.effects.tilt && !reduceMotion() && e.pointerType !== 'touch') {
+      const card = e.target.closest && e.target.closest('.tilt-card');
+      if (card) {
+        const r = card.getBoundingClientRect();
+        if (r.width && r.height) {
+          card.style.setProperty('--tx', (((e.clientX - r.left) / r.width) - .5).toFixed(3));
+          card.style.setProperty('--ty', (((e.clientY - r.top) / r.height) - .5).toFixed(3));
+          hoverCard = card;
+          return;
+        }
       }
+    }
+    if (hoverCard) {
+      hoverCard.style.removeProperty('--tx');
+      hoverCard.style.removeProperty('--ty');
+      hoverCard = null;
     }
   }, { passive: true });
 
@@ -767,23 +1234,29 @@
     const card = e.target.closest && e.target.closest('.tilt-card');
     if (!card) return;
     if (e.relatedTarget && card.contains(e.relatedTarget)) return;
-    card.style.transform = '';
+    card.style.removeProperty('--tx');
+    card.style.removeProperty('--ty');
+    if (hoverCard === card) hoverCard = null;
   }, { passive: true });
 
+  /* 光标环 + 环境光晕都用「目标点 → 缓动跟随」，mousemove 里不直接改 DOM */
   (function cursorLoop() {
     rx += (mx - rx) * .18;
     ry += (my - ry) * .18;
+    glowX += (mx - glowX) * .07;
+    glowY += (my - glowY) * .07;
     if (cursorRing) { cursorRing.style.left = rx + 'px'; cursorRing.style.top = ry + 'px'; }
+    if (ambientGlow) { ambientGlow.style.left = glowX + 'px'; ambientGlow.style.top = glowY + 'px'; }
     requestAnimationFrame(cursorLoop);
   })();
 
   document.addEventListener('pointerover', (e) => {
-    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip')) {
+    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip,input,textarea,select')) {
       body.classList.add('cursor-hover');
     }
   });
   document.addEventListener('pointerout', (e) => {
-    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip')) {
+    if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip,input,textarea,select')) {
       body.classList.remove('cursor-hover');
     }
   });
@@ -791,16 +1264,34 @@
   document.addEventListener('pointerdown', (e) => {
     if (!state.effects.ripple || reduceMotion() || e.button !== 0) return;
     if (e.target.closest && e.target.closest('input,textarea,select')) return;
+
     const el = document.createElement('span');
     el.className = 'click-ripple';
     el.style.left = e.clientX + 'px';
     el.style.top = e.clientY + 'px';
     body.appendChild(el);
     setTimeout(() => el.remove(), 650);
+
+    /* 心形小爆开：6 个粒子、620ms 生命，不是拖尾 */
+    if (!body.classList.contains('cursor-on')) return;
+    for (let i = 0; i < 6; i++) {
+      const sp = document.createElement('span');
+      sp.className = 'cursor-burst';
+      sp.textContent = i % 2 ? '♡' : '✦';
+      const ang = (i / 6) * Math.PI * 2 + Math.random() * .5;
+      const dist = 22 + Math.random() * 16;
+      sp.style.setProperty('--bx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+      sp.style.setProperty('--by', (Math.sin(ang) * dist).toFixed(1) + 'px');
+      sp.style.left = e.clientX + 'px';
+      sp.style.top = e.clientY + 'px';
+      sp.style.animationDelay = (i * 18) + 'ms';
+      body.appendChild(sp);
+      setTimeout(() => sp.remove(), 800);
+    }
   }, { passive: true });
 
   /* ============================================================
-     提示条 / 键盘
+     提示条 / 键盘 / 无障碍
      ============================================================ */
   let toastEl, toastTimer;
   function toast(msg) {
@@ -820,37 +1311,227 @@
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSettings(); return; }
     if (e.key === 'Escape') {
+      /* Escape 的收口顺序：文章浮层 → 设置抽屉 → 添加音乐弹窗 */
+      if (postUrl) { closePost(); return; }
       closeSettings();
+      closeNav(true);
       if (window.RinsoraMusicUpload && window.RinsoraMusicUpload.close) window.RinsoraMusicUpload.close();
       return;
     }
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === '1') showSection('about');
-    if (e.key === '2') showSection('blog');
-    if (e.key === '3') showSection('projects');
+    if (e.key === '1') navigateTo('about');
+    if (e.key === '2') navigateTo('blog');
+    if (e.key === '3') navigateTo('projects');
+    if (e.key === '4') navigateTo('moments');
   });
 
+  /* 设置抽屉打开时把焦点送进去，关上时还回来 —— 键盘用户不用盲找 */
+  let lastFocus = null;
+  function focusTrapGuard() {
+    const on = settingsPanel && settingsPanel.classList.contains('open');
+    if (on && !lastFocus) {
+      lastFocus = document.activeElement;
+      const close = $('#settingsClose');
+      close && close.focus && close.focus();
+    } else if (!on && lastFocus) {
+      lastFocus.focus && lastFocus.focus();
+      lastFocus = null;
+    }
+  }
+  document.addEventListener('transitionend', focusTrapGuard, true);
+
   /* ============================================================
-     对外接口 + 初始化
+     initPageTransitions —— 跨文档转场
+     ------------------------------------------------------------
+     站内看文章走的是 #spaPost 浮层（不换文档）。真正会换文档的是：
+       · 从文章页点「回到博客列表」→ index.html#blog
+       · 文章之间互跳 / 直接打开某篇
+       · 进后台页（editor / project-editor）
+     这些没法不刷新，但可以把「白屏那一瞬」盖住：
+     点下去 → 遮罩淡入（200ms）→ 真正跳转；
+     新文档 <head> 里的内联脚本看到 sessionStorage 标记后挂 data-enter，
+     由一条纯 CSS 动画把遮罩掀开（万一脚本没跑，fill:forwards 也会掀）。
+     ============================================================ */
+  const NAV_FLAG = 'rinsora-nav';
+  function initPageTransitions() {
+    /* 本页已经接管过就别重复绑 */
+    if (html.dataset.navReady) return;
+    html.dataset.navReady = '1';
+
+    /* ⚠️ 这里**必须是冒泡阶段**，不能用捕获（第三个参数传 true 会踩坑）：
+       文章浮层那套（openPost / closePost）是在 document 的冒泡监听里做的，
+       而它注册得更早。挂捕获就会**抢在浮层之前**执行 —— 浮层里
+       「回到博客列表」的 href 是 `../index.html#blog`，按「跨文档链接」
+       一处理就把页面真的导航走了：<audio> 被销毁、音乐断掉，
+       正好把浮层存在的意义抹掉（探针 ① 就是被这个打红的）。
+       冒泡阶段 + 依赖 e.defaultPrevented，顺序就永远是确定的：
+       浮层先处理，处理掉的自会 preventDefault，这里直接放行。 */
+    document.addEventListener('click', (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target && e.target.closest ? e.target.closest('a') : null;
+      if (!a) return;
+      /* 兜底：浮层打开时，浮层内部的一切链接都归浮层管 */
+      if (postUrl && spaPost && spaPost.contains(a)) return;
+      const href = a.getAttribute('href') || '';
+      if (!href || a.target === '_blank' || a.hasAttribute('download')) return;
+      if (/^(#|mailto:|tel:|javascript:)/i.test(href)) return;
+      if (a.dataset.noSwup != null) return;                     /* 显式排除 */
+      /* 站内文章已经由浮层接管，这里不再插手 */
+      if (POST_HREF.test(href)) return;
+
+      let target;
+      try { target = new URL(a.href, location.href); } catch (err) { return; }
+      if (target.origin !== location.origin) return;
+      /* 同页只换 hash 的链接交给 hash 路由，不要遮罩 */
+      if (target.pathname === location.pathname && target.hash) return;
+      /* 文章页之间互跳：交给浮层的那条会走不到这里，剩下的才做遮罩 */
+      if (reduceMotion()) return;
+
+      e.preventDefault();
+      session.set(NAV_FLAG, target.pathname);                    /* 给下一个文档留标记 */
+      const cover = $('#pageCover');
+      if (cover) cover.classList.add('on');
+      setTimeout(() => { location.href = target.href; }, 210);
+    });
+  }
+
+  /* ============================================================
+     initA11y / initPage
+     ============================================================ */
+  /* 底栏 / 扇形导航都带 aria-current，读屏软件能报「当前在哪一栏」。
+     写成独立函数（而不是关在 initA11y 里）是因为 navigateTo 也要调它 ——
+     否则只有「鼠标点的」那次会更新，程序化切换（深链、后退、
+     代码调用 API）之后 aria-current 会一直停在上一栏。
+     函数声明会提升，navigateTo 里可以放心先引用。 */
+  function syncA11y(page) {
+    $$('.radial-item,.mobile-nav button').forEach((b) => {
+      if (b.dataset.target === page) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    });
+  }
+
+  function initA11y() {
+    syncA11y(AppState.currentPage);
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('.radial-item,.mobile-nav button');
+      if (b) syncA11y(b.dataset.target);
+    });
+    /* 侧栏头像本身是个按钮，把状态说清楚 */
+    if (avatarButton) {
+      avatarButton.setAttribute('aria-expanded', 'false');
+      navWrap && navWrap.addEventListener('mouseenter', () => avatarButton.setAttribute('aria-expanded', 'true'));
+      navWrap && navWrap.addEventListener('mouseleave', () => avatarButton.setAttribute('aria-expanded', 'false'));
+      avatarButton.addEventListener('click', () => {
+        avatarButton.setAttribute('aria-expanded', navWrap.classList.contains('open') ? 'true' : 'false');
+      });
+    }
+  }
+
+  /* 页面级初始化：跨文档转场后（如果将来改成不刷新）也要能重跑一遍 */
+  function initPage() {
+    renderMoments();
+    buildRecent();
+    buildBlogFilter();
+    updateClock();
+    applyEffects();
+    layoutRadialNav();
+    observeReveal();
+    const n = $('#nowUpdate');
+    if (n) n.textContent = latestUpdate();
+  }
+
+  /* ============================================================
+     对外接口 + 启动
      ============================================================ */
   window.RinsoraHome = {
+    AppState,
+    navigateTo,
+    initPage,
+    initApp,
+    observeReveal,
     refreshRecent() {
       buildRecent();
       const n = $('#nowUpdate');
-      if (n) n.textContent = latestUpdate() || '—';
+      if (n) n.textContent = latestUpdate();
+      observeReveal();
     },
     refreshBlogFilter: buildBlogFilter,
+    refreshMoments: renderMoments,
+    layoutRadialNav,
+    /* 扇形导航的展开 / 收起。暴露出来是为了让回归装置能走**真实入口** ——
+       直接 classList.add('open') 会被别的路径挂上的 .nav-closed 压住
+       （两条规则特异性相同、.nav-closed 写在后面），量出来还是收起态。 */
+    openNav: () => openNav(true),
+    closeNav: (soft) => closeNav(soft !== false),
     showSection,
     enterApp,
     openSettings,
     closeSettings,
     setPalette: (p) => applyPalette(p, true),
+    setTheme: (name) => {
+      if (name === 'night') applyNight(true, true);
+      else { state.night = false; applyPalette(PALETTE_OF[name] || name, true); }
+    },
     setNight: (n) => applyNight(!!n, true),
+    setEffect(k, on) {
+      if (!(k in state.effects)) return;
+      state.effects[k] = !!on;
+      store.set('rinsora-effect-' + k, on ? 'on' : 'off');
+      applyEffects();
+    },
     state
   };
 
-  const nowUpdate = $('#nowUpdate');
-  if (nowUpdate) nowUpdate.textContent = latestUpdate() || '—';
+  /* ============================================================
+     initApp —— 唯一的启动入口
+     ------------------------------------------------------------
+     顺序是有讲究的，别随手调换：
 
-  if (location.hash) setTimeout(routeHash, 50);
+       1) 主题先落定      —— 首帧那份在 head 的内联脚本里跑，这里同步 JS 侧
+                            状态（设置面板高亮、meta theme-color 等）
+       2) 常驻 UI         —— 扇形导航布局 / 无障碍 / 时钟
+       3) initPage()      内容层：最近发布 / 博客筛选 / 项目树 / Moments
+       4) 动效层          —— 滚动进场 + 跨文档转场
+       5) 深链兜底        —— 带 hash 进来时延后一点再路由，别和开屏抢帧
+
+     这里**不放**任何「每次换页都要重做」的事 —— 那些归 initPage()。
+     浏览器前进 / 后退走的是 hashchange → routeHash() → navigateTo()，
+     不会重跑 initApp()，所以播放器 / 头像 / 主题这些常驻 UI 不会被重建
+     （这正是「音乐不会因为翻页而断」的结构性保证）。
+     ============================================================ */
+  function initApp() {
+    /* 1) 主题 */
+    applyTheme(false);
+    applyHue(state.hue, false);
+
+    /* 2) 常驻 UI */
+    layoutRadialNav();
+    initA11y();
+    updateClock();
+    setInterval(updateClock, 1000);
+    setInterval(() => {
+      /* 「最后更新」不用每秒算，但也不能只在加载时算一次 —— 每 60s 校一次，
+         站长刚发完文章切回来就能看到数字变了。 */
+      const n = $('#nowUpdate');
+      if (n) n.textContent = latestUpdate();
+    }, 60000);
+
+    /* 3) 内容层 */
+    initPage();
+
+    /* 4) 动效层 */
+    observeReveal();
+    initPageTransitions();
+
+    /* 5) 字体换完再量一次导航，否则字体落位后扇形会偏 */
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => layoutRadialNav()).catch(() => {});
+    }
+    window.addEventListener('resize', () => layoutRadialNav(), { passive: true });
+
+    /* 6) 深链兜底 */
+    if (location.hash) setTimeout(routeHash, 50);
+  }
+
+  initApp();
 })();

@@ -176,7 +176,10 @@
         '</span>'
       : '';
 
-    return '<li class="pt-item" data-id="' + esc(it.id) + '" data-name="' + esc(it.name) + '">' +
+    /* .reveal 是给「滚动进场」用的：script.js 的 IntersectionObserver 在
+       元素即将进入视口时加 .in。它只对「当前不在视口里」的元素生效，
+       首屏内的项目从来不会被藏起来（脚本没跑也照常可见）。 */
+    return '<li class="pt-item reveal" data-id="' + esc(it.id) + '" data-name="' + esc(it.name) + '">' +
       '<a class="pt-link"' + (hasUrl ? ' href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer"' : '') + '>' +
         '<span class="pt-icon" aria-hidden="true">' + esc(it.icon) + '</span>' +
         '<span class="pt-info">' +
@@ -261,7 +264,7 @@
 
     host.innerHTML = groups.map(function (g, gi) {
       var open = closed.indexOf(g.name) === -1;              /* 默认展开 */
-      return '<section class="pt-group pt-cat-' + (gi % 4) + (open ? ' open' : '') + '" data-cat="' + esc(g.name) + '">' +
+      return '<section class="pt-group reveal pt-cat-' + (gi % 4) + (open ? ' open' : '') + '" data-cat="' + esc(g.name) + '">' +
         '<button class="pt-head" type="button" aria-expanded="' + (open ? 'true' : 'false') + '">' +
           '<span class="pt-caret" aria-hidden="true">\u25be</span>' +
           '<span class="pt-title">' + esc(g.name) + '</span>' +
@@ -276,6 +279,11 @@
 
     wireGroups(host);
     wireTools(host);
+    /* 渲染完再让 script.js 扫一遍滚动进场目标。
+       注意加载顺序：projects.js 在 script.js 之前，首屏这一次
+       window.RinsoraHome 还没出现 —— 那就交给 script.js 自己的 initPage() 扫，
+       这里的调用主要是给「管理态 reload() 之后」用的。 */
+    if (w.RinsoraHome && w.RinsoraHome.observeReveal) w.RinsoraHome.observeReveal();
   }
 
   function wireGroups(host) {

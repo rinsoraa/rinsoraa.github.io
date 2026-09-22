@@ -1,0 +1,512 @@
+/* ============================================================
+   v3.css —— Rinsora Home V3：组件层 / 动画层
+   ------------------------------------------------------------
+   这份文件必须跟在 style.css 之后加载（同名选择器靠「后写者赢」覆盖）。
+   style.css 负责 base / theme / layout，这里只放：
+
+     20  字号阶梯收口（把 9~10px 抬到可读区间）
+     21  极坐标扇形导航（可扩展到 8 个节点）
+     22  页面转场（4 套 preset + 进出场时序）
+     23  跨文档转场遮罩
+     24  Moments 时间线
+     25  项目展柜（IntersectionObserver 滚动进场）
+     26  世界时钟（今日 / 本周 / 本月 / 今年）
+     27  设置面板 V3（5 套主题 / 特效 / 关于）
+     28  音乐播放器 V3（歌词高亮 / 进度微光 / 手机 compact）
+     29  自定义光标 V3
+     30  卡片交互（参数走 CSS 变量）
+     31  无障碍 / 键盘
+     32  新增响应式断点
+     33  reduced-motion 收口
+   ============================================================ */
+
+/* ============================================================
+   20. 字号阶梯收口
+   ------------------------------------------------------------
+   原来全站有二十多处 9px / 10px 的辅助文字。在 Windows + 雅黑上，
+   这个尺寸基本等于「糊成一条灰线」。统一拉进 11.5~13px 区间，
+   同时把 letter-spacing 略微收一点，免得变宽之后行尾溢出。
+   ============================================================ */
+.rail-top,.rail-bottom,.side-status{font-size:var(--fs-micro);letter-spacing:.12em}
+.eyebrow,.section-kicker{font-size:var(--fs-micro)}
+.section-heading small,.now-kicker{font-size:var(--fs-micro)}
+.now-label,.now-live,.recent-sub,.rc-kind,.rc-foot{font-size:12px}
+.rc-desc,.moment-date,.time-date,.time-foot,.time-top{font-size:12.5px}
+.blog-cat,.bm-cat,.bm-min,.bf-chip,.pt-count,.pt-foot,.pt-date{font-size:12px}
+.pt-tags span,.tag-row span,.project-tags span,.post-tags span{font-size:12px}
+.mp-times{font-size:11px}
+.mp-artist,.mp-track-a,.mp-track-no{font-size:11.5px}
+.profile-avatar-row small,.profile-chip em,.mini-card dt,.mini-card dd{font-size:12px}
+.lab-card span,.lab-list span,.lab-list b,.settings-foot{font-size:12px}
+.landing-meta,.tip{font-size:12px}
+.hero-orbit span,.project-mascot span{font-size:11.5px}
+.avatar-hint{font-size:11px}
+.welcome-nest{font-size:13.5px}
+.section-display{font-size:var(--fs-display)}
+.welcome-name{font-size:var(--fs-hero)}
+.topbar h2{font-size:var(--fs-section)}
+
+/* ============================================================
+   21. 极坐标扇形导航
+   ------------------------------------------------------------
+   旧实现是 `nth-child(n) + 写死的 translate(...)`，加到第 4 个节点
+   就得手算一组新数字，第 8 个基本没法看。现在改成：
+
+     JS 按极坐标算出每个节点的位移，写进 CSS 变量：
+       --nx / --ny  →  水平、垂直位移（px）
+       --nr         →  旋转角（deg）
+       --d          →  展开延迟（ms，做 stagger）
+
+   这里只负责「把它们动起来」，不再关心有几个节点。
+   ------------------------------------------------------------
+   容器定位在头像正中心（left:50%/top:50% 且零尺寸），
+   节点用负 margin 把自己的中心对齐到锚点。
+   ============================================================ */
+.radial-nav{
+  left:50%;top:50%;width:0;height:0;overflow:visible;
+  z-index:9;                       /* 必须高于 .avatar-button(5)，否则会被头像盖住 */
+}
+.radial-item{
+  /* 90x52 与 NAV_CFG 是一对：卡片再大就得往外扩，一扩就压侧栏署名/内容栏。
+     尺寸、半径、角度这三者必须一起改，改完跑 _navfit.py 复核。 */
+  left:0;top:0;width:90px;height:52px;margin:-26px 0 0 -45px;
+  padding:4px 6px;border-radius:17px;
+  z-index:1;
+  /* 收起态：缩到锚点上，锚点在头像中心，所以看起来是「藏在头像里」 */
+  transform:translate3d(0,0,0) scale(.4);
+  transform-origin:50% 50%;
+  transition:opacity .26s var(--ease),transform .5s var(--ease),
+             background .2s,box-shadow .2s,border-color .2s;
+  transition-delay:0ms;
+}
+/* 展开：位置交给 JS 给的变量，延迟按索引错开，形成「一圈弹出来」的观感 */
+.avatar-nav-wrap:hover .radial-item,
+.avatar-nav-wrap.open .radial-item{
+  opacity:1;pointer-events:auto;
+  transform:translate3d(var(--nx,0px),var(--ny,0px),0) rotate(var(--nr,0deg)) scale(1);
+  transition-delay:var(--d,0ms);
+}
+/* 单个节点悬停：再放大一点 + 描边发光，图标轻微旋转 */
+.radial-item:hover,
+.radial-item:focus-visible{
+  transform:translate3d(var(--nx,0px),var(--ny,0px),0) rotate(var(--nr,0deg)) scale(1.09);
+  background:var(--glass-h);
+  box-shadow:0 20px 38px var(--accent-glow),inset 0 1px var(--hi);
+  border-color:var(--accent-primary);
+}
+.radial-item:hover span{transform:rotate(-12deg) scale(1.16)}
+/* 三行文字要一起塞进 52px 里（减去 padding 只剩 44）：
+   16.5 + 14.4 + 9.8 = 40.7 —— 所以 line-height 必须显式钉住，
+   靠继承的 1.5 会算成 53px，直接把 "PROJECTS" 挤出卡片外。 */
+.radial-item span{display:block;line-height:1.1;font-size:15px;
+  transition:transform .3s var(--ease);color:var(--accent-primary)}
+.radial-item b{font-size:12.5px;line-height:1.15}
+.radial-item small{font-size:8.5px;line-height:1.15;letter-spacing:.06em}
+/* 当前项：底色用强调色渐变，和主题联动 */
+.radial-item.active{
+  background:linear-gradient(135deg,var(--accent-soft),rgba(255,255,255,.72));
+  border-color:var(--accent-primary);
+}
+body.night .radial-item.active{
+  background:linear-gradient(135deg,rgba(96,62,92,.96),rgba(64,50,76,.96));
+  border-color:rgba(255,255,255,.2);
+}
+/* 显式收起要压得住 :hover（必须排在展开规则之后） */
+.avatar-nav-wrap.nav-closed .radial-item,
+.avatar-nav-wrap.nav-closed:hover .radial-item{
+  opacity:0;pointer-events:none;
+  transform:translate3d(0,0,0) scale(.4);transition-delay:0ms;
+}
+/* 无 JS 兜底：脚本没跑时至少把四个节点按 NAV_CFG 的默认值摆出来。
+   数值 = 固定的 (cos/sin(角度) * 138, 角度/10)，从 NAV_CFG 手算一遍即可
+   （改了 NAV_CFG 记得回来同步，否则「脚本挂了」和「脚本正常」会长得不一样）。 */
+.radial-nav.no-js .radial-item:nth-child(1){--nx:-47.2px;--ny:-129.7px;--nr:-11deg}
+.radial-nav.no-js .radial-item:nth-child(2){--nx:56.1px;--ny:-126.1px;--nr:-6.6deg}
+.radial-nav.no-js .radial-item:nth-child(3){--nx:127.9px;--ny:-51.7px;--nr:-2.2deg}
+.radial-nav.no-js .radial-item:nth-child(4){--nx:127.9px;--ny:51.7px;--nr:2.2deg}
+
+/* 展开时，弧线会掠过头顶那两块「背景装饰」：
+     · .rail-top 的 "RINSORA / 01"
+     · .avatar-hint 的 "MOVE HERE ♡"
+   它们本身没毛病，但半透明卡片压上去之后，两层字会透过毛玻璃糊在一起，
+   看着像没对齐的 bug。展开时把它们收掉，菜单立刻干净。
+   .avatar-hint 是 wrap 的子节点，.open / :hover 直接够得着；
+   .rail-top 是 wrap 的兄弟，得用 :has() 反查 —— 不支持 :has() 的浏览器
+   这两条整条失效，最多是「装饰字透出来」，功能一点不受影响，
+   所以没必要上 @supports 再包一层。
+   （顺带：这正是 :hover 展开需要的 —— 鼠标移到卡片上时 wrap 仍算 hover，
+    而卡片 z-index:9 抢在 .rail-top 前面接事件，不会来回闪。） */
+.avatar-hint,.rail-top{transition:opacity .22s var(--ease),transform .22s var(--ease)}
+.avatar-nav-wrap.open .avatar-hint,
+.avatar-nav-wrap:hover .avatar-hint{opacity:0;transform:translateY(-6px) scale(.9)}
+.side-rail:has(.avatar-nav-wrap.open) .rail-top,
+.side-rail:has(.avatar-nav-wrap:hover) .rail-top{opacity:0}
+
+/* ============================================================
+   22. 页面转场
+   ------------------------------------------------------------
+   目标：点 Blog 时是「旧内容先退、再转场、新内容进入」，
+   而不是旧内容瞬间消失。四套 preset 由 navigateTo() 按
+   「从哪来 → 到哪去」挑一套，避免所有页面都是同一个 fade。
+   ------------------------------------------------------------
+   时序（JS 控制）：
+     .anim-out  220ms  →  换 .active  →  .tr-* 进场 520ms
+   ============================================================ */
+.page-section{will-change:transform,opacity}
+/* style.css 里 .page-section.active 自带一个 sectionIn 动画。这里按掉它，
+   转场一律由下面的 preset 负责 —— 否则 preset 播完被摘掉的那一瞬间，
+   计算值会变回 sectionIn，浏览器会把这个动画**重播**一遍（肉眼可见的二次入场）。 */
+.page-section.active{animation:none}
+/* 老的「退场页」：脱离文档流叠在原位，淡出 + 轻微上移并缩小。
+   刻意用 position:absolute（而不是留在流里）：
+     · 留在流里会让页面高度在 240ms 里跳一下，滚动条会闪；
+     · 绝对定位 + pointer-events:none 对布局和命中测试都是透明的，
+       探针量几何时它即便还在也影响不到任何 rect。
+   240ms 后由 JS 摘掉 .leaving。 */
+.section-stack{position:relative}
+.page-section.leaving{
+  display:block;position:absolute;left:0;right:0;top:0;
+  pointer-events:none;animation:pgOut .24s var(--ease) both;
+}
+@keyframes pgOut{to{opacity:0;transform:translateY(-14px) scale(.985)}}
+
+/* 1) 横向滑移：About ↔ Blog（左边走的向左退、右边进来的从右入） */
+.page-section.active.tr-slide-x{animation:trSlideX .52s var(--ease) both}
+@keyframes trSlideX{from{opacity:0;transform:translateX(46px) scale(.99)}to{opacity:1;transform:none}}
+
+/* 2) 上下落位：Blog ↔ Projects */
+.page-section.active.tr-drop{animation:trDrop .54s var(--ease) both}
+@keyframes trDrop{from{opacity:0;transform:translateY(34px) scale(.99)}to{opacity:1;transform:none}}
+
+/* 3) 模糊显影：Projects → About（旧项目卡片缩小，About 从 blur 里清晰起来） */
+.page-section.active.tr-blur{animation:trBlur .6s var(--ease) both}
+@keyframes trBlur{from{opacity:0;filter:blur(14px);transform:scale(1.015)}to{opacity:1;filter:blur(0);transform:none}}
+
+/* 4) 纵深推入：进入 Moments 这种「轻内容」时用，从后面推上来 */
+.page-section.active.tr-zoom{animation:trZoom .56s var(--ease) both}
+@keyframes trZoom{from{opacity:0;transform:scale(.955) translateY(16px)}to{opacity:1;transform:none}}
+
+/* ============================================================
+   23. 跨文档转场遮罩
+   ------------------------------------------------------------
+   「点 posts/*.html 不整页白屏刷新」这件事，本站的实际做法是
+   #spaPost 浮层（内容换掉、文档不换，音乐一秒不断）。
+   真正换文档的那些路径（文章页之间互跳、直接打开某篇、进后台页）
+   没法不刷新，但可以把「白屏那一瞬」遮住：
+     离场 → 盖一层同色遮罩 + 淡出 → 浏览器换文档
+     新文档首帧 → 遮罩先在场，再掀开
+   ⚠️ 掀开这件事**只用 CSS 动画**，不依赖 JS 摘属性：
+   万一下一个文档的脚本没跑起来，fill:forwards 也会把它推到
+   opacity:0，绝不可能留下一层盖住整页的遮罩。
+   data-enter 由 <head> 内联脚本按 sessionStorage 的标记挂上，
+   只有「同一标签页里跳过来的」才会有，首次直接打开不会触发。
+   ============================================================ */
+.page-cover{
+  position:fixed;inset:0;z-index:9000;pointer-events:none;
+  background:var(--bg);opacity:0;
+  transition:opacity .26s var(--ease);
+}
+.page-cover.on{opacity:1}
+html[data-enter] .page-cover{
+  opacity:1;transition:none;
+  animation:coverOut .44s .05s var(--ease) forwards;
+}
+@keyframes coverOut{to{opacity:0}}
+
+/* ============================================================
+   23.5 特效开关（设置面板「特效」页）
+   ------------------------------------------------------------
+   全部走 body 上的类，关掉就是真的不渲染 / 不跑，
+   而不是把 opacity 压到 0 继续耗 GPU。
+   ============================================================ */
+body.no-aurora .aurora{display:none}
+body.no-decor .blob,
+body.no-decor .spark,
+body.no-decor .grid-floor,
+body.no-decor .scene-noise{display:none}
+/* 滚动进场：隐藏态只挂在 body.fx-reveal 下面。
+   脚本没跑（或 IO 不可用）就没有这个类，内容一律正常可见 ——
+   不会出现「JS 挂了 → 整页空白」。
+   ⚠️ 三条隐藏态 + 一条 .in，顺序不能换：同权重靠源码先后决胜。 */
+body.fx-reveal .reveal{opacity:0;transform:translateY(22px) scale(.985)}
+body.fx-reveal .pt-group.reveal{transform:translateY(16px)}
+body.fx-reveal .pt-item.reveal{transform:translateY(14px) translateX(-6px)}
+body.fx-reveal .reveal.in{opacity:1;transform:none}
+/* 同一个分类里的项目逐条错峰（最多错 5 档，再多就整块一起进，免得最后一条等太久） */
+.pt-list .pt-item:nth-child(1){--rd:0ms}
+.pt-list .pt-item:nth-child(2){--rd:55ms}
+.pt-list .pt-item:nth-child(3){--rd:110ms}
+.pt-list .pt-item:nth-child(4){--rd:165ms}
+.pt-list .pt-item:nth-child(5){--rd:220ms}
+.pt-list .pt-item:nth-child(n+6){--rd:265ms}
+
+/* ============================================================
+   24. Moments —— 时间线
+   ============================================================ */
+.moments-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.moments-stat{display:flex;gap:16px;color:var(--muted);font-size:var(--fs-meta)}
+.moments-stat b{display:block;font-size:22px;color:var(--ink)}
+.timeline{position:relative;margin:6px 0 0;padding-left:34px}
+/* 竖轴：一条渐变细线，底部渐隐 */
+.timeline:before{
+  content:"";position:absolute;left:11px;top:6px;bottom:22px;width:2px;border-radius:2px;
+  background:linear-gradient(180deg,var(--accent-primary),var(--accent-secondary) 46%,transparent);
+  opacity:.55;
+}
+.moment-entry{position:relative;margin-bottom:18px}
+/* 轴上的小圆点：默认空心，进场后填色 */
+.moment-entry:before{
+  content:"";position:absolute;left:-30px;top:26px;width:11px;height:11px;border-radius:50%;
+  background:var(--bg);border:2.5px solid var(--accent-primary);
+  transition:transform .4s var(--ease),background .4s;
+}
+.moment-entry.in:before{transform:scale(1.1)}
+.moment-entry:hover:before{background:var(--accent-secondary)}
+/* 卡片轻微错位：奇数往右、偶数往左，形成「手帐拼贴」感 */
+.moment-card{
+  padding:20px 22px 18px;border-radius:24px;position:relative;overflow:hidden;
+  transition:transform .32s var(--ease),box-shadow .32s var(--ease);
+}
+.moment-entry:nth-child(odd) .moment-card{margin-left:10px}
+.moment-entry:nth-child(even) .moment-card{margin-right:10px}
+.moment-card:hover{transform:translateY(-4px)}
+.moment-card:before{
+  content:"";position:absolute;width:120px;height:120px;border-radius:50%;right:-30px;top:-30px;
+  background:radial-gradient(circle,var(--accent-soft),transparent 70%);filter:blur(4px);
+}
+.moment-time{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12.5px;letter-spacing:.08em}
+.moment-time i{font-style:normal;font-size:17px}
+/* ⚠️ 用 .moment-card .moment-body 提高一级权重：style.css 里有
+   `.moment-card p{margin:18px 0 0;font-size:14px;max-width:90%}`（给主页那三张
+   小卡写的），单类名压不过它，正文会莫名缩到 14px 并只占 90% 宽。 */
+.moment-card .moment-body{
+  position:relative;margin:13px 0 0;max-width:none;
+  font-size:15.5px;font-weight:400;line-height:1.85;color:var(--ink);
+}
+.moment-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.moment-tags span{
+  padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;
+  background:var(--accent-soft);border:1px solid var(--bd-2);color:var(--accent-primary);
+}
+.moment-mood{position:absolute;right:18px;bottom:14px;font-size:30px;opacity:.28}
+.moments-empty{
+  padding:40px 22px;border-radius:26px;text-align:center;font-size:14px;line-height:1.9;
+  color:var(--muted);background:var(--glass-2);border:1px dashed var(--ring);
+}
+
+/* ============================================================
+   25. 项目展柜 —— 滚动进场
+   ------------------------------------------------------------
+   用 IntersectionObserver 加一个 .in，触发器在 viewport 里出现时才
+   加类。每行按 data-reveal-i 错峰（由 JS 写 --rd 变量）。
+   刻意只做 transform / opacity，不用 filter —— Windows 核显上
+   给几十个节点同时上 blur 会直接掉帧。
+   ============================================================ */
+.reveal{transition:opacity .5s var(--ease),transform .55s var(--ease);transition-delay:var(--rd,0ms)}
+.reveal.in{opacity:1;transform:none}
+.pt-group.reveal{transform:translateY(16px)}
+.pt-item.reveal{transform:translateY(14px) translateX(-6px)}
+.pt-item.reveal.in,.pt-group.reveal.in{transform:none}
+
+/* 展柜感：项目行悬停时给一条左侧强调色竖条 */
+.pt-link{position:relative;overflow:hidden}
+.pt-link:before{
+  content:"";position:absolute;left:0;top:12%;bottom:12%;width:3px;border-radius:0 3px 3px 0;
+  background:linear-gradient(180deg,var(--accent-primary),var(--accent-secondary));
+  transform:scaleY(0);transform-origin:50% 0;transition:transform .34s var(--ease);
+}
+.pt-link:hover:before,a.pt-link:focus-visible:before{transform:scaleY(1)}
+/* 项目图标随主题走 */
+.pt-link .pt-icon,.pt-head .pt-icon{background:linear-gradient(135deg,var(--accent-soft),rgba(255,255,255,.5));color:var(--accent-primary)}
+
+/* ============================================================
+   26. 世界时钟 V3
+   ------------------------------------------------------------
+   今日 / 本周 / 本月 / 今年 四条进度，每 1s 更新一次。
+   星期英文 + 日期保持原来的写法，只在下面补四条。
+   ============================================================ */
+.time-rows{display:grid;gap:9px;margin-top:16px}
+.time-row{display:grid;grid-template-columns:58px 1fr 42px;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.time-row .tr-label{letter-spacing:.1em;font-weight:800}
+.tr-bar{height:8px;border-radius:999px;background:var(--glass-2);border:1px solid var(--bd-2);overflow:hidden}
+.tr-bar i{display:block;height:100%;width:0;border-radius:inherit;transition:width .5s var(--ease)}
+.time-row:nth-child(1) .tr-bar i{background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary))}
+.time-row:nth-child(2) .tr-bar i{background:linear-gradient(90deg,var(--accent-secondary),var(--accent-primary))}
+.time-row:nth-child(3) .tr-bar i{background:linear-gradient(90deg,var(--accent-tertiary),var(--accent-primary))}
+.time-row:nth-child(4) .tr-bar i{background:linear-gradient(90deg,var(--accent-primary),var(--accent-tertiary))}
+.tr-pct{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:800}
+.time-zone{margin-top:12px;color:var(--muted);font-size:11.5px;letter-spacing:.1em}
+
+/* ============================================================
+   27. 设置面板 V3
+   ============================================================ */
+.theme-grid{grid-template-columns:1fr 1fr}
+.theme-grid button{flex-direction:column;align-items:flex-start;gap:8px;padding:12px}
+.theme-grid button .swatch{width:100%;height:26px}
+.theme-grid button span{font-size:12px}
+.theme-grid button em{font-style:normal;font-size:10.5px;color:var(--muted);letter-spacing:.08em}
+.sw-lavender{background:linear-gradient(135deg,#d4c1ff,#9fdbff)}
+.sw-night{background:linear-gradient(135deg,#2a2036,#6d4a7a 55%,#2b3a55)}
+.theme-grid button[data-theme=night].active,
+body.night .theme-grid button.active{outline-color:var(--accent-primary)}
+.set-note{margin:12px 0 0;font-size:12px;line-height:1.8;color:var(--muted)}
+.set-note code{font-family:"JetBrains Mono",Consolas,monospace;font-size:11.5px;padding:1px 5px;border-radius:6px;background:var(--accent-soft);color:var(--accent-primary)}
+
+/* ============================================================
+   28. 音乐播放器 V3
+   ============================================================ */
+/* 当前歌词：粉黄渐变 + 一点微光，前后句继续降透明度 */
+.lb-line.active{text-shadow:0 0 18px var(--accent-glow)}
+.lb-line.near{opacity:.5}
+.lb-line.far{opacity:.12}
+/* 进度条：一条缓慢扫过的微光，暗示「正在前进」 */
+.mp-progress{position:relative}
+.mp-progress:after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  transform:translateX(-100%);opacity:0;
+}
+body.mp-playing .mp-progress:after{animation:mpShimmer 2.6s ease-in-out infinite;opacity:1}
+@keyframes mpShimmer{0%{transform:translateX(-100%)}60%,100%{transform:translateX(100%)}}
+/* 唱片：播放时匀速转，暂停时保持当前角度缓慢停下（不回到 0 点） */
+.mp-disc{animation-timing-function:linear}
+/* 展开时给一层内高光，和卡片材质统一 */
+.mplayer.pinned .mp-shell,.mplayer:hover .mp-shell{border-color:var(--bd)}
+/* 当前曲目：标题吃强调色 */
+.mp-track.on .mp-track-t{color:var(--accent-primary)}
+body.night .mp-track.on .mp-track-t{color:var(--accent-primary)}
+/* 列表里的均衡器跟着主题 */
+.mp-eq i{background:var(--accent-primary)}
+.lb-eq i{background:linear-gradient(180deg,var(--accent-primary),var(--accent-secondary))}
+
+/* ============================================================
+   29. 自定义光标 V3
+   ------------------------------------------------------------
+   旧版是一个点 + 一个圆环。V3 把圆环改成「心形环」，
+   悬停可交互元素时环放大并亮起来，点击时从中心蹦一串小心形。
+   只做 6 个粒子、只跑 620ms，不是拖尾。
+   ============================================================ */
+.cursor-ring{border-color:var(--accent-primary)}
+.cursor-ring span{color:var(--accent-primary)}
+body.cursor-hover .cursor-ring{
+  transform:translate(-50%,-50%) scale(1.4);
+  background:var(--accent-soft);
+  border-color:var(--accent-primary);
+  box-shadow:0 0 22px var(--accent-glow);
+}
+.cursor-burst{position:fixed;z-index:9998;pointer-events:none;font-size:13px;color:var(--accent-primary);transform:translate(-50%,-50%);animation:burstOut .62s var(--ease) forwards}
+@keyframes burstOut{
+  0%{opacity:.95;transform:translate(-50%,-50%) scale(.4)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--bx,0px)),calc(-50% + var(--by,0px))) scale(1.05)}
+}
+.click-ripple{border-color:var(--accent-primary)}
+
+/* ============================================================
+   30. 卡片交互（参数集中在 :root 的 --tilt-* ）
+   ------------------------------------------------------------
+   JS 只往卡片写 --tx / --ty 两个变量，具体角度在 CSS 里算。
+   这样「调手感」是改 CSS 数字，不是改 JS 魔法数。
+   ============================================================ */
+body:not(.no-tilt) .tilt-card:hover{
+  transform:perspective(var(--tilt-persp))
+            rotateX(calc(var(--ty,0) * -1 * var(--tilt-x)))
+            rotateY(calc(var(--tx,0) * var(--tilt-y)))
+            translateY(var(--tilt-lift));
+}
+/* 触屏永远不要倾斜 */
+@media (pointer:coarse){body .tilt-card:hover{transform:none}}
+
+/* ============================================================
+   31. 无障碍 / 键盘
+   ============================================================ */
+.skip-link{
+  position:absolute;left:-9999px;top:0;z-index:10000;
+  padding:10px 16px;border-radius:0 0 14px 0;
+  background:var(--accent-primary);color:#4a2b3a;font-weight:800;font-size:13px;
+}
+.skip-link:focus{left:0}
+/* 键盘焦点一定要看得见（鼠标点击不显示，避免「点到哪都发光」） */
+:focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px;border-radius:8px}
+.radial-item:focus-visible,.mobile-nav button:focus-visible,.bf-chip:focus-visible,
+.theme-grid button:focus-visible,.set-tab:focus-visible,.mm-btn:focus-visible{
+  outline:2px solid var(--accent-primary);outline-offset:2px;
+}
+/* 触屏可点区域至少 44px */
+@media (pointer:coarse){
+  .bf-chip,.mp-btn,.card-tool,.settings-close,.set-tab{min-height:44px;min-width:44px}
+  .bf-chip{min-width:0;padding-left:15px;padding-right:15px}
+}
+/* 管理态按钮：夜间不能出现白框（旧样式在深色底上留了一圈亮边） */
+body.night .card-tool{background:rgba(52,40,62,.94);border-color:rgba(255,255,255,.16);color:#cbb6c4}
+body.night .card-tool:hover{background:rgba(74,55,86,.98);color:var(--accent-primary)}
+body.night .card-tools{filter:none}
+/* 动态内容里的按钮用事件委托，这里只保证「看得见、点得到」 */
+.card-tools{pointer-events:auto}
+.card-tool:focus-visible{opacity:1}
+
+/* ============================================================
+   32. 新增响应式
+   ============================================================ */
+@media (max-width:1150px){
+  /* 侧栏从 248px 收到 210px，四个节点按原尺寸摆会顶进内容栏。
+     不逐个改数字 —— 那就等于维护两套几何，早晚漂移；
+     直接在锚点上整体等比缩小：.radial-nav 是 0×0、transform-origin
+     恰好落在锚点上，所以 scale 会把「极坐标位移 + 卡片尺寸 + 字号」
+     一起缩，相对关系一点不变，碰撞结论也依然成立。 */
+  .radial-nav{transform:scale(.85)}
+}
+@media (max-width:860px){
+  /* 底栏从 3 格变 4 格（新增「碎碎念」）。style.css 里是 repeat(3,1fr)。 */
+  .mobile-nav{grid-template-columns:repeat(4,1fr)}
+  .mobile-nav button{font-size:10.5px}
+  .mobile-nav button span{font-size:15px}
+  /* 手机端不需要扇形导航（侧栏整个不显示），但要把时间四条压紧一点 */
+  .time-row{grid-template-columns:50px 1fr 38px}
+  .timeline{padding-left:28px}
+  .timeline:before{left:9px}
+  .moment-entry:before{left:-26px}
+  .moment-entry:nth-child(odd) .moment-card{margin-left:0}
+  .moment-entry:nth-child(even) .moment-card{margin-right:0}
+  /* 移动端 compact 播放器：右下角固定一颗唱片，展开时向上长 */
+  #floatingPlayer{width:calc(100vw - 28px);right:14px}
+  .mp-shell{width:52px}
+  .mp-disc{width:52px;height:52px}
+  .mplayer:hover .mp-shell,.mplayer:focus-within .mp-shell,.mplayer.pinned .mp-shell{padding:13px}
+  .mp-body,.mp-playlist{max-height:0}
+  .mplayer.pinned .mp-body{max-height:520px}
+  .mplayer.pinned.plist-open .mp-body{max-height:720px}
+  .mplayer.pinned .mp-playlist{max-height:190px}
+  .mp-pl{max-height:172px}
+}
+@media (max-width:520px){
+  .theme-grid{grid-template-columns:1fr 1fr;gap:7px}
+  .theme-grid button{padding:10px}
+  .time-row{grid-template-columns:46px 1fr 36px;font-size:11.5px}
+  .moment-card{padding:17px 17px 15px}
+  .moment-body{font-size:14.5px}
+  .moments-stat b{font-size:19px}
+}
+
+/* ============================================================
+   33. reduced-motion 收口
+   ------------------------------------------------------------
+   全局的「把时长压到 0.001ms」在 style.css 末尾已经有一份。
+   这里只补两件它管不到的事：
+     1. 把进场起始态直接落到位（否则 0.001ms 动画跑完是终点态，
+        但如果某个元素只写了 from 没写 to，就会停在不可见状态）；
+     2. 关掉纯装饰的常驻动画（唱片自转、微光扫过、星尘由 JS 关）。
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none}
+  .page-section.leaving{display:none;animation:none}
+  .page-section.active.tr-slide-x,
+  .page-section.active.tr-drop,
+  .page-section.active.tr-blur,
+  .page-section.active.tr-zoom{animation:none;opacity:1;transform:none;filter:none}
+  .mp-progress:after{display:none}
+  .mp-disc{animation:none!important}
+  body.cursor-hover .cursor-ring{transform:translate(-50%,-50%) scale(1.15)}
+  .moment-card:hover,.pt-link:hover{transform:none}
+}
+body.reduce-motion .mp-disc{animation:none!important}
+body.reduce-motion .mp-progress:after{display:none}

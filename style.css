@@ -59,40 +59,89 @@
     radial-gradient(circle at 86% 12%, rgba(255,232,158,.34), transparent 23%),
     linear-gradient(135deg,#fff8fc 0%,#fff5e8 48%,#f4efff 100%);
   --ring:rgba(199,163,184,.42);        /* 分隔线 / 虚线边框 */
+
+  /* --- V3 语义别名 ---------------------------------------------------
+     新写的组件一律只用下面这几个名字。它们只是「指向既有变量」，
+     所以老规则一行不用改；哪天要换主题引擎，只改这一处映射即可。 */
+  --accent-primary:var(--pink); --accent-secondary:var(--yellow); --accent-tertiary:var(--lav);
+  --accent-glow:rgba(255,158,203,.42); --accent-soft:rgba(255,158,203,.14);
+  --bg-main:var(--bg); --bg-panel:var(--glass);
+  --text-primary:var(--ink); --text-secondary:var(--muted);
+  --border:var(--bd); --shadow-base:var(--shadow);
+
+  /* --- 交互参数集中管理（卡片倾斜 / 涟漪 / 光标）--------------------
+     以前这三个数是写死在 JS 里的魔法数字，现在提到变量上，
+     调手感不用翻代码。JS 读不到时都有默认值兜底。 */
+  --tilt-x:3.4deg; --tilt-y:4.2deg; --tilt-lift:-3px; --tilt-persp:900px;
+  --fx-scale:1;                        /* 整体动效强度，reduce-motion 时归零 */
+
+  /* --- 字号阶梯（V3 全站统一）---------------------------------------
+     之前散落着一堆 9px / 10px，是「看着精致、实际发虚」的主因。
+     统一往上提一档；Windows 中文小字号尤其容易糊。 */
+  --fs-hero:clamp(52px,8vw,76px);
+  --fs-section:clamp(24px,3.4vw,30px);
+  --fs-display:clamp(32px,4.6vw,52px);
+  --fs-card:19px;
+  --fs-body:16px;
+  --fs-meta:13px;
+  --fs-micro:11.5px;
 }
 /* --- 调色板：糖果粉黄（默认） ---
    同时挂在 <html> 上：script.js 在开屏之前就会把 class 写到根元素，
-   这样首帧就是对的配色，不会先闪一下默认色。 */
-html.pal-candy,body.pal-candy{
+   这样首帧就是对的配色，不会先闪一下默认色。
+
+   ⚠️ 每条主题都写了四种选择器：
+     .pal-x        —— 旧类名，script.js / 回归装置都还在用
+     [data-theme=x] —— V3 的正式写法（<html data-theme="candy">）
+   两套并存是刻意的：老代码一行不改，新代码用新名字，切换时两个都写。 */
+html.pal-candy,body.pal-candy,
+html[data-theme=candy],body[data-theme=candy]{
   --pink:#ff8fbd; --yellow:#ffe48d; --peach:#ffb995; --lav:#d8c7ff; --mint:#bdeee2;
   --scene:
     radial-gradient(circle at 18% 8%, rgba(255,174,208,.55), transparent 26%),
     radial-gradient(circle at 84% 22%, rgba(255,229,142,.48), transparent 24%),
     linear-gradient(135deg,#fff7fb,#fff7e7 49%,#f3edff);
+  /* V3 语义别名：新组件一律用这几个名字，换主题时不用改组件 */
+  --bg:#fff8fb; --bg-2:#fff9ec;
+  --accent-primary:#ff8fbd; --accent-secondary:#ffe48d; --accent-tertiary:#d8c7ff;
+  --accent-glow:rgba(255,143,189,.42); --accent-soft:rgba(255,143,189,.14);
 }
 /* --- 调色板：蜜桃晚霞 --- */
-html.pal-sunset,body.pal-sunset{
+html.pal-sunset,body.pal-sunset,
+html[data-theme=sunset],body[data-theme=sunset]{
   --pink:#ff9f9f; --yellow:#ffd984; --peach:#ffb08d; --lav:#d8c2ff; --mint:#cbe8de;
   --scene:
     radial-gradient(circle at 10% 12%, rgba(255,162,138,.56), transparent 28%),
     radial-gradient(circle at 82% 20%, rgba(255,219,124,.44), transparent 24%),
     linear-gradient(135deg,#fff8f4,#fff0df 52%,#efe8ff);
+  --bg:#fff9f5; --bg-2:#fff3e6;
+  --accent-primary:#ff8f8f; --accent-secondary:#ffd984; --accent-tertiary:#d8c2ff;
+  --accent-glow:rgba(255,143,143,.42); --accent-soft:rgba(255,143,143,.14);
 }
-/* --- 调色板：梦幻紫蓝 --- */
-html.pal-lilac,body.pal-lilac{
+/* --- 调色板：梦幻紫蓝（lilac / lavender 两个名字都认） --- */
+html.pal-lilac,body.pal-lilac,
+html[data-theme=lilac],body[data-theme=lilac],
+html[data-theme=lavender],body[data-theme=lavender]{
   --pink:#d9a7ff; --yellow:#ffe2a6; --peach:#ffbfd2; --lav:#bda7ff; --mint:#c9eaf3;
   --scene:
     radial-gradient(circle at 14% 16%, rgba(206,173,255,.56), transparent 26%),
     radial-gradient(circle at 85% 20%, rgba(170,220,255,.44), transparent 25%),
     linear-gradient(135deg,#fbf7ff,#f4f0ff 50%,#edf6ff);
+  --bg:#faf8ff; --bg-2:#f3f1ff;
+  --accent-primary:#c89bff; --accent-secondary:#ffe2a6; --accent-tertiary:#a8c8ff;
+  --accent-glow:rgba(200,155,255,.45); --accent-soft:rgba(200,155,255,.15);
 }
 /* --- 调色板：薄荷汽水 --- */
-html.pal-mint,body.pal-mint{
+html.pal-mint,body.pal-mint,
+html[data-theme=mint],body[data-theme=mint]{
   --pink:#8adcc5; --yellow:#ffe69a; --peach:#ffc9a6; --lav:#cfc8ff; --mint:#98ead0;
   --scene:
     radial-gradient(circle at 14% 10%, rgba(147,236,211,.54), transparent 26%),
     radial-gradient(circle at 82% 20%, rgba(255,225,157,.42), transparent 25%),
     linear-gradient(135deg,#f5fffb,#fff9ea 50%,#eef6ff);
+  --bg:#f6fffc; --bg-2:#fbfff2;
+  --accent-primary:#6fd6bb; --accent-secondary:#ffe69a; --accent-tertiary:#c8e8ff;
+  --accent-glow:rgba(111,214,187,.42); --accent-soft:rgba(111,214,187,.15);
 }
 
 /* --- 夜间：只换变量，不换结构 ---
@@ -100,7 +149,8 @@ html.pal-mint,body.pal-mint{
    只写在 body.night 上，夜间时 html 的底色会一直停在日间浅色 ——
    页面过滚动 / 视口边缘就会闪一条浅粉边（html.night 本来就是为了兜这个）。
    写法和上面的调色板一致（html.pal-x,body.pal-x）。 */
-html.night,body.night{
+html.night,body.night,
+html[data-theme=night],body[data-theme=night]{
   --ink:#f7edf6; --muted:#c6b7c8;
   --glass:rgba(34,26,46,.62); --glass-2:rgba(255,255,255,.07);
   --glass-h:rgba(255,255,255,.13); --glass-solid:rgba(31,25,42,.92);
@@ -109,6 +159,10 @@ html.night,body.night{
   --shadow:0 28px 80px rgba(6,3,11,.46);
   --ring:rgba(255,255,255,.12);
   --bg:#17121f;
+  /* 夜间是「紫黑 + 粉紫 + 蓝」，和日间那四套是完全不同的一档，
+     所以连强调色一起换，不只是把底色压暗。 */
+  --accent-primary:#f58fc0; --accent-secondary:#b8a4ff; --accent-tertiary:#7fc4ff;
+  --accent-glow:rgba(245,143,192,.38); --accent-soft:rgba(245,143,192,.12);
   --scene:
     radial-gradient(circle at 18% 8%, rgba(255,146,192,.15), transparent 30%),
     radial-gradient(circle at 84% 12%, rgba(181,156,255,.17), transparent 26%),
@@ -125,10 +179,17 @@ html.night.pal-mint,body.night.pal-mint{--scene:radial-gradient(circle at 14% 10
 html{scroll-behavior:smooth;background:var(--bg)}
 body{
   margin:0; min-height:100vh; overflow-x:hidden; color:var(--ink);
-  font-family:"HarmonyOS Sans","PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
-  font-size:16px; background:var(--bg);
+  /* Windows 优先的中文字体栈：雅黑 UI 的 hinting 在小字号下最稳。
+     后面保留 HarmonyOS / PingFang，Mac 上会自动落到苹方。 */
+  font-family:"Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC","Segoe UI",
+              "HarmonyOS Sans","PingFang SC",system-ui,-apple-system,sans-serif;
+  font-size:16px; font-weight:400; line-height:1.7; background:var(--bg);
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility;
 }
+/* 中文正文不要用极细字重：雅黑 300 及以下在 LCD 上会糊成一团。
+   标题用 800 而不是 900/1000，笔画不会挤在一起。 */
+b,strong,h1,h2,h3,h4{font-weight:800}
+h1,h2,h3,h4{line-height:1.3}
 button,input{font:inherit} button{border:0;color:inherit;cursor:pointer;background:none}
 a{color:inherit;text-decoration:none}
 img{max-width:100%}
@@ -275,7 +336,8 @@ html[data-pre-section] .app{display:block}
 html[data-pre-section] .page-section{display:none}
 html[data-pre-section="about"] #about,
 html[data-pre-section="blog"] #blog,
-html[data-pre-section="projects"] #projects{display:block}
+html[data-pre-section="projects"] #projects,
+html[data-pre-section="moments"] #moments{display:block}
 
 /* ---------- 站内打开文章：#spaPost 浮层 ----------
    首页点博客卡片原先是直接换文档（posts/xxx.html），<audio> 跟着文档一起
@@ -323,22 +385,30 @@ body.night .side-rail{background:rgba(22,17,29,.58);border-right-color:rgba(255,
 .avatar-hint{position:absolute;top:-4px;left:118px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.75);color:#a88599;font-size:10px;font-weight:900;opacity:.7;z-index:6;transform:rotate(5deg)}
 body.night .avatar-hint{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:#d7c0ce}
 
-/* 径向导航：头像 hover / 展开时，三个节点从右下往左上散开 */
-.radial-nav{position:absolute;left:88px;top:20px;width:260px;height:210px;z-index:7;pointer-events:none}
+/* 径向导航：头像 hover / 展开时，四个节点沿弧线散开。
+   ⚠️ 这里的 left/top/width/height 只是**结构兜底**，真正的几何
+   （极坐标位移、卡片尺寸、圆角、内边距、字号）全部由 v3.css 第 21 节
+   接管并覆盖。两边的数字请保持一致，否则读代码的人会以为改这里有用。
+   扇形形状的唯一权威是 script.js 的 NAV_CFG —— 别回来加 nth-child 位移。 */
+.radial-nav{position:absolute;left:50%;top:50%;width:0;height:0;z-index:7;pointer-events:none}
 .radial-item{
-  position:absolute;left:0;top:74px;width:118px;height:64px;border-radius:20px;padding:7px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-  opacity:0;pointer-events:none;transform-origin:16px 50%;
-  transform:translateX(-12px) scale(.72);
+  position:absolute;left:0;top:0;width:90px;height:52px;border-radius:17px;padding:4px 6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+  opacity:0;pointer-events:none;transform-origin:50% 50%;
+  transform:translate3d(0,0,0) scale(.4);
   transition:opacity .28s var(--ease),transform .45s var(--ease),background .2s,box-shadow .2s;
 }
 .radial-item span{font-size:18px;color:#ef87ae}
 .radial-item b{font-size:13px;line-height:1.2}
 .radial-item small{font-size:9px;letter-spacing:.1em;color:#b59aa9}
 .avatar-nav-wrap:hover .radial-item,.avatar-nav-wrap.open .radial-item{opacity:1;pointer-events:auto}
-.avatar-nav-wrap:hover .radial-item:nth-child(1),.avatar-nav-wrap.open .radial-item:nth-child(1){transform:translate(10px,-56px) rotate(-9deg) scale(1)}
-.avatar-nav-wrap:hover .radial-item:nth-child(2),.avatar-nav-wrap.open .radial-item:nth-child(2){transform:translate(74px,4px) rotate(2deg) scale(1)}
-.avatar-nav-wrap:hover .radial-item:nth-child(3),.avatar-nav-wrap.open .radial-item:nth-child(3){transform:translate(16px,84px) rotate(10deg) scale(1)}
+/* ⚠️ 这里**不要**再写 `:nth-child(n){transform:translate(x,y)}` 那种硬编码位移。
+   V3 的极坐标布局把位移写进 --nx/--ny，由 v3.css 的
+   `.avatar-nav-wrap.open .radial-item`（3 个类）消费；
+   而 `:nth-child(1)` 那条是 4 个类 —— 特异性更高，**后加载也压不住它**，
+   结果是「JS 明明算出了极坐标，渲染出来还是老的写死位置」，
+   而且第 4 个及以后的节点根本没有对应规则，会缩成一小块（踩过）。
+   要改扇形形状，去 script.js 的 NAV_CFG，别回来加 nth-child。 */
 .radial-item:hover{background:var(--glass-h);box-shadow:0 18px 34px rgba(175,111,150,.18),inset 0 1px var(--hi)}
 .radial-item.active{background:linear-gradient(135deg,rgba(255,246,250,.88),rgba(255,247,214,.78))}
 body.night .radial-item{color:#f0e2ec;border-color:var(--bd-2)}
@@ -349,7 +419,7 @@ body.night .radial-item small{color:#c0a9bb}
 /* 显式收起（点空白 / 点自己的头像再点一次）要盖得住上面的 :hover，
    所以这条规则必须写在 :hover / .open 之后。 */
 .avatar-nav-wrap.nav-closed .radial-item,
-.avatar-nav-wrap.nav-closed:hover .radial-item{opacity:0;pointer-events:none;transform:translateX(-12px) scale(.72)}
+.avatar-nav-wrap.nav-closed:hover .radial-item{opacity:0;pointer-events:none;transform:translate3d(0,0,0) scale(.4)}
 .avatar-nav-wrap.nav-closed .avatar-sidebar{transform:none;filter:none}
 
 .side-name{text-align:center;margin-top:8px}
