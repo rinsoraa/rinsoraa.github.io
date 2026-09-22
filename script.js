@@ -1385,6 +1385,33 @@
     toastTimer = setTimeout(() => { toastEl.className = 'blog-toast'; }, 2400);
   }
 
+  /* 侧栏联系方式：GitHub / Bilibili 是真实 <a>（新标签打开，不用 JS），
+     QQ / 邮箱走剪贴板复制 + toast 反馈。 */
+  function copyText(text, label) {
+    const ok = () => toast('已复制' + label + '：' + text);
+    const no = () => toast('复制失败，请手动复制：' + text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(no);
+      return;
+    }
+    /* 旧浏览器 / 非安全上下文 fallback：textarea + execCommand */
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-999px;opacity:0';
+      body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const done = document.execCommand('copy');
+      body.removeChild(ta);
+      done ? ok() : no();
+    } catch (e) { no(); }
+  }
+  $$('.side-link[data-copy]').forEach((btn) => {
+    btn.addEventListener('click', () => copyText(btn.dataset.copy, btn.dataset.label || ''));
+  });
+
   document.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
