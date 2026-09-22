@@ -23,6 +23,13 @@
 
   var DATA_PATH = 'music-data.js';
   var STATE_KEY = 'rinsora-music-state';
+  /* 「播到哪了」单独存一份 sessionStorage（不是 localStorage）：
+     换文档的跳转（直接打开某篇文章、在文章页点「回到博客列表」）里，
+     <audio> 会随旧文档销毁，靠这份记录在新文档里接着播。
+     sessionStorage 天然只活在当前标签页，关掉就没了 —— 不会变成
+     「下次打开小窝自动开始播」这种突然袭击。 */
+  var RESUME_KEY = 'rinsora-music-resume';
+  var RESUME_TTL = 6 * 3600 * 1000;   // 超过 6 小时就当它已经翻篇了
 
   /* 曲目里的 src / cover 是按「相对站点根目录」写的（assets/music/xxx）。
      文章页在 /posts/ 下，原样用会让浏览器去找 /posts/assets/... -> 404：
@@ -260,6 +267,68 @@
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify({ mode: state.mode, index: state.index }));
     } catch (e) {}
+  }
+
+  /* ============================================================
+     跨文档续播
+     ------------------------------------------------------------
+     同一个文档里换内容是不断音的（首页点文章走的是 script.js 的
+     #spaPost 浮层）。但真链接还是会换文档：直接打开某篇文章、在文章页
+     点「回到博客列表」…… <audio> 随旧文档销毁，只能在新文档里接着播。
+     新文档要自动发声得靠浏览器的粘性激活，被拦下来也不会报错 ——
+     那就退成「停在原位置不响」，用户点一下播放即可，不会更糟。
+     ============================================================ */
+  var tracked = { src: '', t: 0, playing: false, at: 0 };
+  var lastSave = 0;
+
+  function flushResume() {
+    try {
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+        src: tracked.src, t: tracked.t, playing: tracked.playing, at: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  /* 只在真的在播的时候记录 —— 暂停中点出去，回来就不该自己响 */
+  function trackResume(force) {
+    if (!audio || !current()) return;
+    var now = Date.now();
+    if (!force && now - lastSave < 1000) return;
+    lastSave = now;
+    tracked.src = current().src || '';
+    tracked.t = audio.currentTime || 0;
+    tracked.at = now;
+    flushResume();
+  }
+
+  function restoreResume() {
+    var s = null;
+    try { s = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null'); } catch (e) { s = null; }
+    if (!s || !s.playing || !s.src) return false;
+    if (Date.now() - (Number(s.at) || 0) > RESUME_TTL) return false;
+
+    var list = tracks(), i = -1, k;
+    for (k = 0; k < list.length; k++) { if (list[k].src === s.src) { i = k; break; } }
+    if (i < 0) return false;                 /* 曲库换过了，对不上就不硬放 */
+
+    state.index = i;
+    saveState();
+    audio.src = res(list[i].src);
+    buildLines();
+    renderAll();
+
+    var seek = function () {
+      var t = Number(s.t) || 0;
+      if (t > 0.3 && isFinite(audio.duration) && t < audio.duration - 0.5) audio.currentTime = t;
+    };
+    if (audio.readyState >= 1) seek();
+    else audio.addEventListener('loadedmetadata', seek);
+
+    tracked.src = list[i].src;
+    tracked.t = Number(s.t) || 0;
+    tracked.playing = true;
+    audio.play().catch(function () { /* 被自动播放策略拦下：停在原位置，等用户点 */ });
+    return true;
   }
 
   /* ============================================================
@@ -673,12 +742,19 @@
       if (!state.started) { state.started = true; d.body.classList.add('lyrics-on'); }
       setPlayingUi(true);
       startWipe();
+      tracked.playing = true;
+      trackResume(true);
     });
     audio.addEventListener('pause', function () {
       d.body.classList.remove('mp-playing');
       setPlayingUi(false);
       stopWipe();
       if (state.started) syncLyrics();
+      /* 迟一步再记「已暂停」：换文档时浏览器也可能顺手 pause 一下，
+         当场写下去就会变成「明明在播却记成暂停」，回来就不响了。 */
+      setTimeout(function () {
+        if (audio.paused && !audio.ended) { tracked.playing = false; trackResume(true); }
+      }, 300);
     });
     audio.addEventListener('ended', function () {
       d.body.classList.remove('mp-playing');
@@ -697,6 +773,19 @@
         p.cur.textContent = fmt(audio.currentTime);
       });
       if (state.started) syncLyrics();
+      trackResume(false);          /* 每秒落一次盘，关页面时进度最多差 1 秒 */
+    });
+
+    /* 离开文档前再补一次：timeupdate 是每秒级的，最后一次可能来不及写 */
+    w.addEventListener('pagehide', function () {
+      tracked.t = audio ? (audio.currentTime || 0) : 0;
+      trackResume(true);
+    });
+    d.addEventListener('visibilitychange', function () {
+      if (d.visibilityState === 'hidden') {
+        tracked.t = audio ? (audio.currentTime || 0) : 0;
+        trackResume(true);
+      }
     });
   }
 
@@ -760,6 +849,10 @@
     buildLines();
     renderAll();
     setPlayingUi(false);
+
+    /* 跨文档跳转（真链接打开文章 / 从文章页回列表）时接着刚才的位置播。
+       没记录或当时是暂停的，这里就是个空操作。 */
+    restoreResume();
 
     /* 「＋ 添加音乐」只有配过 Token 才挂载 —— 普通访客看不到，也点不出写操作。
        面板本身在 music-upload.js 里，这里只负责把按钮插到右下角并召唤它。 */

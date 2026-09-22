@@ -22,6 +22,8 @@
   <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
   <title>空凛 · Rinsora 的小窝</title>
   <link rel="stylesheet" href="style.css">
+  <!-- 文章排版：真实文章页用它，首页点进文章时的 #spaPost 浮层也复用它 -->
+  <link rel="stylesheet" href="posts/post.css">
   <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色 -->
   <script>
   try{
@@ -33,8 +35,14 @@
     var hue=localStorage.getItem('rinsora-hue');
     if(hue) root.style.setProperty('--hue', hue+'deg');
     /* 走「直达某个分栏」的链接进来（文章页的「回到博客列表」就是 #blog）：
-       开屏加载页没必要再放一遍，首帧直接按掉，免得先闪一下。 */
-    if(/^#(about|blog|projects)$/i.test(location.hash||'')) root.classList.add('no-boot');
+       ① 开屏加载页没必要再放一遍，首帧直接按掉；
+       ② 只渲染目标那一栏 —— 否则脚本要 50ms 后才跑，中间会先闪一下「主页」。
+       两件事都靠 CSS 兜第一帧（.no-boot / [data-pre-section]），
+       脚本接管后再把 data-pre-section 撤掉。 */
+    var hs = location.hash || '';
+    if (/^#(about|blog|projects)$/i.test(hs)) root.setAttribute('data-pre-section', hs.slice(1).toLowerCase());
+    else if (/^#\/post\//i.test(hs)) root.setAttribute('data-pre-section', 'blog');
+    if (root.hasAttribute('data-pre-section')) root.classList.add('no-boot');
   }catch(e){}
   </script>
 </head>
@@ -388,6 +396,18 @@
     <button data-target="blog" type="button"><span>✎</span>博客</button>
     <button data-target="projects" type="button"><span>✦</span>项目</button>
   </nav>
+
+  <!-- 站内打开文章：内容换掉、文档不换 —— <audio> 才不会被销毁，音乐一直播下去。
+       放在 .mobile-nav 之后，同层级时才由 DOM 顺序压住它（另外开浮层时会把它关掉）。 -->
+  <div class="spa-post" id="spaPost" hidden>
+    <div class="bg-decor" aria-hidden="true">
+      <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+      <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+    </div>
+    <div class="spa-post-view" id="spaPostView">
+      <div id="spaPostBody"></div>
+    </div>
+  </div>
 </div>
 
 <audio id="audio" preload="metadata"></audio>

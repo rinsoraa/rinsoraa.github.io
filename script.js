@@ -48,6 +48,10 @@
   const settingsMask = $('#settingsMask');
   const pageProgress = $('#pageProgress');
   const boot = $('#bootScreen');
+  /* 站内看文章的浮层（不换文档 → 音乐不断），逻辑见下面「站内打开文章」一节 */
+  const spaPost = $('#spaPost');
+  const spaPostView = $('#spaPostView');
+  const spaPostBody = $('#spaPostBody');
 
   const PALETTES = ['candy', 'sunset', 'lilac', 'mint'];
 
@@ -292,6 +296,8 @@
 
   function showSection(id, push) {
     if (!TITLES[id]) id = 'about';
+    hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
+    html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
     state.section = id;
     $$('.page-section').forEach((s) => s.classList.toggle('active', s.id === id));
     $$('.radial-item').forEach((b) => b.classList.toggle('active', b.dataset.target === id));
@@ -334,15 +340,137 @@
   });
 
   /* 直达链接：#about / #blog / #projects 直接跳过欢迎页，
+     #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
      #admin / #write / #editor / #project 跳后台页 */
   function routeHash() {
-    const h = (location.hash || '').replace(/^#/, '').toLowerCase();
+    const raw = (location.hash || '').replace(/^#/, '');
+    const h = raw.toLowerCase();
     if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
     if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
+    /* 文章：先落回博客分栏（首帧 CSS 已经把欢迎页按住了），再盖上浮层 */
+    const pm = /^\/post\/([^/?#]+\.html)$/i.exec(raw);
+    if (pm) {
+      skipBoot(); enterApp(true); showSection('blog', false);
+      openPost('posts/' + pm[1], false);
+      return true;
+    }
     if (TITLES[h]) { skipBoot(); enterApp(true); showSection(h, false); return true; }
     return false;
   }
-  window.addEventListener('hashchange', () => { if (!routeHash()) return; });
+  window.addEventListener('hashchange', () => {
+    /* 没命中任何路由也要把浮层收掉：从「主页」的最近发布点进文章时，
+       进站时的 hash 本来就是空的，后退回来只会把 hash 清掉，
+       不在这里收就永远卡在文章上。 */
+    if (!routeHash()) hidePost();
+  });
+
+  /* ============================================================
+     站内打开文章 —— 内容换掉，文档不换
+     ------------------------------------------------------------
+     博客卡片的 href 是真的 posts/xxx.html。直接点就是「换文档」，
+     <audio> 会跟着旧文档一起销毁，音乐必然停 —— 这是「点进文章音乐
+     就断」的根因，靠调音量/续播都绕不过去。所以这里把站内点击接管
+     下来：fetch 回文章页，只把 .post-wrap 搬进 #spaPost 浮层，
+     地址记成 #/post/xxx.html。文档自始至终是同一个，播放器当然一直播。
+     真链接一个没动：新标签页 / 中键 / Ctrl+点 / 无脚本访问 / SEO
+     全都还是 posts/xxx.html 那个真页面。
+     ============================================================ */
+  const POST_HREF = /^posts\/[^/?#]+\.html$/i;
+  let postUrl = '';          // 浮层里当前这篇（站内相对路径）
+  let postPushed = false;    // 这条历史是自己 push 的（false = 直接开链接进来的）
+  let postScrollY = 0;       // 进文章前列表滚到哪了
+  let backScrollY = null;    // 退回列表时要把滚动位置还回去
+
+  function postOf(a) {
+    if (!a || !a.getAttribute) return '';
+    const href = a.getAttribute('href') || '';
+    return POST_HREF.test(href) ? href : '';
+  }
+
+  /* 只收起浮层，不碰路由 —— 给 showSection 用，避免两边互相调用 */
+  function hidePost() {
+    if (!postUrl) return;
+    postUrl = '';
+    postPushed = false;
+    spaPost && spaPost.classList.remove('on');
+    body.classList.remove('spa-post-open');
+    /* 把滚动位置还给列表：showSection 会先把页面滚到顶，所以这里推到
+       下一个 tick 再盖回去（behavior:auto 会顶掉那边还在跑的 smooth）。 */
+    if (backScrollY != null) {
+      const to = backScrollY;
+      backScrollY = null;
+      setTimeout(() => window.scrollTo({ top: to, behavior: 'auto' }), 0);
+    }
+    setTimeout(() => {
+      if (postUrl || !spaPost) return;        /* 这中间又打开了别的文章 */
+      spaPost.hidden = true;
+      if (spaPostBody) spaPostBody.textContent = '';
+    }, 320);
+  }
+
+  function openPost(url, push) {
+    if (!spaPost || !spaPostBody) return false;
+    if (url === postUrl) return true;
+
+    closeSettings();                          /* 设置抽屉别压在文章上面 */
+    hidePost();
+    postUrl = url;
+    postPushed = push !== false;
+    postScrollY = window.pageYOffset || 0;
+
+    spaPost.hidden = false;
+    void spaPost.offsetHeight;                /* 先让 hidden 那帧提交过，transition 才会跑 */
+    spaPost.classList.add('on');
+    body.classList.add('spa-post-open');
+    if (spaPostView) spaPostView.scrollTop = 0;
+    if (postPushed && history.pushState) {
+      history.pushState({ rsp: url }, '', '#/post/' + url.replace(/^posts\//i, ''));
+    }
+
+    fetch(url, { credentials: 'same-origin' })
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((html) => {
+        if (postUrl !== url) return;           /* fetch 期间切走了 */
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const wrap = doc.querySelector('.post-wrap');
+        if (!wrap) throw new Error('没有 .post-wrap');
+        spaPostBody.textContent = '';
+        spaPostBody.appendChild(document.importNode(wrap, true));
+        const t = doc.querySelector('title');
+        if (t && t.textContent) document.title = t.textContent;
+      })
+      .catch(() => { location.href = url; });  /* 取不到就老老实实走真链接 */
+    return true;
+  }
+
+  /* 浮层里的「回到博客列表」：能退就退回上一条历史（连滚动位置一起还原），
+     直接开链接进来的没有上一条，就换成博客分栏。 */
+  function closePost() {
+    if (!postUrl) return;
+    if (postPushed && history.length > 1) {
+      backScrollY = postScrollY;
+      history.back();
+      return;
+    }
+    hidePost();
+    showSection('blog', false);
+  }
+
+  /* 站内链接接管：文章卡片、浮层里的返回按钮都走这里 */
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a) return;
+    /* 浮层内部的「回到博客列表 / 看更多文章」= 收起浮层，不要换文档 */
+    if (postUrl && spaPost && spaPost.contains(a)) {
+      if (/index\.html(#blog)?$/i.test(a.getAttribute('href') || '')) { e.preventDefault(); closePost(); }
+      return;
+    }
+    const url = postOf(a);
+    if (!url) return;
+    e.preventDefault();
+    openPost(url, true);
+  });
 
   /* ============================================================
      外观设置抽屉

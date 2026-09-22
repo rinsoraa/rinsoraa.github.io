@@ -10,18 +10,18 @@
    ============================================================ */
 
 .post-wrap{
-  position:relative;z-index:30;min-height:100vh;
+  /* ⚠️ z-index 只能压住 .bg-decor(0)，不能超过播放器。之前这里是 30，
+     逼得下面要给 #floatingPlayer / .lyricbar 单独抬到 60 / 58；那两条
+     一旦被别的页面（首页就是）加载，会反过来把播放器抬到移动端底部
+     导航(40)之上，挡住「项目」按钮。改回 1 之后：bg-decor(0) <
+     .post-wrap(1) < .lyricbar(19) < #floatingPlayer(21)，
+     文章页和首页用同一套层级，谁都不用特批。 */
+  position:relative;z-index:1;min-height:100vh;
   /* 底部留 130px：右下角那个常驻音乐播放器是 fixed 覆盖层，别压住结尾 */
   padding:56px 28px 130px;display:flex;justify-content:center;align-items:flex-start;
 }
 /* 歌词栏一登场就再让一截，正文结尾不会被它盖住 */
 body.lyrics-on .post-wrap{padding-bottom:230px}
-
-/* 文章页也挂着「右下角播放器 + 底部歌词栏」（见下方 .post-footer 之后的引入说明）。
-   它们的 z-index 是 21 / 19，而 .post-wrap 是 30 —— 不抬起来的话，
-   卡片会把这两个覆盖层整个盖住。 */
-#floatingPlayer{z-index:60}
-.lyricbar{z-index:58}
 
 .post-card{
   width:min(820px,100%);padding:50px 56px 44px;border-radius:36px;position:relative;

@@ -263,6 +263,45 @@ body.night .boot-progress{background:rgba(255,255,255,.12)}
 .app.visible .side-rail{animation:appIn .85s var(--ease)}
 @keyframes appIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
+/* ---------- 首帧直达某个分栏 ----------
+   走 #about / #blog / #projects 进来（文章页的「回到博客列表」就是 #blog）时，
+   index.html 的首帧内联脚本会给 <html> 挂上 data-pre-section。
+   路由脚本要 50ms 后才跑，靠这几条把「主页」按在第一帧之外，
+   不然会先闪一下首页再跳到博客 —— 加载页按掉之后露出来的就是它。
+   .app 也一并提前显示，免得中间空出一帧背景。
+   脚本接管后由 showSection() 撤掉这个属性。 */
+html[data-pre-section] .welcome-screen{display:none}
+html[data-pre-section] .app{display:block}
+html[data-pre-section] .page-section{display:none}
+html[data-pre-section="about"] #about,
+html[data-pre-section="blog"] #blog,
+html[data-pre-section="projects"] #projects{display:block}
+
+/* ---------- 站内打开文章：#spaPost 浮层 ----------
+   首页点博客卡片原先是直接换文档（posts/xxx.html），<audio> 跟着文档一起
+   销毁 —— 音乐必停。这里把站内点击接管下来，只把文章内容搬进这层浮层，
+   文档不动，播放器自然一直播下去。真链接仍然保留：新标签页、中键、
+   无脚本访问、SEO 全都走原路。
+   层级（都在 .app 这个 z-index:5 的层叠上下文里）：
+     .side-rail 18 / .top-actions 24 < #spaPost 40 < 播放器 45 / 歌词栏 46
+   播放器/歌词栏只在浮层打开时抬到 40 之上，平时不动 —— 否则会盖住
+   移动端底部导航(40)。 */
+.spa-post{
+  position:fixed;inset:0;z-index:40;overflow:hidden;
+  background:var(--bg);
+  opacity:0;transition:opacity .3s var(--ease);
+}
+.spa-post[hidden]{display:none}
+.spa-post.on{opacity:1}
+/* 装饰层跟着浮层走，别再用 fixed 逃到视口上去 */
+.spa-post .bg-decor{position:absolute}
+/* 滚动交给内层：这样 .bg-decor 不会跟着内容滚走 */
+.spa-post-view{position:absolute;inset:0;z-index:1;overflow-y:auto;overscroll-behavior:contain}
+body.spa-post-open{overflow:hidden}
+body.spa-post-open #floatingPlayer{z-index:45}
+body.spa-post-open .lyricbar{z-index:46}
+body.spa-post-open .mobile-nav{display:none}
+
 .side-rail{position:fixed;z-index:18;left:0;top:0;bottom:0;width:var(--rail);display:flex;flex-direction:column;align-items:center;padding:24px 18px 22px;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.12));border-right:1px solid var(--bd-2);backdrop-filter:blur(26px) saturate(1.25);-webkit-backdrop-filter:blur(26px) saturate(1.25);will-change:backdrop-filter}
 body.night .side-rail{background:rgba(22,17,29,.58);border-right-color:rgba(255,255,255,.08)}
 .rail-top{width:100%;display:flex;justify-content:space-between;align-items:center;color:#b99bad;font-size:10px;letter-spacing:.18em}
