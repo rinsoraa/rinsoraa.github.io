@@ -676,6 +676,10 @@
     const projects = readRecentProjects(3);
     if (!posts.length && !projects.length) { host.innerHTML = ''; return; }
 
+    /* ⚠️ 每个区块是「recent-grid-wrap > (recent-sub + recent-grid)」两层，
+       结尾必须写两个 </div>。少写一个的话浏览器会把第二块解析成第一块的子元素
+       （嵌套），于是「博客卡片 → 最新项目线」之间那段间距直接变成 0，
+       而 .recent-grid-wrap 的 margin 只作用在整块之后 —— 改 CSS 怎么改都没反应。 */
     let out = '<div class="section-heading fancy-heading"><span>✧</span><h3>最近发布</h3><small>RECENT</small><span class="line"></span></div>';
     if (posts.length) {
       out += '<div class="recent-grid-wrap"><div class="recent-sub"><i></i>最新博客<span class="rt-line"></span></div><div class="recent-grid">' +
@@ -685,7 +689,7 @@
             '<b class="rc-title">' + esc(p.title) + '</b>' +
             '<span class="rc-desc">' + esc(p.desc) + '</span>' +
             '<span class="rc-foot"><span>' + esc(p.date) + '</span><span>READ MORE ↗</span></span>' +
-          '</a>').join('') + '</div>';
+          '</a>').join('') + '</div></div>';
     }
     if (projects.length) {
       out += '<div class="recent-grid-wrap"><div class="recent-sub"><i class="k-proj"></i>最新项目<span class="rt-line"></span></div><div class="recent-grid">' +
@@ -698,7 +702,7 @@
             '<span class="rc-desc">' + esc(p.desc || '') + '</span>' +
             '<span class="rc-foot"><span>' + esc(p.date || '') + '</span><span>' + (p.url ? 'OPEN ↗' : '') + '</span></span>' +
           '</' + tag + '>';
-        }).join('') + '</div>';
+        }).join('') + '</div></div>';
     }
     host.innerHTML = out;
   }
