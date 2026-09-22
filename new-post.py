@@ -114,7 +114,7 @@ CARD = (
     '<p>@@SUMMARY@@</p>'
     '<div class="blog-foot"><span class="bm-cat">@@CAT@@</span>'
     '<span class="bm-min">@@MIN@@ min</span>'
-    '<span class="read-more">READ MORE \u2192</span></div></article>'
+    '<a class="read-more" href="posts/@@SLUG@@.html">READ MORE \u2192</a></div></article>'
 )
 
 PLACEHOLDER_BODY = (

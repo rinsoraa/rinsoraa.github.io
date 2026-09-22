@@ -49,7 +49,7 @@
   --ease:cubic-bezier(.2,.8,.2,1);
   --rail:248px;                        /* 侧栏宽 = 内容区 margin-left */
   --cpad:52px;                         /* 内容区左右内边距，歌词栏跟它对齐 */
-  --bar-h:96px;                        /* 底部歌词栏高度 */
+  --bar-h:76px;                        /* 底部歌词栏高度（桌面是一条小长方形） */
   --hue:0deg;                          /* 背景色相微调 */
 
   /* 场景底色（由调色板覆盖） */
@@ -328,24 +328,32 @@ body.night .side-status{background:rgba(255,255,255,.08);color:#c3b2c2}
 .crumb .eyebrow{margin-bottom:4px}
 .topbar h2{margin:0;font-size:38px;letter-spacing:-.05em}
 .top-actions{display:flex;gap:8px;flex-shrink:0}
+/* 通用小胶囊按钮（顶栏 / 后台页都会用到；关掉状态变淡）
+   ⚠️ 这一段必须排在 .dock-btn 之前 —— .dock-btn 的实际类名是
+   「soft-btn dock-btn」，两段同权重，谁在源码里靠后谁生效。 */
+.soft-btn{min-height:34px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.62);border:1px solid var(--bd);font-size:11px;cursor:pointer}
+.soft-btn:hover{background:var(--glass-h)}
+.soft-btn.off{opacity:.5}
+
 /* ============================================================
-   左下角「歌词 / 夜间模式」按钮组
+   顶栏右上角「夜间 / 歌词 / 外观」按钮组
    ------------------------------------------------------------
-   DOM 上它们还待在顶栏里（手机端就在原位不动），
-   桌面端用 fixed 把整组挪到页面左下角，变成「一枚玻璃圆钮 +
-   悬停才展开的文字」。收起态就是纯图标，别把 .dock-label 的
-   max-width:0 去掉，否则它会一直占着宽度。
+   ⚠️ 别再把它们 fixed 到左下角。侧栏 .side-rail 是 fixed 且 z-index:18，
+   按钮组原来只有 14，两者又同在 .app 这个层叠上下文里，而侧栏整整盖住
+   左侧 248px —— 结果三个按钮既看不见也点不到
+   （elementFromPoint 命中的是 aside.side-rail，不是按钮）。
+   现在回到 DOM 原位（顶栏右上角），顺带把 z-index 提到侧栏之上兜底。
+   收起态是纯图标，别去掉 .dock-label 的 max-width:0。
    ============================================================ */
-@media (min-width:761px){
-  .top-actions{
-    position:fixed;left:26px;bottom:26px;z-index:14;
-    flex-direction:column-reverse;gap:9px;align-items:flex-start;
-  }
-}
+.top-actions{position:relative;z-index:24}
 .dock-btn{
   display:inline-flex;align-items:center;gap:0;
   height:42px;min-width:42px;padding:0 12px;border-radius:999px;
-  color:#b083a3;font-size:12px;font-weight:900;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:0 10px 24px rgba(169,113,154,.16),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(18px) saturate(1.45);
+  -webkit-backdrop-filter:blur(18px) saturate(1.45);
+  color:#b083a3;font-size:12px;font-weight:900;cursor:pointer;
   transition:transform .3s var(--ease),background .25s,color .25s,
              box-shadow .3s var(--ease),border-color .25s;
 }
@@ -366,7 +374,7 @@ body.night .dock-ic .ic-moon{opacity:0;transform:rotate(110deg) scale(.35)}
   transition:max-width .38s var(--ease),opacity .3s var(--ease),margin-left .38s var(--ease);
 }
 .dock-btn:hover .dock-label,.dock-btn:focus-visible .dock-label{max-width:96px;opacity:1;margin-left:8px}
-body.night .dock-btn{color:#d7c0ce}
+body.night .dock-btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:#d7c0ce}
 body.night .dock-btn:hover{background:var(--glass-h);color:#f7b8d4}
 .dock-btn.off{opacity:.55}
 .page-progress{height:2px;border-radius:999px;background:rgba(255,255,255,.34);overflow:hidden;margin:8px 0 28px}
@@ -375,6 +383,13 @@ body.night .page-progress{background:rgba(255,255,255,.12)}
 .page-section{display:none;animation:sectionIn .6s var(--ease)}
 .page-section.active{display:block}
 @keyframes sectionIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+
+/* ⚠️ 移动端底部导航默认关掉。
+   它的定位样式只写在 @media(max-width:860px) 里，桌面端如果缺这条
+   display:none，它就退化成 .glass 基类上的一块静态面板，以
+   「主页 / 博客 / 项目」三条的形式卡在整页最底部（页面往下滚才会看到，
+   看着像是卡片悬停时冒出来的）。 */
+.mobile-nav{display:none}
 
 /* ============================================================
    6. 玻璃 / 亚克力基类
@@ -531,7 +546,10 @@ body.night .bf-chip.active{color:#3b2531}
 .blog-cat{display:inline-flex;margin-left:8px;font-size:10px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.42);color:#ad859d}
 body.night .blog-cat{background:rgba(255,255,255,.1);color:#d6bccd}
 .blog-card h4{margin:20px 0 9px;max-width:90%;font-size:19px;line-height:1.45;letter-spacing:-.03em}
-.blog-card h4 a{position:relative;display:inline;background:linear-gradient(currentColor,currentColor) 0 100% / 0 1px no-repeat;transition:background-size .35s var(--ease)}
+/* ⚠️ 这里不能给 a 加 position:relative —— 下面那条 :after 是靠
+   position:absolute;inset:0 把标题链铺满整张卡片的，一旦这个 a 自己
+   成了定位祖先，:after 就只盖住标题那行，「整卡可点」直接失效。 */
+.blog-card h4 a{display:inline;background:linear-gradient(currentColor,currentColor) 0 100% / 0 1px no-repeat;transition:background-size .35s var(--ease)}
 .blog-card:hover h4 a{background-size:100% 1px}
 /* 整卡可点：让标题链接铺满卡片，同时不挡住右上角的管理按钮 */
 .blog-card .card-title-link:after{content:"";position:absolute;inset:0;border-radius:inherit}
@@ -636,8 +654,9 @@ body.night .pt-link:hover .pt-go{background:rgba(255,255,255,.2);color:#f7b8d4}
 }
 #floatingPlayer.visible{opacity:1;transform:none;pointer-events:auto}
 #floatingPlayer:not(.visible) .mp-shell{pointer-events:none}
-/* 底部歌词栏登场时，把常驻播放器顶到它上面去，两者不许叠在一起 */
-body.lyrics-on #floatingPlayer{bottom:124px}
+/* 歌词栏改成右下角那条小长方形之后，两者已经互不重叠（歌词栏右边缘
+   固定给它让出 446px），所以桌面端播放器不必再向上挪。
+   手机端仍然要让位 —— 那条写在 @media(max-width:860px) 里。 */
 
 /* ---------- 外壳：宽度从「一张唱片」平滑长成「一整张卡片」 ---------- */
 .mp-shell{
@@ -794,27 +813,33 @@ body:not(.mp-playing) .mp-eq i,body:not(.mp-playing) .lb-eq i{animation-play-sta
    必须是等高的一行（34px），改 --bar-h 或行高要同时改这两个数。
    ============================================================ */
 .lyricbar{
-  position:fixed;left:var(--rail);bottom:0;z-index:19;
-  width:min(1320px,calc(100% - var(--rail)));
+  /* 桌面端是一条「浮起来的小长方形」，不是贴着底边和侧栏的大托盘：
+     左边缘从侧栏再让出 22px（不再紧贴导航栏），右边缘固定给右下角
+     播放器留出 446px，所以两边永远不重叠 —— 正因为不重叠，播放器
+     也就不需要为了显示歌词而向上挪（见 #floatingPlayer）。 */
+  position:fixed;left:calc(var(--rail) + 22px);bottom:18px;z-index:19;
+  width:min(720px,calc(100% - var(--rail) - 446px));
   height:0;opacity:0;pointer-events:none;overflow:hidden;
-  border-top:1px solid transparent;border-radius:24px 24px 0 0;
-  background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,251,253,.74) 34%,rgba(255,250,252,.92) 100%);
+  border:1px solid transparent;border-radius:26px;
+  background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(255,250,252,.9));
   backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);
   will-change:backdrop-filter;
   transition:height .55s var(--ease),opacity .5s var(--ease),border-color .5s var(--ease);
 }
-body.lyrics-on .lyricbar{height:var(--bar-h);opacity:1;pointer-events:auto;border-top-color:rgba(255,255,255,.75)}
+body.lyrics-on .lyricbar{height:var(--bar-h);opacity:1;pointer-events:auto;border-color:rgba(255,255,255,.75)}
 /* 顶栏那个「♫ 歌词」可以把它收起来（这条必须放在上一条之后才生效） */
-body.lyrics-hidden .lyricbar{height:0;opacity:0;pointer-events:none;border-top-color:transparent}
+body.lyrics-hidden .lyricbar{height:0;opacity:0;pointer-events:none;border-color:transparent}
 body.night .lyricbar{
-  background:linear-gradient(180deg,rgba(31,24,41,0) 0%,rgba(31,24,41,.86) 34%,rgba(27,21,36,.96) 100%);
-  border-top-color:rgba(255,255,255,.1);
+  background:linear-gradient(180deg,rgba(34,27,46,.86),rgba(27,21,36,.94));
+  border-color:rgba(255,255,255,.12);
 }
 
-.lb-inner{position:relative;height:var(--bar-h);padding:0 var(--cpad);display:flex;align-items:center}
+.lb-inner{position:relative;height:var(--bar-h);padding:0 14px;display:flex;align-items:center}
 .lb-side{
+  /* 条子收窄后，「♫ 歌名」会和居中的歌词压在一起 —— 直接收掉，
+     歌名播放器自己会显示（手机端原本也是收起的）。 */
   position:absolute;left:14px;top:50%;transform:translateY(-50%);
-  display:flex;align-items:center;gap:9px;max-width:min(230px,24vw);
+  display:none;align-items:center;gap:9px;max-width:min(230px,24vw);
 }
 .lb-eq{height:13px}
 .lb-now{font-size:11px;font-weight:800;color:#a9829c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -826,7 +851,7 @@ body.night .lb-now{color:#c9b2c4}
   mask-image:linear-gradient(180deg,transparent 0,#000 30%,#000 70%,transparent 100%);
 }
 .lb-scroll{
-  width:100%;padding:0 26px;box-sizing:border-box;will-change:transform;
+  width:100%;padding:0 14px;box-sizing:border-box;will-change:transform;
   /* 让第 --i 行正好落在可视区中间：(高/2) - (行高/2) - i*行高 */
   transform:translateY(calc(var(--bar-h) / 2 - 17px - var(--i,0) * 34px));
   transition:transform .62s cubic-bezier(.22,.85,.24,1);
@@ -1052,11 +1077,6 @@ body.no-ripple .click-ripple{display:none}
 .screen-grain{position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:20;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E")}
 .editor-page{position:relative;z-index:30;min-height:100vh}
 
-/* 通用小胶囊按钮（顶栏 / 后台页都会用到；关掉状态变淡） */
-.soft-btn{min-height:34px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.62);border:1px solid var(--bd);font-size:11px;cursor:pointer}
-.soft-btn:hover{background:var(--glass-h)}
-.soft-btn.off{opacity:.5}
-
 /* 角标 / 图钉这些小装饰 */
 .sticker{position:absolute;right:20px;top:18px;transform:rotate(8deg);background:#ffe48a;color:#7c5a4a;padding:7px 10px;border-radius:10px;font-size:10px;font-weight:1000;box-shadow:0 7px 14px rgba(208,157,70,.18)}
 body.night .sticker{background:#6d5540;color:#ffe6b8}
@@ -1094,7 +1114,7 @@ body.night .sticker{background:#6d5540;color:#ffe6b8}
   /* 手机端：歌词栏整条贴底（上沿两个圆角保留），播放器被它顶到上面 */
   #floatingPlayer{right:14px;left:auto;bottom:14px;width:calc(100vw - 28px)}
   body.lyrics-on #floatingPlayer{bottom:112px}
-  .lyricbar{left:0;width:100%;border-radius:20px 20px 0 0}
+  .lyricbar{left:0;right:auto;bottom:0;width:100%;border-radius:20px 20px 0 0;border-bottom:0}
   .lb-inner,.lb-view{height:var(--bar-h)}
   .lb-side{display:none}
   .lb-scroll{padding:0 16px;transform:translateY(calc(var(--bar-h) / 2 - 16px - var(--i,0) * 32px))}

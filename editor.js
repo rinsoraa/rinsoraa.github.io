@@ -367,7 +367,7 @@
       '<p>' + esc(summary) + '</p>' +
       '<div class="blog-foot"><span class="bm-cat">' + esc(cat) + '</span>' +
       '<span class="bm-min">' + esc(min) + ' min</span>' +
-      '<span class="read-more">READ MORE \u2192</span></div></article>';
+      '<a class="read-more" href="posts/' + slug + '.html">READ MORE \u2192</a></div></article>';
   }
 
   function findGrid(lines) {
