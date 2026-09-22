@@ -520,7 +520,7 @@ body.night .now-live strong{color:#e2d2e0}
 body.night .now-list li.is-blank .now-val{color:#9d8799}
 
 /* 「最近发布」：博客取最近 3 篇，项目取最近 3 个（一个项目都没有就整块不渲染） */
-.recent-grid-wrap{margin:0 0 16px}
+.recent-grid-wrap{margin:0 0 30px}
 .recent-sub{display:flex;align-items:center;gap:8px;color:#ad97a8;font-size:11px;font-weight:900;letter-spacing:.14em;margin-bottom:9px}
 .recent-sub i{width:6px;height:6px;border-radius:50%;background:#ef9fbc}
 .recent-sub i.k-proj{background:#a99cf0}
@@ -1159,7 +1159,7 @@ body.night .sticker{background:#6d5540;color:#ffe6b8}
   .project-mascot em{bottom:15px}
   .blog-grid{grid-template-columns:1fr}
   .about-lower,.moments-grid,.recent-grid{grid-template-columns:1fr}
-  .recent-grid-wrap{margin-bottom:14px}
+  .recent-grid-wrap{margin-bottom:26px}
   .now-head{flex-direction:column}
   .now-live{white-space:normal}
   .now-label{width:74px}
