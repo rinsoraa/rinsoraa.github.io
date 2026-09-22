@@ -263,13 +263,11 @@ body.night .boot-progress{background:rgba(255,255,255,.12)}
 /* ============================================================
    4. 欢迎页（门口）
    ------------------------------------------------------------
-   ⚠️ .welcome-screen 的退场动画里带了 transform。
-   这没问题 —— 它下面没有 position:fixed 的元素（欢迎页播放器是普通流），
-   头像飞行的副本也挂在 body 上，不会被这段 transform 带走。
-   但同一段话在 .app 上就不能成立，见下一节。
+   退场 = 纯 opacity 淡出（不位移、不缩放）：头像不移动，只是化成
+   光晕被 reveal 层盖过去，所以 welcome 不需要 translate/scale。
    ============================================================ */
-.welcome-screen{position:relative;z-index:30;min-height:100vh;display:grid;place-items:center;padding:30px;transition:opacity .8s var(--ease),transform .9s var(--ease),visibility .8s}
-.welcome-screen.hidden{position:fixed;inset:0;opacity:0;transform:translateY(-26px) scale(1.035);visibility:hidden;pointer-events:none}
+.welcome-screen{position:relative;z-index:30;min-height:100vh;display:grid;place-items:center;padding:30px;transition:opacity .55s var(--ease),visibility .55s}
+.welcome-screen.hidden{position:fixed;inset:0;opacity:0;visibility:hidden;pointer-events:none}
 .welcome-halo{position:absolute;width:min(78vw,920px);height:min(78vw,920px);border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.46),transparent 65%);filter:blur(26px) hue-rotate(var(--hue))}
 .welcome-card{width:min(790px,100%);padding:20px 40px 36px;border-radius:42px;text-align:center;position:relative;overflow:hidden}
 .welcome-card:before{content:"";position:absolute;inset:0;background:linear-gradient(125deg,rgba(255,255,255,.48),transparent 30%,rgba(255,230,165,.11) 70%,rgba(214,197,255,.12));pointer-events:none}
@@ -375,13 +373,6 @@ body.night .side-rail{background:rgba(22,17,29,.58);border-right-color:rgba(255,
 .avatar-button{position:relative;z-index:5;padding:0;background:transparent;line-height:0}
 .avatar-sidebar{width:132px;height:132px;transition:transform .35s var(--ease),filter .35s,opacity .35s}
 .avatar-button:hover .avatar-sidebar,.avatar-nav-wrap.open .avatar-sidebar{transform:translateY(-4px) scale(1.07) rotate(-2deg);filter:drop-shadow(0 18px 28px rgba(220,124,169,.33))}
-/* 飞行结束那一刻由 JS 把侧栏头像揭开，避免「啪」地直接出现 */
-.avatar-sidebar.arriving{animation:avatarArrive .6s cubic-bezier(.17,.86,.25,1.2) both}
-@keyframes avatarArrive{
-  0%{opacity:0;transform:scale(.8) rotate(-5deg)}
-  62%{opacity:1;transform:scale(1.06) rotate(1.5deg)}
-  100%{opacity:1;transform:scale(1) rotate(0)}
-}
 .avatar-hint{position:absolute;top:-4px;left:118px;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.75);color:#a88599;font-size:10px;font-weight:900;opacity:.7;z-index:6;transform:rotate(5deg)}
 body.night .avatar-hint{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:#d7c0ce}
 
@@ -1158,9 +1149,6 @@ body.night .lab-card p{color:#c9b8c8}
 .click-ripple{position:fixed;z-index:9990;left:0;top:0;width:18px;height:18px;border-radius:50%;border:1px solid rgba(235,137,177,.55);transform:translate(-50%,-50%) scale(.4);animation:clickPop .62s var(--ease) forwards;pointer-events:none}
 @keyframes clickPop{to{opacity:0;transform:translate(-50%,-50%) scale(5)}}
 body.no-ripple .click-ripple{display:none}
-/* 头像飞行副本：挂到 body 上，用视口坐标动画，不受欢迎页退场影响 */
-.avatar-flight{position:fixed!important;z-index:10050;object-fit:contain;pointer-events:none;user-select:none;border-radius:50%;will-change:transform,opacity}
-.avatar-flight-glow{position:fixed;z-index:10049;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,177,209,.56) 0%,rgba(255,228,168,.28) 36%,transparent 72%);filter:blur(10px);mix-blend-mode:screen;will-change:transform,opacity}
 
 .blog-toast{position:fixed;left:50%;bottom:28px;z-index:5000;transform:translate(-50%,18px);opacity:0;padding:11px 16px;border-radius:999px;background:rgba(55,44,66,.88);color:#fff;font-size:12px;transition:opacity .25s var(--ease),transform .25s var(--ease);pointer-events:none}
 .blog-toast.show{opacity:1;transform:translate(-50%,0)}
@@ -1284,6 +1272,84 @@ body.night .sticker{background:#6d5540;color:#ffe6b8}
    ============================================================ */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
-  .avatar-flight,.avatar-flight-glow{display:none!important}
 }
 body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+
+
+/* ============================================================
+   19. Room Entry Animation —— 头像唤醒小窝（Room Reveal）
+   ------------------------------------------------------------
+   状态机：body.room-entering 触发整套 CSS 动画；动画用
+   animation-delay 编排，元素 base 态 = 最终可见态，所以动画没跑
+   （reduced-motion / 降级）时也落在正确终点。
+   颜色全走主题变量（--accent-primary/secondary/tertiary），
+   换主题后入场动画跟着变。
+   关键：绝不给 .app 加 transform / filter —— 侧栏、播放器都是
+   position:fixed，加了会把它们的包含块改成 .app。
+   ============================================================ */
+
+/* —— reveal 光晕层：fixed 全屏，从头像中心向四周扩散的梦幻光 —— */
+.room-reveal{
+  position:fixed;inset:0;z-index:45;pointer-events:none;
+  opacity:0;visibility:hidden;
+  background:radial-gradient(circle at var(--reveal-x,50%) var(--reveal-y,42%),
+    var(--accent-secondary) 0%, var(--accent-primary) 40%, var(--accent-tertiary) 70%, transparent 85%);
+  transform-origin:var(--reveal-x,50%) var(--reveal-y,42%);
+  will-change:transform,opacity;
+}
+body.room-entering .room-reveal{
+  visibility:visible;
+  animation:roomReveal .8s cubic-bezier(.22,.9,.32,1) .16s forwards;
+}
+@keyframes roomReveal{
+  0%{opacity:0;transform:scale(.06);filter:saturate(1)}
+  46%{opacity:.9;transform:scale(1);filter:saturate(1.3)}
+  100%{opacity:0;transform:scale(1.4);filter:saturate(.85)}
+}
+
+/* —— 粒子画布：固定全屏，只画一小段「中央头像 → 侧栏头像」的引导线 —— */
+.entry-particles{position:fixed;inset:0;z-index:46;pointer-events:none}
+
+/* —— 阶段 2：中央头像蓄力（scale/rotate/brightness，不位移） —— */
+body.room-entering .avatar-large{
+  animation:avatarCharge .32s var(--ease) both,
+             avatarFade .34s var(--ease) .45s forwards;
+}
+@keyframes avatarCharge{
+  0%{transform:scale(1) rotate(0);filter:drop-shadow(0 16px 20px rgba(150,100,135,.22)) brightness(1)}
+  55%{transform:scale(1.06) rotate(-2deg);filter:drop-shadow(0 24px 40px var(--accent-glow)) brightness(1.12)}
+  100%{transform:scale(1.02) rotate(0);filter:drop-shadow(0 16px 20px rgba(150,100,135,.22)) brightness(1.05)}
+}
+@keyframes avatarFade{
+  to{opacity:0;transform:scale(.88);filter:blur(4px) brightness(1.15)}
+}
+
+/* —— 阶段 6：侧栏头像显影（它本来就在固定位置，不移动） ——
+   挂在 body.room-entering .app.visible 下：只覆盖「正常进入」这条路径。
+   instant（enterApp(true)）不加 room-entering，头像直接落到可见态，
+   回归装置量几何时不会被 scale/blur 动画干扰。 */
+body.room-entering .app.visible .avatar-sidebar{
+  animation:sidebarAvatarIn .62s cubic-bezier(.17,.86,.25,1.15) .06s both;
+}
+@keyframes sidebarAvatarIn{
+  0%{opacity:0;transform:scale(.72);filter:blur(6px)}
+  60%{opacity:1;transform:scale(1.08);filter:blur(0)}
+  100%{opacity:1;transform:scale(1);filter:blur(0)}
+}
+
+/* —— 阶段 8：主内容错峰浮现（只覆盖首次进入，切分栏走 tr-* 转场） ——
+   挂 body.room-entering，进入完成后被 JS 摘掉，之后切分栏不会再错峰。 */
+body.room-entering .app.visible .page-section.active > *{
+  animation:contentIn .45s var(--ease) both;
+}
+body.room-entering .app.visible .page-section.active > *:nth-child(1){animation-delay:.35s}
+body.room-entering .app.visible .page-section.active > *:nth-child(2){animation-delay:.42s}
+body.room-entering .app.visible .page-section.active > *:nth-child(3){animation-delay:.49s}
+body.room-entering .app.visible .page-section.active > *:nth-child(4){animation-delay:.56s}
+body.room-entering .app.visible .page-section.active > *:nth-child(5){animation-delay:.63s}
+body.room-entering .app.visible .page-section.active > *:nth-child(6){animation-delay:.70s}
+body.room-entering .app.visible .page-section.active > *:nth-child(n+7){animation-delay:.70s}
+@keyframes contentIn{
+  from{opacity:0;transform:translateY(18px) scale(.985);filter:blur(5px)}
+  to{opacity:1;transform:none;filter:none}
+}

@@ -146,9 +146,12 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 
 ### 3.4 交互：三个值得说的实现
 
-**① 进场动画（欢迎页 → 桌面态）**
-`flyAvatar()` 先量出欢迎页头像与侧栏头像的 `getBoundingClientRect()`，
-克隆一个 `.avatar-flight` 用 WAAPI 从 A 飞到 B（中段轻微上扬），落下后给侧栏头像加 `.arriving` 弹一下。
+**① 进场动画（欢迎页 → 桌面态）—— Room Reveal / 头像唤醒**
+头像**不移动**：以中央头像为视觉中心，走「蓄力（scale/rotate/brightness）→ 光晕 `clip-path`/`radial-gradient` 扩散
+（`#roomReveal`）→ 头像淡出 → 粒子引导线（`#entryParticles` Canvas，粉→黄→紫，跑完尺寸归零）→ 侧栏头像
+`blur/scale` 显影 → 导航错峰展开 → 内容错峰浮现」，制造「头像化成光、唤醒小窝」的幻觉。
+状态机是 `startRoomEntry()` / `finishRoomEntry()` + 自增 `entryToken`，动画由 `body.room-entering` 触发、
+`animation-delay` 编排；`enterApp(true)`（instant）直接落到最终态、不播动画。
 
 > ⚠️ 这里有个关键约束：**`.app` 不能带 `transform` / `filter`**。
 > 一旦带了，它的 `position: fixed` 后代就会改以 `.app` 为包含块，
@@ -164,7 +167,7 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 **③ 交互状态一律「有兜底路径」**
 这是这个项目反复踩出来的规矩，写进了代码里两处：
 
-- `flyAvatar()` 的收尾和右下播放器的淡入，**都另有一条 `setTimeout` 兜底** —— 因为
+- `startRoomEntry()` 的收尾和右下播放器的淡入，**都另有一条 `setTimeout` 兜底** —— 因为
   `Animation.finished` 在后台标签页里可能永不 resolve，双 `rAF` 也可能被节流；
   只挂在动画回调上的话，头像会永远停在 `opacity: 0`。
 - 写作台 / 项目编辑台 / 添加音乐的管理按钮**只在存过 Token 的浏览器里出现**，所以

@@ -64,6 +64,10 @@
   const settingsMask = $('#settingsMask');
   const pageProgress = $('#pageProgress');
   const boot = $('#bootScreen');
+  /* Room Reveal 入场动画的两件套：光晕扩散层 + 粒子轨迹画布。
+     都挂在 body 上（.app 之外），绝不参与 .app 的层叠 / 包含块。 */
+  const roomReveal = $('#roomReveal');
+  const entryCanvas = $('#entryParticles');
   /* 站内看文章的浮层（不换文档 → 音乐不断），逻辑见下面「站内打开文章」一节 */
   const spaPost = $('#spaPost');
   const spaPostView = $('#spaPostView');
@@ -89,6 +93,7 @@
     currentPage: 'about',
     previousPage: null,
     isEntering: false,
+    entered: false,
     isTransitioning: false,
     theme: 'candy',
     effects: {}
@@ -524,134 +529,208 @@
   });
 
   /* ============================================================
-     initEntry —— 「进入小窝」
+     initEntry —— 「进入小窝」（Room Reveal / 头像唤醒）
      ------------------------------------------------------------
-     目标：一整段连续的动画，而不是「啪」地切过去。
-     时序（总长约 1.1s）：
+     彻底废弃旧的「头像飞行」方案：那个方案会 cloneNode + 量两个头像的
+     getBoundingClientRect，把一个头像 DOM 从欢迎页「飞」到侧栏 ——
+     依赖两个不同元素之间的坐标转移，脆弱、难维护、还带着一堆旧
+     fallback。本次不再修补它，直接删掉。
 
-       0ms    点按钮，按钮禁用；欢迎页开始减速（整体轻微缩小）
-       0ms    克隆头像 → 沿弧线飞向左侧 sidebar 头像的位置
-       0ms    欢迎页那个大播放器向下淡出（landingPlayer.exit）
-       700ms  侧栏头像揭开（.arriving），导航节点逐个延迟弹出
-       760ms  右下角播放器从下方向上淡入
-       820ms  .app 的侧栏 / 主内容进入
+     新方案：头像不移动。以中央头像为视觉中心，用「蓄力 → 光晕扩散 →
+     头像淡出 → 粒子引导 → 侧栏头像显影 → 导航错峰 → 内容错峰」，
+     制造「头像化成光、唤醒整个小窝」的完整幻觉。
 
-     ⚠️ .app 上不能有 transform —— 侧栏和播放器都是 position:fixed，
-     给祖先加 transform 会把它们的包含块从视口改成 .app，
-     bottom:0 就跑到首屏下面去了（之前踩过）。
+     时序（总长约 1.2s）：
+       0ms    按钮禁用；body.room-entering 触发头像蓄力 + reveal 扩散
+       0ms    welcome 大播放器向下淡出（landingPlayer.exit）
+       430ms  .app 显示（侧栏头像 / 导航 / 内容各自入场）
+       480ms  粒子轨迹从中央头像流向侧栏（纯装饰引导线，头像本身不动）
+       520ms  welcome 整块淡出
+       620ms  导航做一次「欢迎展开」（复用极坐标 + --d stagger）
+       680ms  右下角播放器从下方向上淡入
+       1250ms 收尾：导航收起、摘 room-entering、销毁粒子、状态落定
+
+     状态由两个标记 + 一个自增 token 管：
+       AppState.isEntering（动画中）、AppState.entered（已进入）
+       entryToken 保证旧一轮的定时器不再动 DOM（连点 / 重入安全）。
+     ⚠️ .app 上不能有 transform —— 侧栏/播放器都是 position:fixed。
      ============================================================ */
-  function flyAvatar() {
-    if (reduceMotion()) return false;
-    const from = $('.avatar-glass .avatar-large', welcome) || $('.avatar-large', welcome);
-    const to = $('.avatar-sidebar', app);
-    if (!from || !to) return false;
-
-    const a = from.getBoundingClientRect();
-    const b = to.getBoundingClientRect();
-    if (!a.width || !b.width) return false;
-
-    const cx1 = a.left + a.width / 2, cy1 = a.top + a.height / 2;
-    const cx2 = b.left + b.width / 2, cy2 = b.top + b.height / 2;
-    const dx = cx2 - cx1, dy = cy2 - cy1;
-    const scale = b.width / a.width;              /* 145px → 132px ≈ .91 */
-    const lift = Math.min(48, Math.abs(dx) * .07); /* 中段轻轻上扬，看起来是「飞」而不是「滑」 */
-
-    const clone = from.cloneNode(true);
-    clone.removeAttribute('id');
-    clone.className = 'avatar-flight';
-    clone.style.left = a.left + 'px';
-    clone.style.top = a.top + 'px';
-    clone.style.width = a.width + 'px';
-    clone.style.height = a.height + 'px';
-    app.before(clone);                            /* 挂在 .app 之前，层级自然在欢迎页之上 */
-
-    const glowSize = Math.max(a.width * 1.8, 200);
-    const glow = document.createElement('div');
-    glow.className = 'avatar-flight-glow';
-    glow.style.cssText += `width:${glowSize}px;height:${glowSize}px;left:${cx1 - glowSize / 2}px;top:${cy1 - glowSize / 2}px`;
-    app.before(glow);
-
-    /* 原头像不立刻消失 —— 先压到 0.15，让「它已经飞走了」和「它还在那」
-       之间有一段过渡，而不是硬切。飞行结束时才彻底隐去。 */
-    from.style.transition = 'opacity .28s ease';
-    from.style.opacity = '.15';
-    to.style.opacity = '0';
-
-    const anim = clone.animate([
-      { transform: 'translate3d(0,0,0) scale(1)', opacity: 1 },
-      { transform: `translate3d(${dx * .34}px,${dy * .52 - lift}px,0) scale(1.09)`, opacity: 1, offset: .44 },
-      { transform: `translate3d(${dx}px,${dy}px,0) scale(${scale})`, opacity: 1 }
-    ], { duration: 960, easing: 'cubic-bezier(.42,.02,.22,1)', fill: 'forwards' });
-
-    glow.animate([
-      { transform: 'translate3d(0,0,0) scale(.7)', opacity: .8 },
-      { transform: `translate3d(${dx * .45}px,${dy * .4 - lift * .6}px,0) scale(1.05)`, opacity: .42 },
-      { transform: `translate3d(${dx}px,${dy}px,0) scale(.6)`, opacity: 0 }
-    ], { duration: 960, easing: 'cubic-bezier(.42,.02,.22,1)', fill: 'forwards' });
-
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      clone.remove();
-      glow.remove();
-      from.style.opacity = '0';
-      to.style.opacity = '';
-      to.classList.remove('arriving');
-      void to.offsetWidth;                        /* 强制重排，动画才会从 0 开始 */
-      to.classList.add('arriving');
-      setTimeout(() => to.classList.remove('arriving'), 720);
-    };
-    /* 收尾必须有一条「无条件」路径：动画的 finished 在页面被切到后台、
-       或浏览器对 WAAPI 降频时可能永远不 resolve，那样 to.style.opacity
-       会永远停在 0 —— 侧栏头像就彻底看不见了。finish 自身幂等，兜底无害。 */
-    try { anim.finished.then(finish).catch(finish); } catch (e) { /* 老浏览器没有 finished */ }
-    setTimeout(finish, 1080);
-    return true;
-  }
 
   let entered = false;
-  function enterApp(instant) {
-    if (entered) return;
-    entered = true;
+  let entryToken = 0;
+  let entryRaf = 0;
+
+  /* 粒子轨迹：一条从「中央头像」指向「侧栏头像」的粉→黄→紫光点流。
+     纯视觉引导线，不移动任何头像；跑完自动清场。颜色读主题变量，
+     换主题后入场粒子也跟着变。 */
+  function spawnEntryParticles() {
+    if (!entryCanvas) return;
+    const from = $('.avatar-large', welcome);
+    const to = $('.avatar-sidebar', app);
+    if (!from || !to) return;
+    const a = from.getBoundingClientRect();
+    const b = to.getBoundingClientRect();
+    if (!a.width || !b.width) return;
+
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const ctx = entryCanvas.getContext('2d');
+    if (!ctx) return;
+    entryCanvas.width = Math.round(innerWidth * dpr);
+    entryCanvas.height = Math.round(innerHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const sx = a.left + a.width / 2, sy = a.top + a.height / 2;
+    const ex = b.left + b.width / 2, ey = b.top + b.height / 2;
+    const count = innerWidth < 600 ? 12 : 26;
+    const cs = getComputedStyle(body);
+    const palette = [
+      cs.getPropertyValue('--accent-primary').trim() || '#ff9dc6',
+      cs.getPropertyValue('--accent-secondary').trim() || '#ffe294',
+      cs.getPropertyValue('--accent-tertiary').trim() || '#d6c5ff',
+      '#ffffff'
+    ];
+    const parts = [];
+    for (let i = 0; i < count; i++) {
+      parts.push({
+        t: Math.random(),
+        s: 1.5 + Math.random() * 2.6,
+        p: palette[i % palette.length],
+        o: .35 + Math.random() * .65,
+        drift: (Math.random() - .5) * 60
+      });
+    }
+    const t0 = performance.now();
+    const dur = 620;
+
+    function frame(now) {
+      const k = Math.min(1, (now - t0) / dur);
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      parts.forEach(function (pt) {
+        const tt = Math.max(0, Math.min(1, pt.t + k * .95));
+        const ease = tt;
+        const x = sx + (ex - sx) * ease + Math.sin(tt * 6 + pt.t * 10) * pt.drift * (1 - tt);
+        const y = sy + (ey - sy) * ease + Math.cos(tt * 7 + pt.t * 9) * pt.drift * (1 - tt);
+        ctx.globalAlpha = Math.max(0, Math.sin(tt * Math.PI) * pt.o);
+        ctx.fillStyle = pt.p;
+        ctx.beginPath();
+        ctx.arc(x, y, pt.s * (1 - tt * .4), 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      if (k < 1) entryRaf = requestAnimationFrame(frame);
+      else clearEntryParticles();
+    }
+    entryRaf = requestAnimationFrame(frame);
+  }
+
+  function clearEntryParticles() {
+    if (entryRaf) { cancelAnimationFrame(entryRaf); entryRaf = 0; }
+    if (entryCanvas) {
+      const ctx = entryCanvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, entryCanvas.width, entryCanvas.height);
+      /* 尺寸归零，彻底释放这块显存（粒子只在入场那一小段用） */
+      entryCanvas.width = 0;
+      entryCanvas.height = 0;
+    }
+  }
+
+  function finishRoomEntry() {
+    AppState.isEntering = false;
+    AppState.entered = true;
+    if (body) body.classList.remove('room-entering');
+    clearEntryParticles();
+    if (enterBtn) { enterBtn.disabled = false; enterBtn.removeAttribute('aria-disabled'); }
+    layoutRadialNav();
+  }
+
+  function startRoomEntry() {
+    if (AppState.isEntering || AppState.entered) return;
     AppState.isEntering = true;
+    const token = ++entryToken;
     try { window.RinsoraMusic && window.RinsoraMusic.collapse && window.RinsoraMusic.collapse(); } catch (e) {}
 
-    const flying = !instant && flyAvatar();
-    if (!flying && !instant) {
-      const to = $('.avatar-sidebar', app);
-      if (to) { to.style.opacity = ''; }
+    /* reveal 光晕的中心 = 中央头像中心。这里只用于给光晕/粒子定位，
+       头像本身原地不动 —— 这是和旧「头像飞行」方案的本质区别。 */
+    const big = $('.avatar-large', welcome);
+    if (big && roomReveal) {
+      const r = big.getBoundingClientRect();
+      if (r.width) {
+        roomReveal.style.setProperty('--reveal-x', ((r.left + r.width / 2) / innerWidth * 100).toFixed(2) + '%');
+        roomReveal.style.setProperty('--reveal-y', ((r.top + r.height / 2) / innerHeight * 100).toFixed(2) + '%');
+      }
     }
 
-    /* ① 欢迎页的大播放器向下淡出 */
-    if (landingPlayer) landingPlayer.classList.add('exit');
-    /* ② 欢迎页整块退出（减速 + 缩小 + 上移） */
-    if (welcome) { welcome.classList.add('hidden'); welcome.setAttribute('aria-hidden', 'true'); }
+    /* ① 按钮反馈 + 触发整套 CSS 动画（头像蓄力 / reveal 扩散 / 头像淡出） */
     if (enterBtn) { enterBtn.disabled = true; enterBtn.setAttribute('aria-disabled', 'true'); }
-    /* ③ 主内容上线 */
-    if (app) app.classList.add('visible');
+    body.classList.add('room-entering');
 
-    /* ④ 右下播放器从下方向上淡入。
-       必须等 .visible 这一帧真的提交过再切，然后隔一个定时器 + 双 rAF ——
-       同一帧里改两次类名会被合并，transition 不会触发，
-       表现就是「直接出现」而不是「向上淡入」。 */
-    if (floatingPlayer) {
-      void floatingPlayer.offsetHeight;
-      const at = instant ? 60 : (flying ? 780 : 240);
-      setTimeout(() => {
-        rAF2(() => floatingPlayer.classList.add('visible'));
-      }, at);
-      /* 同上：双 rAF 是为了「先让 .visible 那一帧提交过」，但如果 rAF 被
-         节流（后台标签页 / 无头渲染）就永远等不到 —— 补一条定时兜底。 */
-      setTimeout(() => floatingPlayer.classList.add('visible'), at + 260);
+    /* ② welcome 大播放器向下淡出（独立状态，不跟头像飞绑定） */
+    if (landingPlayer) landingPlayer.classList.add('exit');
+
+    /* ③ 粒子引导线（头像淡出后启动，画完自毁；reduced-motion 不画） */
+    if (!reduceMotion()) {
+      setTimeout(() => { if (token === entryToken) spawnEntryParticles(); }, 480);
     }
 
+    /* ④ .app 显示 —— 侧栏头像 / 导航 / 内容开始各自的入场动画 */
     setTimeout(() => {
-      AppState.isEntering = false;
-      layoutRadialNav();          /* 侧栏真正可见之后再量一次，位置最准 */
-    }, instant ? 80 : 1100);
+      if (token !== entryToken) return;
+      if (app) app.classList.add('visible');
+    }, 430);
+
+    /* ⑤ 导航做一次「欢迎展开」：复用极坐标 + --d stagger，之后收起 */
+    setTimeout(() => {
+      if (token !== entryToken) return;
+      openNav(true);
+    }, 620);
+
+    /* ⑥ welcome 整块淡出（头像淡出后，文字/按钮/简介也一起隐去） */
+    setTimeout(() => {
+      if (token !== entryToken) return;
+      if (welcome) { welcome.classList.add('hidden'); welcome.setAttribute('aria-hidden', 'true'); }
+    }, 520);
+
+    /* ⑦ 右下播放器从下方向上淡入（独立状态，不依赖头像飞行；双 rAF + 定时兜底） */
+    setTimeout(() => {
+      if (token !== entryToken) return;
+      if (floatingPlayer) {
+        void floatingPlayer.offsetHeight;
+        rAF2(() => floatingPlayer.classList.add('visible'));
+      }
+    }, 680);
+    setTimeout(() => { if (token === entryToken && floatingPlayer) floatingPlayer.classList.add('visible'); }, 940);
+
+    /* ⑧ 收尾：导航收起、状态落定。主兜底 + 再兜一层，幂等，
+       即便动画在后台标签页被降频，也保证最终状态完整。 */
+    setTimeout(() => {
+      if (token !== entryToken) return;
+      closeNav(true);
+      finishRoomEntry();
+    }, 1250);
+    setTimeout(() => { if (token === entryToken) finishRoomEntry(); }, 1600);
   }
-  enterBtn && enterBtn.addEventListener('click', () => enterApp(false));
+
+  /* 兼容旧接口：回归装置 / 直达链接走 instant=true，直接落到最终态。
+     instant 不播任何动画，但保证 welcome 隐藏、app 可见、
+     侧栏头像 / 播放器都在位、导航几何量过。 */
+  function enterApp(instant) {
+    if (entered) return;
+    if (instant) {
+      entered = true;
+      AppState.isEntering = false;
+      AppState.entered = true;
+      body.classList.remove('room-entering');
+      clearEntryParticles();
+      if (welcome) { welcome.classList.add('hidden'); welcome.setAttribute('aria-hidden', 'true'); }
+      if (landingPlayer) landingPlayer.classList.add('exit');
+      if (app) app.classList.add('visible');
+      if (floatingPlayer) floatingPlayer.classList.add('visible');
+      layoutRadialNav();
+      return;
+    }
+    startRoomEntry();
+  }
+  enterBtn && enterBtn.addEventListener('click', () => startRoomEntry());
 
   /* ============================================================
      站内打开文章 —— 内容换掉，文档不换

@@ -94,6 +94,11 @@
   </div>
 </div>
 
+<!-- Room Reveal 入场层：光晕扩散 + 粒子引导线。
+     挂在 .app 之外（body 上），绝不参与 .app 的层叠 / fixed 包含块。 -->
+<div class="room-reveal" id="roomReveal" aria-hidden="true"></div>
+<canvas class="entry-particles" id="entryParticles" aria-hidden="true"></canvas>
+
 <!-- 欢迎页：门口只保留头像、简介、音乐、进入按钮 -->
 <main class="welcome-screen" id="welcomeScreen">
   <div class="welcome-halo" aria-hidden="true"></div>
@@ -133,7 +138,7 @@
       <span>进入小窝</span>
       <em>ENTER MY ROOM</em>
     </button>
-    <p class="tip">点击后，头像会移动到左侧，音乐播放器将收起为常驻唱片机</p>
+    <p class="tip">点击后，头像会化作光晕唤醒整个小窝，音乐播放器收起为常驻唱片机</p>
   </div>
 </main>
 

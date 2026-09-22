@@ -507,6 +507,12 @@ body.night .card-tools{filter:none}
   .mp-disc{animation:none!important}
   body.cursor-hover .cursor-ring{transform:translate(-50%,-50%) scale(1.15)}
   .moment-card:hover,.pt-link:hover{transform:none}
+  /* Room Entry：直接落到最终态，不做光晕扩散 / 头像蓄力 / 粒子 / 内容错峰 */
+  body.room-entering .room-reveal{animation:none;visibility:hidden}
+  body.room-entering .avatar-large{animation:none}
+  body.room-entering .app.visible .avatar-sidebar{animation:none}
+  body.room-entering .page-section.active > *{animation:none}
+  .entry-particles{display:none}
 }
 body.reduce-motion .mp-disc{animation:none!important}
 body.reduce-motion .mp-progress:after{display:none}
