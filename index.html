@@ -627,6 +627,21 @@
           </div>
         </div>
 
+        <!-- 第十轮新增：Museum 独立播放进度条（LIVE 显示，BROWSE 淡出）。
+             数据来源 = 同一个 #audio 的 currentTime / duration，不新建 audio、
+             不自己维护时间 —— 和播放器共享一条时间轴。 -->
+        <div class="mm-archive-progress" id="mmArchiveProgress" aria-hidden="true">
+          <button class="mm-prog-play" id="mmProgPlay" type="button" aria-label="播放 / 暂停">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <path class="mm-ic-play" d="M8 5.5v13l11-6.5z"/>
+              <path class="mm-ic-pause" d="M8 5h3v14H8zM13 5h3v14h-3z"/>
+            </svg>
+          </button>
+          <span class="mm-prog-cur" id="mmProgCur">00:00</span>
+          <span class="mm-prog-bar" id="mmProgBar"><i class="mm-prog-fill" id="mmProgFill"></i></span>
+          <span class="mm-prog-dur" id="mmProgDur">00:00</span>
+        </div>
+
         <!-- 固定资料：档案编号 / 收录日期（两行永远在 —— 档案馆的编号是骨架） -->
         <dl class="mm-detail-meta" id="mmDetailMeta"></dl>
         <!-- 可选资料：album / genre / source / note —— 有才渲染，没有则空 -->

@@ -790,7 +790,8 @@ body.museum-open{overflow:hidden}
   .mm-lyrics{min-height:156px}
   .mm-lyr-view{min-height:92px}
   /* 头部行的封面收一档：窄屏先把地方让给文字与歌词 */
-  .mm-archive-head{grid-template-columns:clamp(84px,20%,116px) 1fr;gap:14px}
+  .mm-archive-head{grid-template-columns:auto 1fr;gap:14px}
+  .mm-archive-art{width:clamp(84px,20%,116px)}
 }
 @media (max-width:560px){
   .mm-load-dust{display:none}         /* 小屏别为装饰堆节点 */
@@ -870,6 +871,11 @@ body.museum-open{overflow:hidden}
   backdrop-filter:blur(var(--blur)) saturate(1.4);
   -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
   overflow:hidden;
+  /* 第十轮：LIVE↔BROWSE 的淡出（opacity/blur/translateY + visibility 延迟隐藏）。
+     visibility 的过渡按规范是「visible→hidden 在末尾翻、hidden→visible 立即翻」，
+     所以淡出完才真正隐藏、淡入时立即可见 —— 正是想要的效果。 */
+  transition:opacity .5s var(--ease),filter .5s var(--ease),
+             transform .5s var(--ease),visibility .5s;
   /* ⚠️ 行高只有这一个来源：JS 写（music-museum.js 的 LYR_LH），CSS 只读。
      写两处的症状是「当前句不居中」，很难归因。 */
   --mm-lyr-lh:40px;
@@ -1009,15 +1015,20 @@ body.museum-open{overflow:hidden}
       宽度吃掉了三成。现在封面只占**头部这一行**的左格。 */
 .mm-archive-head{
   display:grid;
-  grid-template-columns:clamp(104px,22%,168px) 1fr;
+  /* 第十轮：封面尺寸改成「封面自己定宽 + 列 auto」—— 这样封面在
+     LIVE（缩略）与 BROWSE（大图）之间能平滑过渡（两个状态都是显式长度，
+     width 才可插值；原来列是 clamp、封面 width:auto，跨状态会瞬间换尺寸）。 */
+  grid-template-columns:auto 1fr;
   gap:clamp(14px,1.6vw,22px);
   align-items:center;
   min-width:0;          /* grid 子项默认 min-width:auto：长标题会把轨道撑破 */
 }
 .mm-archive-art{
   position:relative;aspect-ratio:1/1;border-radius:18px;overflow:hidden;
+  width:clamp(104px,22%,168px);   /* LIVE 的缩略尺寸（显式长度，可过渡到大封面） */
   background:var(--glass-2);border:1px solid var(--bd-2);
   box-shadow:0 18px 40px rgba(90,40,80,.26),inset 0 1px 0 var(--hi);
+  transition:width .5s var(--ease),box-shadow .4s var(--ease);
 }
 .mm-archive-img{display:block;width:100%;height:100%;object-fit:cover}
 /* 这张没有封面 / 封面挂了 → 一块渐变占位（不是一个破图图标）。
@@ -1129,6 +1140,79 @@ body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
 .mm-detail-play .mm-ic-pause{display:none}
 .mm-detail-play[data-state="pause"] .mm-ic-play{display:none}
 .mm-detail-play[data-state="pause"] .mm-ic-pause{display:block}
+
+/* ============================================================
+   G1c. Museum 独立进度条（第十轮）
+   ------------------------------------------------------------
+   LIVE：显示真实 currentTime / duration / 进度条 / 播放暂停态。
+   BROWSE：淡出（不把「正在播另一首」的错误时间挂到选中的档案上）。
+   数据由 JS 读同一个 #audio 写进来（fill 宽度走 inline width）。
+   ============================================================ */
+.mm-archive-progress{
+  display:flex;align-items:center;gap:11px;
+  margin-top:18px;
+  max-height:64px;overflow:hidden;
+  transition:opacity .4s var(--ease),max-height .4s var(--ease),margin .4s var(--ease);
+}
+.mm-prog-play{
+  flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;padding:0;cursor:pointer;
+  background:var(--glass-2);border:1px solid var(--bd);color:var(--accent-primary);
+  transition:transform .25s var(--ease),background .2s,color .2s;
+}
+.mm-prog-play:hover{transform:scale(1.08);background:var(--glass-h)}
+.mm-prog-play .mm-ic-pause{display:none}
+.mm-prog-play[data-state="pause"] .mm-ic-play{display:none}
+.mm-prog-play[data-state="pause"] .mm-ic-pause{display:block}
+.mm-prog-cur,.mm-prog-dur{
+  flex:0 0 auto;font-size:11px;letter-spacing:.04em;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.mm-prog-bar{
+  flex:1;height:5px;border-radius:99px;overflow:hidden;
+  background:var(--bd-2);box-shadow:inset 0 1px 1px rgba(0,0,0,.06);
+}
+.mm-prog-fill{
+  display:block;height:100%;width:0;border-radius:inherit;
+  background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary),var(--accent-tertiary));
+}
+
+/* ============================================================
+   G1d. LIVE / BROWSE 展示模式（第十轮）
+   ------------------------------------------------------------
+   data-mode 由 JS 写（live / paused / browse），唯一权威状态。
+     live / paused → 横向头 + 歌词 + 进度（默认版式）
+     browse        → 大封面在上、文字在下，歌词与进度淡出
+   ⚠️ 只有「选中与在播是否相等」变化时 data-mode 才跨 browse/live，
+      所以版式过渡不会每次滚轮都重播（需求第十三条）。
+   ⚠️ 歌词是「淡出」不是 display:none：摘出网格成绝对定位、落在原处，
+      靠 opacity/blur/translateY 过渡，回到 LIVE 时立刻恢复（歌词数据不重建）。
+   ============================================================ */
+.mm-detail[data-mode="browse"]{grid-template-rows:minmax(0,1fr)}
+.mm-detail[data-mode="browse"] .mm-archive{align-self:center}
+.mm-detail[data-mode="browse"] .mm-archive-progress{
+  max-height:0;margin-top:0;opacity:0;pointer-events:none;
+}
+.mm-detail[data-mode="browse"] .mm-lyrics{
+  position:absolute;left:0;right:0;bottom:0;
+  width:auto;max-width:1000px;margin:0 auto;
+  opacity:0;filter:blur(8px);transform:translateY(16px);
+  visibility:hidden;pointer-events:none;
+}
+/* 大封面在上、文字在下（同一节点 + 状态类，不建第二张封面） */
+.mm-detail[data-mode="browse"] .mm-archive-head{
+  grid-template-columns:1fr;gap:18px;
+  justify-items:center;text-align:center;
+}
+.mm-detail[data-mode="browse"] .mm-archive-art{
+  width:clamp(180px,26vw,280px);justify-self:center;
+}
+.mm-detail[data-mode="browse"] .mm-detail-meta{
+  max-width:340px;margin-left:auto;margin-right:auto;
+}
+.mm-detail[data-mode="browse"] .mm-detail-tags{justify-content:center}
+.mm-detail[data-mode="browse"] .mm-detail-acts{justify-content:center}
+.mm-detail[data-mode="browse"] .mm-detail-desc{text-align:center}
 
 /* ============================================================
    G1b. 内容切换（需求第二 / 九条）—— **只有内部内容**动
@@ -1282,6 +1366,10 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   .mm-detail-body,
   .mm-lyr-view{animation:none;transform:none}
   .mm-lyr-track{transition:none}
+  /* 第十轮：LIVE↔BROWSE 的过渡也关掉（直接切换，不依赖动画完成才显示内容） */
+  .mm-lyrics,
+  .mm-archive-art,
+  .mm-archive-progress{transition:none}
   /* ⚠️ 只收唱片自己的过渡。扇形位移是 rAF 插值（不是 transition），
      所以这条不会把「滚轮切曲」也冻住 —— 那是功能，不是装饰。 */
   .mm-disc{transition-duration:.01ms}
@@ -1315,3 +1403,8 @@ body.reduce-motion .mm-detail,
 body.reduce-motion .mm-detail-body,
 body.reduce-motion .mm-lyr-view{animation:none;transform:none}
 body.reduce-motion .mm-lyr-track{transition:none}
+/* 第十轮：站内「减少动态」开关同样收掉 LIVE↔BROWSE 的过渡
+   （和上面那条媒体查询一致 —— 两个独立来源都要写）。 */
+body.reduce-motion .mm-lyrics,
+body.reduce-motion .mm-archive-art,
+body.reduce-motion .mm-archive-progress{transition:none}

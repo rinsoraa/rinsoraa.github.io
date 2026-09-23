@@ -92,6 +92,16 @@
     return isFinite(n) ? n : dflt;
   };
 
+  /* 时间格式 mm:ss —— 优先复用 music.js 的 fmt（它导出了），
+     没有时给本地等价实现（语义一致：非法值 → '00:00'）。 */
+  function fmtT(s) {
+    const F = window.RinsoraMusic && window.RinsoraMusic.fmt;
+    if (typeof F === 'function') { try { return F(s); } catch (e) {} }
+    if (!isFinite(s) || s < 0) return '00:00';
+    const m = Math.floor(s / 60), x = Math.floor(s % 60);
+    return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x;
+  }
+
   /* ============================================================
      MUSIC 路径解析
      ------------------------------------------------------------
@@ -153,6 +163,13 @@
   const lyrView = $('#mmLyricsView');
   const lyrTrack = $('#mmLyricsTrack');
   const lyrEmpty = $('#mmLyricsEmpty');
+  /* 第十轮：Archive 里的独立进度条（LIVE 显示 / BROWSE 淡出，数据来自同一个 #audio） */
+  const progBox = $('#mmArchiveProgress');
+  const progPlay = $('#mmProgPlay');
+  const progCur = $('#mmProgCur');
+  const progBar = $('#mmProgBar');
+  const progFill = $('#mmProgFill');
+  const progDur = $('#mmProgDur');
 
   /* ---------------------------------------------------- 状态 ---- */
   const state = {
@@ -197,7 +214,13 @@
       cap: 0,             /* 一行放得下的「视觉字数」（超了按比例缩字号） */
       p: -1,              /* 已写下的擦除进度（去重：不每帧写 DOM） */
       raf: 0              /* 擦除进度的 rAF 句柄；0 = 未跑 */
-    }
+    },
+
+    /* —— 第十轮：右侧展示模式（LIVE / BROWSE / PAUSED）——
+       ⚠️ 派生状态：由 selected（selectedIndex）与 playing（playingIndex + isPlaying）
+       共同决定，**唯一落点是 syncMode()**（别在别处再算一遍）。
+       三值：'live'（选中=在播）/ 'paused'（选中=当前曲目但暂停）/ 'browse'（选中≠在播）。 */
+    mode: ''
   };
 
   /* ⚠️⚠️ 为什么扇形位置要两个字段（fanPos / fanTo）而且**都不取模**：
@@ -1296,6 +1319,60 @@
     syncCue();
     syncLyricTime();
     syncDetailPlayBtn();
+    /* 第十轮：播放态变了 → 右侧 LIVE/BROWSE/PAUSED 模式跟着变 */
+    syncMode();
+  }
+
+
+  /* ============================================================
+     LIVE / BROWSE / PAUSED —— 右侧展示模式（第十轮）
+     ------------------------------------------------------------
+     需求把 selectedIndex 与 playingIndex 强制分开，右侧按「选中」与「在播」
+     的关系走两种版式（外加「暂停」作为 live 的变体）：
+       · live    选中 == 正在播        → 横向头 + 歌词 + 真进度
+       · paused  选中 == 当前曲目但暂停 → 同 live，歌词/进度停在那一帧
+       · browse  选中 != 正在播        → 大封面 + 文字下方，歌词/进度淡出
+     ⚠️ 模式是**派生**的：三个源（state.selected / playingIndex / state.isPlaying），
+        唯一落点是 syncMode()；data-mode 写在 #mmDetail 上，CSS 只读。
+     ⚠️ 只有「选中与在播是否相等」变化时，data-mode 才在 browse 与 live/paused
+        之间切换（live↔paused 不改版式，只改进度条的播放/暂停图标）——
+        所以「每次滚轮」不会触发整块版式过渡，只有跨过「正在播那首」才会。
+     ============================================================ */
+  function computeMode() {
+    const rec = state.selected;
+    if (!rec) return '';                            /* 没选中 → 不表态（面板也收着） */
+    if (playingIndex >= 0 && rec.index === playingIndex) {
+      return state.isPlaying ? 'live' : 'paused';
+    }
+    return 'browse';
+  }
+
+  /* 模式的**唯一落点**：算一遍，写 state.mode + #mmDetail 的 data-mode，
+     顺带刷进度条（进度条的显隐 / 图标都跟着模式走）。 */
+  function syncMode() {
+    const mode = computeMode();
+    state.mode = mode;
+    if (detailEl) detailEl.dataset.mode = mode;
+    syncProgress();
+  }
+
+  /* —— Museum 独立进度条（第十轮）——
+     ⚠️ 数据来源 = 同一个 #audio（currentTime / duration），**不新建 audio**。
+     只读不写：绝不 seek、绝不 load —— 和播放器共享同一条时间轴。
+     ⚠️ BROWSE 模式下进度条被 CSS 淡出（不把「正在播 B 的 currentTime」
+        错挂到 selected A 的档案上）。 */
+  function syncProgress() {
+    if (!progBar) return;
+    const a = d.getElementById('audio');
+    const dur = a && isFinite(a.duration) && a.duration > 0 ? a.duration : 0;
+    const cur = a && isFinite(a.currentTime) && a.currentTime > 0 ? a.currentTime : 0;
+    const pct = dur > 0 ? clamp((cur / dur) * 100, 0, 100) : 0;
+    if (progFill) progFill.style.width = pct + '%';
+    if (progCur) progCur.textContent = fmtT(cur);
+    if (progDur) progDur.textContent = fmtT(dur);
+    /* 进度条里那枚「播放/暂停」：data-state 只留 play/pause 两值，
+       语义是「当前在响没有」—— live 显示 pause，其余（paused/browse）显示 play。 */
+    if (progPlay) progPlay.dataset.state = state.isPlaying ? 'pause' : 'play';
   }
 
 
@@ -1544,6 +1621,8 @@
     state.lastSel = state.selectedIndex;
     syncDetailPlayBtn();
     syncCue();
+    /* 第十轮：选中变了 → 右侧 LIVE/BROWSE/PAUSED 模式跟着变 */
+    syncMode();
   }
 
   /* ------------------------------------------------------------
@@ -1765,6 +1844,15 @@
         return;
       }
       play(rec);
+    });
+  }
+
+  /* 进度条里那枚「播放/暂停」：和右侧大播放键同一个语义（点它 = 点 detailPlay）。
+     不复制一套播放逻辑 —— 复用同一处，避免两套状态机漂移。 */
+  if (progPlay) {
+    progPlay.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (detailPlay) detailPlay.click();
     });
   }
 
@@ -2127,15 +2215,37 @@
   function bindAudio() {
     const a = d.getElementById('audio');
     if (!a) return;
-    const onPlay = () => { if (!state.open) return; state.isPlaying = true; syncPlaying(); };
+    const onPlay = () => {
+      if (!state.open) return;
+      state.isPlaying = true;
+      /* 外部切歌（播放器上一首/下一首/自动接下一首）时，music.js 的 setIndex()
+         已经先把 getState().index 写成了新曲 —— 这里立刻把它读回来，避免
+         playingIndex 停在旧曲上最长 1s（否则外部切歌后右侧模式会在
+         live/browse 之间先闪一下、再被 1s 轮询纠正）。读的是同一个真相
+         （getState().index），不是第二套状态。 */
+      const idx = playerIndexNow();
+      if (idx >= 0 && idx !== playingIndex) {
+        playingIndex = idx;
+        state.playBlocked = false;
+      }
+      syncPlaying();
+    };
     const onStop = () => { if (!state.open) return; state.isPlaying = false; syncPlaying(); };
     a.addEventListener('play', onPlay);
     a.addEventListener('pause', onStop);
     /* 播完一首也算「不在播」（music.js 随后会自动接下一首并再派发 play） */
     a.addEventListener('ended', onStop);
     /* 第八轮：歌词行切换靠它（4Hz 足够 —— 歌词行之间通常好几秒）。
-       擦除进度另由 rAF 驱动（见 lyrTick）。两条路都不新建 audio。 */
-    a.addEventListener('timeupdate', () => { if (state.open) syncLyricTime(); });
+       擦除进度另由 rAF 驱动（见 lyrTick）。两条路都不新建 audio。
+       第十轮：进度条也靠它刷（currentTime / duration 都从这里读）。 */
+    a.addEventListener('timeupdate', () => {
+      if (!state.open) return;
+      syncLyricTime();
+      syncProgress();
+    });
+    /* 第十轮：进度条的总时长在 metadata 就绪后才拿得到 —— 挂这一次性刷新即可，
+       之后每次 timeupdate 都会再读 duration，不需要额外监听。 */
+    a.addEventListener('loadedmetadata', () => { if (state.open) syncProgress(); });
   }
   bindAudio();
 
@@ -2229,6 +2339,14 @@
     archiveArt: () => (archArt ? (archArt.getAttribute('src') || '') : ''),
     /* 播放按钮的状态机：'play' / 'resume' / 'pause'（别去解析中文文案） */
     playState: () => (detailPlay ? (detailPlay.dataset.state || '') : ''),
+    /* —— 第十轮：右侧展示模式 + 进度条（回归装置用）—— */
+    mode: () => state.mode,
+    progress: () => ({
+      cur: progCur ? progCur.textContent : '',
+      dur: progDur ? progDur.textContent : '',
+      pct: progFill ? progFill.style.width : '',
+      playing: !!(progPlay && progPlay.dataset.state === 'pause')
+    }),
     /* 歌词面板的一帧快照 */
     lyrics: () => ({
       forId: state.lyr.forId,
