@@ -4,11 +4,20 @@
    四块内容：
      A. 进入加载层（.mm-load）—— 圆环 / 声波 / 加载线 / 微粒子
      B. 场景本体（.mm-scene）—— 左：**扇形唱片导航**（无限循环）
-                                右：档案轨（MUSIC ARCHIVE + LYRICS 预留位）
+                                右：档案轨（MUSIC ARCHIVE + LYRICS）
      C. 顶部状态条 / 底部提示（.mm-hud）
      D. 右侧档案轨（.mm-detail 那一列）
 
-   ⚠️⚠️ 第六轮（本轮）改的是「馆藏怎么摆、怎么选」：
+   ⚠️⚠️ 第八轮（阶段二）补齐了右侧那一列：
+       · 档案卡多了**头部行**（[封面缩略] + [kicker / 歌名 / 歌手]）；
+       · LYRICS 从「预留位」变成真的歌词（.mm-lyr-* 那一套，滚动跟随 +
+         当前句高亮 + 沿时间擦除）；
+       · 滚轮换焦点时**只有内部内容**换（fade + translate + blur，
+         .swap-* 那四条 keyframes），面板本身不重新滑入；
+       · 焦点那张唱片上多了一枚 .mm-disc-cue 提示。
+       ⚠️⚠️ 左侧扇形的几何**一个数都没动**（本轮不碰 fanGeometry）。
+
+   ⚠️⚠️ 第六轮改的是「馆藏怎么摆、怎么选」：
        原来是**分页唱片墙**（page / pager / ‹ 1 / 2 ›，一页 6 张），
        现在是**左侧无限循环扇形**（滚轮 / ↑↓ 浏览，点击选曲，右侧联动）。
        分页那一整套（.mm-hud-mid 里的 .mm-pager / .mm-page-btn）已删除；
@@ -728,12 +737,18 @@ body.museum-open .content{
 }
 /* 日常状态也要有过渡，退出时才能平滑回来 */
 .side-rail,.content{transition:filter .42s var(--ease),opacity .42s var(--ease)}
-body.museum-open #floatingPlayer,
-body.museum-open .lyricbar{
-  /* 播放器与歌词栏是「还在播」的证据，留一点可见度（不模糊整块，
+body.museum-open #floatingPlayer{
+  /* 播放器是「还在播」的证据，留一点可见度（不模糊整块，
      只降一点不透明度），让人知道音乐没断 */
   opacity:.9;
 }
+/* ⚠️ 第八轮：全局歌词栏在展厅里**收掉**（不是「降一点」）——
+   博物馆自己有了歌词面板（跟着扇形焦点走），而底部那条是「跟着播放走」，
+   两个同时出现既是重复信息，又会和 .mm-foot 抢同一块地方
+   （都是屏幕正下方居中，必然叠在一起）。
+   ⚠️ 只改 opacity / pointer-events，**不 display:none**：
+      music.js 的歌词状态机照常跑，退出展厅它自然回来。 */
+body.museum-open .lyricbar{opacity:0;pointer-events:none}
 body.museum-open{overflow:hidden}
 
 /* ============================================================
@@ -769,7 +784,13 @@ body.museum-open{overflow:hidden}
     overflow-y:auto;
   }
   .mm-archive,.mm-lyrics{max-width:none}
-  .mm-lyrics{min-height:128px}
+  /* 窄屏是「上下」版式：扇形在上、档案轨在下（一块，可滚）。
+     歌词那一格从 128 提到 156 —— 它现在是真的三行歌词（前后句要看得见），
+     不是占位块。 */
+  .mm-lyrics{min-height:156px}
+  .mm-lyr-view{min-height:92px}
+  /* 头部行的封面收一档：窄屏先把地方让给文字与歌词 */
+  .mm-archive-head{grid-template-columns:clamp(84px,20%,116px) 1fr;gap:14px}
 }
 @media (max-width:560px){
   .mm-load-dust{display:none}         /* 小屏别为装饰堆节点 */
@@ -816,9 +837,14 @@ body.museum-open{overflow:hidden}
   grid-template-rows:minmax(0,auto) minmax(132px,1fr);
   gap:16px;
   opacity:0;visibility:hidden;pointer-events:none;
-  transition:opacity .42s var(--ease),visibility .42s;
+  /* ⚠️ 第八轮：整块从右侧滑入 —— 但**只在 .on 变化时**（进厅 / 收起后再展开）。
+       滚轮换歌时不会重播它：那时候动的是内部内容（见 .swap-y-* / .swap-x-*），
+       需求第二条点名的「不要整个页面一直左右飞」就是这个意思。 */
+  transform:translateX(30px);
+  transition:opacity .42s var(--ease),visibility .42s,
+             transform .5s var(--ease);
 }
-.mm-detail.on{opacity:1;visibility:visible;pointer-events:auto}
+.mm-detail.on{opacity:1;visibility:visible;pointer-events:auto;transform:none}
 
 /* 档案卡在轨道里占满可用宽。
    ⚠️ 第七轮把上限从 660px 提到 1000px：卡片右侧的空间就是用户反馈的
@@ -827,39 +853,104 @@ body.museum-open{overflow:hidden}
    否则两块在居中的轨道里会左右错开）。 */
 .mm-archive{width:100%;max-width:1000px;align-self:start}
 
-/* —— 歌词面板：这一阶段**只留位置**（用户明确要求先不做歌词） ——
-   ⚠️ 为什么留位而不是干脆不渲染：
-      右侧这一列的高度现在就定下来，下一阶段接歌词时版式不用重排一遍
-      （高度一变，扇形几何的可用高度也跟着变，那是一次连锁改动）。
-   虚线边框是刻意的：一眼看出「这块还没长出来」，而不是以为它坏了。 */
+/* —— 歌词面板（第八轮接上真歌词）——
+   结构：.mm-lyr-top（标题 + 状态） / .mm-lyr-view（固定高取景框）
+         > .mm-lyr-track（整条位移）> .mm-lyr-line × N（绝对定位） /
+         .mm-lyr-empty（空状态）。
+   ⚠️ 为什么是「固定行高 + 整条位移」而不是让文字自然流：
+      自然流下要让当前句居中就得读每行的 offsetTop（换一行查一次布局）；
+      固定行高时位移是一个乘法，换行 / 拖时间轴都不会抖。
+   ⚠️ 虚线边框换成了实线：这块不再是「还没长出来」的占位。 */
 .mm-lyrics{
   width:100%;max-width:1000px;min-height:0;   /* 与 .mm-archive 同宽，两块才对得齐 */
-  display:flex;flex-direction:column;gap:10px;
-  padding:20px 22px;border-radius:26px;
-  background:var(--glass);border:1px dashed var(--bd);
+  display:flex;flex-direction:column;gap:12px;
+  padding:18px 22px 20px;border-radius:26px;
+  background:var(--glass);border:1px solid var(--bd);
   box-shadow:inset 0 1px 0 var(--hi);
   backdrop-filter:blur(var(--blur)) saturate(1.4);
   -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
   overflow:hidden;
+  /* ⚠️ 行高只有这一个来源：JS 写（music-museum.js 的 LYR_LH），CSS 只读。
+     写两处的症状是「当前句不居中」，很难归因。 */
+  --mm-lyr-lh:40px;
 }
+.mm-lyr-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .mm-lyrics-kicker{margin:0;font-size:10px;letter-spacing:.24em;color:var(--muted)}
-.mm-lyrics-slot{
-  flex:1;min-height:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:8px;text-align:center;
+/* 状态说明：跟随播放 / 已暂停 / 未在播放 + 行数。
+   ⚠️ 它的意义是「诚实」—— 选中的不是正在播的那首时，歌词照常显示但
+      没有任何一行被当成当前句，这里要说清楚（需求第七条）。 */
+.mm-lyr-state{
+  font-size:10px;letter-spacing:.1em;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
 }
-.mm-lyrics-slot p{margin:0;font-size:13px;color:var(--ink)}
-.mm-lyrics-slot small{font-size:11.5px;color:var(--muted);max-width:34ch;line-height:1.75}
-.mm-lyrics-dash{width:44px;height:2px;border-radius:2px;background:var(--bd-2)}
+.mm-lyrics.is-live .mm-lyr-state{color:var(--accent-primary)}
+
+/* 取景框：固定高度 + 超出裁掉 + 上下渐隐。
+   ⚠️ 渐隐用 mask 而不是「两个覆盖层」：覆盖层会挡住 hover / 焦点，
+      而且它得跟着主题底色走；mask 只跟 alpha 有关，完全不碰颜色。 */
+.mm-lyr-view{
+  position:relative;flex:1;min-height:96px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 20%,#000 80%,transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 20%,#000 80%,transparent 100%);
+}
+.mm-lyr-track{
+  position:absolute;left:0;right:0;top:0;height:0;
+  transition:transform .5s var(--ease);
+}
+.mm-lyr-line{
+  position:absolute;left:0;right:0;
+  top:calc(var(--mm-li,0) * var(--mm-lyr-lh,40px));   /* 行位置：一个乘法 */
+  height:var(--mm-lyr-lh,40px);
+  display:flex;align-items:center;
+  margin:0;padding:0 12px;border-radius:12px;
+  font-size:12.5px;line-height:1.4;color:var(--muted);
+  /* ⚠️ nowrap 是必需的：行高固定，一旦某行折成两行，整条轨道的位移就和视觉对不上。
+         放不下的长行由 JS 按宽度缩字号（--mm-lf），不是换行。 */
+  overflow:hidden;white-space:nowrap;
+  transition:color .4s var(--ease),opacity .4s var(--ease),
+             filter .4s var(--ease),font-size .36s var(--ease);
+}
+/* 远近三档：越远越小、越淡、越糊（需求第六条）。
+   ⚠️ 字号一律乘 --mm-lf（长行自动缩），字号与行高是两件事。 */
+.mm-lyr-line.d3{opacity:.26;font-size:calc(11px * var(--mm-lf,1));filter:blur(1.7px)}
+.mm-lyr-line.d2{opacity:.44;font-size:calc(11.5px * var(--mm-lf,1));filter:blur(1px)}
+.mm-lyr-line.d1{opacity:.68;font-size:calc(12.5px * var(--mm-lf,1))}
+/* 当前句：更亮 + 稍大 + 强调色 + 左侧一道 accent 竖条 +
+   沿时间铺开的擦除（--mm-lyr-p 由 rAF 写，需求第六条点名的 wipe）。 */
+.mm-lyr-line.d0{
+  opacity:1;font-size:calc(15.5px * var(--mm-lf,1));
+  color:var(--ink);font-weight:900;letter-spacing:-.01em;
+  background-image:linear-gradient(90deg,var(--accent-soft),var(--accent-soft));
+  background-repeat:no-repeat;background-position:left center;
+  background-size:calc(var(--mm-lyr-p,0) * 100%) 100%;
+  box-shadow:inset 2px 0 0 0 var(--accent-primary);
+}
+/* 有歌词、但选中的那张**不是**正在播的那首 → 不假装在播：
+   四个 d* 一个都不加（没有当前句），整片压平、从头显示（需求第七条）。 */
+.mm-lyrics.is-idle .mm-lyr-line{opacity:.46;filter:none}
+/* —— 空状态（需求第五条：没有 lrc 时不要显示空白区域）—— */
+.mm-lyrics.is-empty .mm-lyr-view{display:none}
+.mm-lyr-empty{
+  flex:1;min-height:96px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:9px;text-align:center;
+}
+.mm-lyr-empty[hidden]{display:none}
+.mm-lyr-dash{width:44px;height:2px;border-radius:2px;background:var(--bd-2)}
+.mm-lyr-empty-t{margin:0;font-size:13.5px;font-weight:900;color:var(--ink)}
+.mm-lyr-empty-s{font-size:11px;letter-spacing:.03em;color:var(--muted)}
 
 .mm-detail-card{
   position:relative;z-index:1;
   /* ⚠️ 第六轮：卡片从「居中 modal 里的固定宽度」变成「填满轨道的那一列」。
-     ⚠️ 第七轮：卡片左栏那张「大封面」删掉了（左侧扇面的唱片本来就带封面，
-        档案里再放一张是重复信息，还吃掉三成横向空间）。
-        于是两栏 grid 退回**单栏块**：整条宽度都留给文字。
-        ⚠️ 别再写成 grid —— 没有第二栏了，留着 grid-template-columns
-           只会让人以为还有个封面列（回归装置 K3 会盯这条）。 */
+     ⚠️ 第七轮：卡片左栏那张「大封面」删掉了（它把卡片三成宽度吃掉，
+        连下面的资料表都被挤在同一行网格里）。
+     ⚠️ 第八轮：封面按**头部行缩略**的落点回来 —— 所以这里的契约没有变：
+        卡片自己仍然是 display:block（单栏块），两栏只发生在
+        .mm-archive-head 那一行里（[封面] [标题块]），
+        下面的 meta / 描述 / 标签全部通栏。
+        ⚠️ 别给 .mm-detail-card 加 grid-template-columns —— 那才是第七轮
+           真正删掉的东西（回归装置 O32 会盯这条）。 */
   display:block;
   width:100%;
   max-height:100%;            /* 由轨道那一行的高度决定（.mm-detail 的 grid 行） */
@@ -911,17 +1002,45 @@ body.museum-open{overflow:hidden}
 
 /* —— 右：档案信息 —— */
 .mm-detail-body{min-width:0}
+
+/* —— 头部行：[封面缩略] [kicker / 歌名 / 歌手] ——
+   ⚠️ 第七轮删掉的是「占卡片一整列（1:1）的大封面」，不是「封面」本身。
+      问题不在有没有封面，而在那一列是 grid 的一栏 —— 它把整张卡片的
+      宽度吃掉了三成。现在封面只占**头部这一行**的左格。 */
+.mm-archive-head{
+  display:grid;
+  grid-template-columns:clamp(104px,22%,168px) 1fr;
+  gap:clamp(14px,1.6vw,22px);
+  align-items:center;
+  min-width:0;          /* grid 子项默认 min-width:auto：长标题会把轨道撑破 */
+}
+.mm-archive-art{
+  position:relative;aspect-ratio:1/1;border-radius:18px;overflow:hidden;
+  background:var(--glass-2);border:1px solid var(--bd-2);
+  box-shadow:0 18px 40px rgba(90,40,80,.26),inset 0 1px 0 var(--hi);
+}
+.mm-archive-img{display:block;width:100%;height:100%;object-fit:cover}
+/* 这张没有封面 / 封面挂了 → 一块渐变占位（不是一个破图图标）。
+   ⚠️ 与唱片封面（.mm-disc-art.is-empty）同一套语言，站内观感一致。 */
+.mm-archive-art.is-empty{
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));
+}
+.mm-archive-art.is-empty .mm-archive-img{display:none}
+.mm-archive-art.is-empty:after{content:'✦';font-size:26px;color:rgba(255,255,255,.74)}
+.mm-archive-id{min-width:0}
 .mm-detail-kicker{
   margin:0;font-size:9.5px;letter-spacing:.3em;font-weight:900;
   color:var(--accent-primary);text-transform:uppercase;
 }
-.mm-detail-idx{
-  margin:6px 0 12px;
-  font-size:11px;letter-spacing:.18em;color:var(--muted);
-  font-variant-numeric:tabular-nums;
-}
+/* ⚠️ 第八轮删掉了 `.mm-detail-idx`（「01 / 08」那一行）——
+   档案编号现在只出现在资料表的 ARCHIVE 那一行：同一条信息两个落点必然漂移，
+   而且在头部行里它和 kicker 挤在一起反而更乱。 */
 .mm-detail-title{
-  margin:0;font-size:30px;line-height:1.24;letter-spacing:-.04em;color:var(--ink);
+  /* ⚠️ 从 30px 收到 clamp(...)：标题现在和封面同处一行，右列宽度比原来窄
+     一大截（宽屏约 480px）。用 vw 而不是写死 —— 1152 屏上轨道只有 634px 宽。 */
+  margin:7px 0 0;font-size:clamp(21px,2.3vw,27px);
+  line-height:1.24;letter-spacing:-.04em;color:var(--ink);
   /* 长标题最多两行，超出省略 —— 详情面板不能因为歌名很长就撑变形 */
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   overflow:hidden;overflow-wrap:anywhere;
@@ -997,11 +1116,74 @@ body.museum-open{overflow:hidden}
 }
 body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
 .mm-detail-play-ic{display:grid;place-items:center;width:18px;height:18px}
-/* 播放 / 暂停图标二选一：默认只显示播放三角；.is-playing 时换成暂停条。
-   两个 path 都在同一个 <svg> 里，用 CSS 切换显示 —— 不额外加 DOM。 */
+/* 播放 / 暂停图标二选一：默认只显示播放三角；data-state="pause" 时换成暂停条。
+   两个 path 都在同一个 <svg> 里，用 CSS 切换显示 —— 不额外加 DOM。
+   ⚠️ 第八轮把这些规则从 `.is-playing` 改成 `[data-state="pause"]`：
+      同一个「在播」比特原本有**两个落点**（类 + data-state），
+      而 JS 那边的注释还写着「CSS 读它」——CSS 从来没读过，是一句假注释。
+      留下 data-state 当唯一落点，理由是它**三值**（play / resume / pause），
+      类比只能表达两值。改法同特异性同位置 → 图标观感逐像素等价。
+   ⚠️ resume（选中的是当前歌但已暂停）与 play 视觉一致是**刻意的**：
+      两者的区别只在文案与 aria-label（「继续播放」/「播放这首」）。
+      本机没有可用的浏览器可视化通道，不为它引入看不见的观感改动。 */
 .mm-detail-play .mm-ic-pause{display:none}
-.mm-detail-play.is-playing .mm-ic-play{display:none}
-.mm-detail-play.is-playing .mm-ic-pause{display:block}
+.mm-detail-play[data-state="pause"] .mm-ic-play{display:none}
+.mm-detail-play[data-state="pause"] .mm-ic-pause{display:block}
+
+/* ============================================================
+   G1b. 内容切换（需求第二 / 九条）—— **只有内部内容**动
+   ------------------------------------------------------------
+   面板本体只在「展开 / 收起」时从右侧滑入一次；滚轮换歌时不许整块飞走
+   再飞回来（那正是用户点名的「整个页面一直左右飞」）。
+   所以两段动画各自挂在**内容**上：
+     .mm-detail-body  档案内容：纵向（它是一列）
+     .mm-lyr-view     歌词内容：横向（它是一条带）
+   ⚠️ keyframes 只用到 translate + filter + opacity（需求第二条点名的三样），
+      且用 both 填充 —— 动画没跑完 / animationend 不派发时也停在最终态
+      （铁律 2：最终可见状态不能只挂在动画回调上）。
+   ============================================================ */
+.mm-detail-body.swap-y-fwd{animation:mmSwapY .46s var(--ease) both}
+.mm-detail-body.swap-y-back{animation:mmSwapYBack .46s var(--ease) both}
+.mm-lyr-view.swap-x-fwd{animation:mmSwapX .46s var(--ease) both}
+.mm-lyr-view.swap-x-back{animation:mmSwapXBack .46s var(--ease) both}
+@keyframes mmSwapY{
+  from{opacity:0;translate:0 18px;filter:blur(6px)}
+  to{opacity:1;translate:0 0;filter:blur(0)}
+}
+@keyframes mmSwapYBack{
+  from{opacity:0;translate:0 -18px;filter:blur(6px)}
+  to{opacity:1;translate:0 0;filter:blur(0)}
+}
+@keyframes mmSwapX{
+  from{opacity:0;translate:22px 0;filter:blur(6px)}
+  to{opacity:1;translate:0 0;filter:blur(0)}
+}
+@keyframes mmSwapXBack{
+  from{opacity:0;translate:-22px 0;filter:blur(6px)}
+  to{opacity:1;translate:0 0;filter:blur(0)}
+}
+
+/* —— 焦点提示（需求十一）——
+   滚轮只浏览不出声，但焦点那张要给一点「点我播放」的暗示。
+   ⚠️ 位置压在盘面**内侧**的下缘：扇面上相邻两张的中心距最小只有 0.65 倍
+      直径（见 _mmfan.js 的可辨识性断言），放在盘面外一定会压在邻居身上。
+   ⚠️ 颜色写死（深底白字）是有意的：它压在**用户自备的封面**上，不站在
+      页面底色上，所以站不住主题变量 —— 深底白字对五套主题、任何封面都读得清。
+   ⚠️ 它随唱片一起 rotate / scale（是唱片的子元素）：看起来像盘面的一部分，
+      而不是一个浮在场景里的 UI 部件。 */
+.mm-disc-cue{
+  position:absolute;left:50%;bottom:11%;
+  transform:translateX(-50%);
+  padding:4px 12px;border-radius:999px;white-space:nowrap;
+  font-size:9.5px;font-weight:900;letter-spacing:.16em;
+  color:#fff;background:rgba(24,16,28,.62);
+  border:1px solid rgba(255,255,255,.24);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;       /* 只是提示，点击归唱片自己 */
+  transition:opacity .3s var(--ease);
+}
+.mm-disc.sel .mm-disc-cue{opacity:1}
 
 /* ============================================================
    G2. 主题兼容收口（第三阶段）
@@ -1023,6 +1205,11 @@ body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
 /* 详情面板的阴影走的是暖紫调 rgba(90,40,80,.28)，夜间偏暖会有点脏，
    换成 --shadow（夜间是 rgba(6,3,11,.46)）就干净了。 */
 body.night .mm-detail-card{box-shadow:var(--shadow),inset 0 1px 0 var(--hi)}
+/* 档案封面的投影走的是暖紫调，夜间偏暖会有点脏 —— 换成纯黑 + 顶部高光，
+   和唱片的处理一致。 */
+body.night .mm-archive-art{
+  box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14);
+}
 body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14)}
 
 /* ============================================================
@@ -1038,8 +1225,12 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
     padding:22px 20px 20px;
     border-radius:24px;
   }
-  .mm-detail-title{font-size:24px;text-align:center}
-  .mm-detail-kicker,.mm-detail-idx,.mm-detail-artist{text-align:center}
+  .mm-detail-title{font-size:23px;text-align:center}
+  .mm-detail-kicker,.mm-detail-artist{text-align:center}
+  /* 窄屏 fallback（需求第十二条）：不要硬把桌面版式压进小屏 ——
+     头部行退回单栏，封面收起来（左侧扇形上的唱片本来就带着封面）。 */
+  .mm-archive-head{grid-template-columns:1fr;gap:0}
+  .mm-archive-art{display:none}
   .mm-detail-meta{max-width:320px;margin-left:auto;margin-right:auto}
   .mm-detail-acts{justify-content:center}
   .mm-detail-x{right:11px;top:11px}
@@ -1048,6 +1239,8 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   .mm-detail-card{padding:22px 16px 20px}
   .mm-detail-title{font-size:21px}
   .mm-detail-play{width:100%;justify-content:center}
+  /* 小屏取景框再收一档，但至少留出「上一句 / 当前句 / 下一句」 */
+  .mm-lyr-view,.mm-lyr-empty{min-height:76px}
 }
 
 /* ============================================================
@@ -1082,6 +1275,12 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   .mm-disc:hover .mm-disc-plate,
   .mm-disc:focus-visible .mm-disc-plate{animation:none}
   .mm-detail-card{transform:none;filter:none}
+  /* 第八轮：内容切换（fade + translate + blur）整块关掉 —— 「不动」优先；
+     歌词的自动滚动也直接跳（否则长歌词会在眼前一直滑）。 */
+  .mm-detail,
+  .mm-detail-body,
+  .mm-lyr-view{animation:none;transform:none}
+  .mm-lyr-track{transition:none}
   /* ⚠️ 只收唱片自己的过渡。扇形位移是 rAF 插值（不是 transition），
      所以这条不会把「滚轮切曲」也冻住 —— 那是功能，不是装饰。 */
   .mm-disc{transition-duration:.01ms}
@@ -1109,3 +1308,9 @@ body.reduce-motion .mm-disc-plate{animation:none}
 /* 第三阶段：站内「减少动态」开关打开时，同样收掉播放动画（和媒体查询一致） */
 body.reduce-motion .mm-disc .mm-disc-plate:before{animation:none;opacity:0}
 body.reduce-motion .mm-disc.playing .mm-disc-plate:after{animation:none}
+/* 第八轮：站内「减少动态」开关打开时同样收掉内容切换与歌词滚动
+   （和上面那条媒体查询一致 —— 两处都要写，因为它们是两个独立来源）。 */
+body.reduce-motion .mm-detail,
+body.reduce-motion .mm-detail-body,
+body.reduce-motion .mm-lyr-view{animation:none;transform:none}
+body.reduce-motion .mm-lyr-track{transition:none}

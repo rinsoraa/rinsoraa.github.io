@@ -46,12 +46,29 @@
      isPlayingIndex(i)    → 该曲目是否正在响（含暂停判定）
      onExitRequest(fn)    → 「退出展厅」交给宿主关（见 requestExit）
 
+   第八轮（阶段二：右侧 Music Archive + Lyrics）加的东西：
+     · Archive 的封面回来了 —— 但落点变了：它只占**头部行**里一个方形
+       （.mm-archive-art），标题 / 歌手在它右边，下面的 meta / 描述 /
+       标签**仍然通栏**。第七轮那块「一整列 + 1:1」的问题不在「有没有封面」，
+       而在「它把整张卡片的宽度吃掉三成」；现在只有头部那一行是两栏。
+     · 歌词真的接上了（LYRICS）：来源 = selectedRecord.track.lrc，
+       解析**复用** RinsoraMusic.parseLrc()（不发明第二套格式），
+       时间轴读同一个 #audio.currentTime。
+     · 内容切换（需求第二 / 九条）：滚轮只切焦点 → 右侧**内部内容**
+       原地换（fade + translate + blur，460ms），面板本身不重新滑入。
+     · 焦点唱片上有一枚提示（需求十一）：CLICK TO PLAY / RESUME / PAUSE。
+     · 新增对外接口（回归装置用）：
+       lyrics() / lyricsAt(pos) / cueText(pos) / lineTiers() / swapHost()
+       archiveArt() / playState() / syncLyricTime()
+
    ⚠️ 这一轮**删掉**的东西（别再写回来）：
      · page / pageCount / computePerPage / gotoPage / renderPager / 分页器 DOM
      · 自由摆位（x / y / scale / rotation / depth）—— 位置改由扇形几何按
        「焦点距离」解算；music-museum-data 的 spots 只剩 label / note 覆写
      · 鼠标视差（--mm-px-pos / --mm-depth-x/y / setParallax / stepParallax）
      · 唱片下方的 .mm-disc-label 胶囊（标题归右侧档案面板，扇形上不放字）
+       ⚠️ 第八轮补一句：扇形上**只**多了焦点那一张的 .mm-disc-cue 提示
+          （CLICK TO PLAY）—— 它不是 label 的复活（label 是 7 张一起显示歌名）。
      ⚠️ 但「删掉」是指不再有**读取方**，不是把数据抹掉：
         spots 里的 note / label 照旧读（见 collectSpots）。
    ============================================================ */
@@ -116,7 +133,6 @@
         在 index.html 里也已经不存在 —— 别再 `$('#mmDetailArt')` 找它。 */
   const detailEl = $('#mmDetail');
   const detailKicker = $('#mmDetailKicker');
-  const detailIndex = $('#mmDetailIndex');
   const detailTitle = $('#mmDetailTitle');
   const detailArtist = $('#mmDetailArtist');
   const detailMeta = $('#mmDetailMeta');
@@ -126,6 +142,17 @@
   const detailPlay = $('#mmDetailPlay');
   const detailPlayTxt = $('#mmDetailPlayTxt');
   const detailClose = $('#mmDetailClose');
+  /* 第八轮：档案头部那张封面（第七轮删过一次，现在按「头部行缩略」的落点回来），
+     以及右侧下半的歌词面板。⚠️ 封面只用 <img> 的 src/class，不建第二套状态 ——
+     它的内容是 fillDetail 顺带写的。 */
+  const archArt = $('#mmArchiveArt');
+  const archArtWrap = $('#mmArchiveArtWrap');
+  const detailBody = $('.mm-detail-body');
+  const lyrEl = $('#mmLyrics');
+  const lyrMeta = $('#mmLyricsMeta');
+  const lyrView = $('#mmLyricsView');
+  const lyrTrack = $('#mmLyricsTrack');
+  const lyrEmpty = $('#mmLyricsEmpty');
 
   /* ---------------------------------------------------- 状态 ---- */
   const state = {
@@ -155,7 +182,22 @@
     isPlaying: false,     /* 播放器当前是否在响（body.mp-playing 的真实读数） */
     playBlocked: false,   /* 上一次播放被浏览器自动播放策略拦下了（UI 降级用） */
     dataSig: '',          /* 曲库指纹：变了就重建唱片池（上传新歌后能立刻看到） */
-    hostExit: null        /* 宿主（script.js）的退出函数；见 requestExit() */
+    hostExit: null,       /* 宿主（script.js）的退出函数；见 requestExit() */
+
+    /* —— 第八轮：右侧内容切换 + 歌词 —— */
+    navDir: 1,            /* 上一次焦点移动的方向（+1 下一张 / -1 上一张）。
+                             只用来决定内容切换动画从哪一侧进来，不参与定位。 */
+    lastSel: -1,          /* 上一次铺到 UI 的焦点位置（判断「焦点真的换了」——
+                             syncSelected 会被重复调用，不能每次都播切换动画） */
+    lyr: {                /* 歌词面板的状态 —— **全在这一处**，别在别处再存一份 */
+      forId: '',          /* 当前这份歌词属于哪张唱片（空串 = 还没有唱片） */
+      lines: [],          /* [{t, text}]，来自 RinsoraMusic.parseLrc() */
+      active: -2,         /* 当前高亮行（-1 = 有歌词但不在播；-2 = 尚未铺过） */
+      h: 0,               /* 取景框高度（布局属性，只在换焦点 / resize 时量一次） */
+      cap: 0,             /* 一行放得下的「视觉字数」（超了按比例缩字号） */
+      p: -1,              /* 已写下的擦除进度（去重：不每帧写 DOM） */
+      raf: 0              /* 擦除进度的 rAF 句柄；0 = 未跑 */
+    }
   };
 
   /* ⚠️⚠️ 为什么扇形位置要两个字段（fanPos / fanTo）而且**都不取模**：
@@ -597,7 +639,10 @@
      ============================================================ */
   function syncData() {
     const sig = trackList().map((t) =>
-      [t && t.id, t && t.title, t && t.artist, t && t.cover, t && t.date].join('\u0001')
+      [t && t.id, t && t.title, t && t.artist, t && t.cover, t && t.date,
+       /* 第八轮：歌词也算数据（合起来的长度即可，够用且不用把整首歌词搬进指纹）。
+          不然「刚把歌词填进 music-data.js」在展厅里永远看不到。 */
+       t && t.lrc ? String(t.lrc).length : 0].join('\u0001')
     ).join('\u0002');
     if (sig === state.dataSig) return false;
     state.dataSig = sig;
@@ -687,6 +732,12 @@
     if (!state.rendered || o.rebuild) {
       stageEl.textContent = '';
       state.pool = {};
+      /* 重建 = 数据变了（含歌词被编辑）→ 让歌词面板也重铺一次，
+         否则同一张唱片的旧行表会一直留着（forId 没变就不重建） */
+      state.lyr.forId = '';
+      state.lyr.lines = [];
+      state.lyr.active = -2;
+      stopLyr();
     }
     /* 焦点归位：曲库变了之后旧的位置可能越界 */
     state.selectedIndex = ((Math.round(state.selectedIndex) % n) + n) % n;
@@ -756,6 +807,12 @@
     const gloss = d.createElement('span');
     gloss.className = 'mm-disc-gloss';
     plate.appendChild(gloss);
+    /* 第八轮：焦点提示（需求十一）。它只在焦点那张上显形
+       （CSS: .mm-disc.sel .mm-disc-cue），文字由 syncCue() 按播放状态写。 */
+    const cue = d.createElement('span');
+    cue.className = 'mm-disc-cue';
+    cue.setAttribute('aria-hidden', 'true');
+    btn.appendChild(cue);
     btn.appendChild(plate);
 
     /* 无障碍：读屏要说清「这是哪首歌、点了会怎样」。
@@ -891,6 +948,270 @@
     sceneEl.style.setProperty('--mm-size', g.size + 'px');
   }
 
+  /* ============================================================
+     歌词（第八轮 · 阶段二）
+     ------------------------------------------------------------
+     需求第五条：来源 = selectedRecord.track.lrc，解析**复用**
+     RinsoraMusic.parseLrc() —— 不发明第二套格式、不写第二个解析器。
+     需求第七条：时间轴读**同一个** #audio.currentTime。
+     需求第十一条：滚轮只浏览不出声 → 高亮只在「真的在播」时才走。
+
+     ⚠️⚠️ 为什么**不**读 getState().active（music.js 里也有一个「当前行」）：
+        那是第二份真相。它描述的是「播放器正在放的那一首」，而这里要描述的是
+        「扇形当前选中的那一首」—— 两件事；一旦漂移，症状是「高亮行和声音对不上」，
+        报错为零、极难查。所以本文件的判据只有一条：
+        selected.index === playingIndex（选中的就是播放器此刻的曲目）时，
+        才用 #audio.currentTime 定位当前行。
+     ⚠️ 行表**不缓存**：每次换焦点现解一次（几十行正则，开销可以忽略）。
+        缓存反而要处理「站长刚改了歌词 → 旧表还在」的失效问题 —— 那是第二个真相。
+     ============================================================ */
+  const LYR_LH = 40;        /* 行高（px）—— 唯一来源，写进 --mm-lyr-lh 给 CSS 读 */
+  const LYR_LEAD = 0.12;    /* 提前量，与 music.js 底部歌词栏一致（同一首歌两处观感统一） */
+  const LYR_FIT = 44;       /* 一行放得下的「视觉字数」兜底值（量不到宽度时用） */
+  let lyrMetaTxt = '';      /* 已写下的状态文案（去重：1s 轮询不该每秒写一次 DOM） */
+
+  /* 解析：**只**用 RinsoraMusic.parseLrc()。取不到就当「没有歌词」——
+     不自己写解析器（需求第五条：不要重新发明另一种歌词格式）。 */
+  function parseLrcAny(text) {
+    const R = window.RinsoraMusic;
+    if (!R || typeof R.parseLrc !== 'function') return [];
+    try { return R.parseLrc(text) || []; } catch (e) { return []; }
+  }
+  function lyricLines(rec) {
+    if (!rec) return [];
+    const raw = (rec.track && typeof rec.track.lrc === 'string') ? rec.track.lrc : '';
+    return parseLrcAny(raw).filter((l) => l && typeof l.text === 'string' && l.text);
+  }
+
+  /* 一行放得下多少 —— 中文按 1 个字宽、西文按 0.55 个字宽估。
+     ⚠️ 为什么缩字号而不是换行：行高是固定值（整条轨道的位移是一个乘法），
+        某一行换成两行，位移公式就和视觉对不上了。 */
+  function visualWidth(str) {
+    const t = String(str || '');
+    let w = 0;
+    for (let i = 0; i < t.length; i++) w += t.charCodeAt(i) > 0x2e80 ? 1 : 0.55;
+    return Math.max(1, w);
+  }
+  function fitScale(text) {
+    const cap = state.lyr.cap > 0 ? state.lyr.cap : LYR_FIT;
+    return clamp(cap / visualWidth(text), 0.72, 1);
+  }
+
+  /* ------------------------------------------------------------
+     swapContent —— 内容切换（需求第二 / 九条）
+     ------------------------------------------------------------
+     「滚轮快速浏览时不要整个页面左右飞」→ 动的**只有内部内容**：
+     fade + translate + blur，面板本体不重新滑入（那由 .mm-detail 的
+     入场过渡负责，只在展开 / 收起时跑一次）。
+     ⚠️ 手法是「移除类 → 强制提交 → 再加类」；animation 用 both 填充，
+        所以**动画没跑完 / animationend 不派发**时也停在最终态（铁律 2）。
+     ⚠️ axis：档案卡是纵向一列 → 'y'；歌词是横向一条带 → 'x'。
+     ============================================================ */
+  function swapContent(el, dir, axis) {
+    if (!el || !dir || reduceMotion()) return;
+    const y = axis !== 'x';
+    const cls = y ? (dir > 0 ? 'swap-y-fwd' : 'swap-y-back')
+                  : (dir > 0 ? 'swap-x-fwd' : 'swap-x-back');
+    el.classList.remove('swap-y-fwd', 'swap-y-back', 'swap-x-fwd', 'swap-x-back');
+    void el.offsetHeight;
+    el.classList.add(cls);
+  }
+
+  /* 把「当前句」推到取景框正中 —— 固定行高下就是一个乘法，不读每行的布局。
+     ⚠️ state.lyr.h 是量一次存起来的（换焦点 / resize 时量），这里零布局读。 */
+  function scrollLyrics() {
+    if (!lyrTrack) return;
+    const h = state.lyr.h || LYR_LH * 3;
+    const i = state.lyr.active > 0 ? state.lyr.active : 0;
+    lyrTrack.style.transform = 'translateY(' + (h / 2 - (i + 0.5) * LYR_LH).toFixed(1) + 'px)';
+  }
+
+  function setLyrActive(i) {
+    const L = state.lyr;
+    if (L.active === i) return;
+    const prev = L.active;        /* 只为了把它的擦除进度摘掉，见下 */
+    L.active = i;
+    L.p = -1;                     /* 换了行 → 擦除进度要重算，不沿用上一行的 */
+    const nodes = lyrTrack ? lyrTrack.children : [];
+    /* ⚠️ 把**上一行**的擦除进度摘掉（只清一个，不给每行都调一遍）。
+       --mm-lyr-p 只在 .d0 上有视觉效果（background-size 只声明在 .d0 里），
+       所以留着肉眼看不见 —— 但那是「DOM 里存着一个上一状态的字符串」，
+       和 syncCue 的非焦点残影同一类。契约：任何时刻**只有当前句那一行**
+       带 --mm-lyr-p（回归装置 L7b 就是守这一条）。 */
+    if (prev >= 0 && nodes[prev]) nodes[prev].style.removeProperty('--mm-lyr-p');
+    for (let k = 0; k < nodes.length; k++) {
+      const el = nodes[k];
+      /* i < 0（有歌词但不在播）→ dist = -1 → 四个 d* 全落在 false：
+         这就是「歌词照常显示、但没有任何一行被当成当前句」（需求第七条）。 */
+      const dist = i < 0 ? -1 : Math.abs(k - i);
+      el.classList.toggle('d0', dist === 0);
+      el.classList.toggle('d1', dist === 1);
+      el.classList.toggle('d2', dist === 2);
+      el.classList.toggle('d3', dist >= 3);
+    }
+    scrollLyrics();
+  }
+
+  /* 擦除进度：当前句从自己的时间点走到下一句，背景由 0 铺到 100%。
+     ⚠️ 只在真的在播时推进；暂停时停在最后一帧（不回退、不清零）。 */
+  function updateWipe(lines, idx, t) {
+    if (!lyrTrack || idx < 0) return;
+    const L = state.lyr;
+    const el = lyrTrack.children[idx];
+    if (!el) return;
+    const a = lines[idx].t;
+    const b = idx + 1 < lines.length ? lines[idx + 1].t : a + 4;
+    const p = clamp((t - a) / Math.max(0.6, b - a), 0, 1);
+    if (Math.abs(p - L.p) < 0.01) return;       /* 去重：别每帧都写 DOM */
+    L.p = p;
+    el.style.setProperty('--mm-lyr-p', p.toFixed(3));
+  }
+
+  /* ------------------------------------------------------------
+     量歌词取景框
+     ------------------------------------------------------------
+     ⚠️ 这是**每次换焦点 / resize 读一次**的布局读（和 canScrollBox 同类），
+        不是每帧的。放在独立函数里，回归装置才能把它从「热路径」里排除掉。
+     ============================================================ */
+  function measureLyrics() {
+    if (!lyrEl || !lyrView || !lyrTrack) return;
+    const L = state.lyr;
+    const empty = lyrEl.classList.contains('is-empty');
+    /* 先读后写是刻意的：刚从 display:none 变回来时，要读变更**之后**的值 */
+    L.h = empty ? 0 : (lyrView.clientHeight || 0);
+    L.cap = empty ? 0 : Math.max(20, ((lyrView.clientWidth || 0) - 26) / 15.5);
+    /* 长行是按宽度缩字号的 → 宽度变了（resize）要把每一行重算一遍 */
+    Array.prototype.forEach.call(lyrTrack.children, (p, i) => {
+      if (L.lines[i]) p.style.setProperty('--mm-lf', fitScale(L.lines[i].text).toFixed(3));
+    });
+    scrollLyrics();
+  }
+
+  /* ------------------------------------------------------------
+     syncLyricTime —— 歌词面板的**唯一落点**
+     ------------------------------------------------------------
+     当前行 / 擦除进度 / 状态文案 / is-live / is-idle / rAF 起停，
+     全部由这一个函数写（「一条状态只有一个落点」）。
+     调用时机：换焦点（renderLyrics）、播放状态变化（syncPlaying）、
+               #audio 的 timeupdate（4Hz）、rAF 每帧（只算擦除进度）。
+     ============================================================ */
+  function syncLyricTime() {
+    const L = state.lyr;
+    const rec = state.selected;
+    /* live = 「扇形选中的那张就是播放器此刻的曲目」；
+       playing = 它同时还真的在响。暂停时 live 仍为真 → 保留停在的那一行。 */
+    const live = !!rec && playingIndex >= 0 && rec.index === playingIndex;
+    const playing = live && !!state.isPlaying;
+    let idx = -1;
+    let t = 0;
+    if (live) {
+      const a = d.getElementById('audio');
+      t = (a && typeof a.currentTime === 'number') ? a.currentTime : 0;
+      for (let i = 0; i < L.lines.length; i++) {
+        if (t + LYR_LEAD >= L.lines[i].t) idx = i;
+      }
+    }
+    if (L.lines.length) {
+      setLyrActive(idx);
+      if (live) updateWipe(L.lines, idx, t);
+    }
+    const cnt = L.lines.length;
+    const txt = !cnt ? ''
+      : (playing ? '跟随播放 · ' + cnt + ' 行'
+        : (live ? '已暂停 · ' + cnt + ' 行' : '未在播放 · ' + cnt + ' 行'));
+    if (lyrMeta && lyrMetaTxt !== txt) { lyrMetaTxt = txt; lyrMeta.textContent = txt; }
+    if (lyrEl) {
+      lyrEl.classList.toggle('is-live', playing);
+      lyrEl.classList.toggle('is-idle', !!cnt && !live);
+    }
+    if (playing && !reduceMotion()) startLyr(); else stopLyr();
+    return idx;
+  }
+
+  /* 擦除进度要 60fps 才顺（timeupdate 只有 ~4Hz），所以它由 rAF 驱动 ——
+     而且**只在真的在播时**跑：暂停 / 离厅 / 换到别的唱片立刻停。 */
+  function lyrTick() {
+    state.lyr.raf = 0;
+    const L = state.lyr;
+    const rec = state.selected;
+    if (!state.open || !rec || !L.lines.length) return;
+    if (playingIndex < 0 || rec.index !== playingIndex || !state.isPlaying) return;
+    const a = d.getElementById('audio');
+    const t = (a && typeof a.currentTime === 'number') ? a.currentTime : 0;
+    let idx = -1;
+    for (let i = 0; i < L.lines.length; i++) if (t + LYR_LEAD >= L.lines[i].t) idx = i;
+    if (idx !== L.active) setLyrActive(idx);
+    updateWipe(L.lines, idx, t);
+    L.raf = requestAnimationFrame(lyrTick);
+  }
+  function startLyr() {
+    if (state.lyr.raf || !state.open) return;
+    state.lyr.raf = requestAnimationFrame(lyrTick);
+  }
+  function stopLyr() {
+    if (state.lyr.raf) { cancelAnimationFrame(state.lyr.raf); state.lyr.raf = 0; }
+  }
+
+  /* ------------------------------------------------------------
+     renderLyrics —— 把某张唱片的歌词铺进面板
+     ------------------------------------------------------------
+     ⚠️ 只在「换了唱片」或「行数变了」时重建行节点；同一张唱片重复调用
+        只重算高亮（滚轮快滚时不会每格重建几十个节点 —— 需求第九条）。
+     ============================================================ */
+  function renderLyrics(rec, dir) {
+    if (!lyrEl || !lyrTrack) return;
+    const L = state.lyr;
+    const lines = lyricLines(rec);
+    const id = rec ? rec.musicId : '';
+    if (L.forId !== id || L.lines.length !== lines.length) {
+      L.forId = id;
+      L.lines = lines;
+      lyrTrack.textContent = '';
+      const frag = d.createDocumentFragment();
+      lines.forEach((l, i) => {
+        const p = d.createElement('p');
+        p.className = 'mm-lyr-line';
+        p.style.setProperty('--mm-li', String(i));     /* 行位置：top = i × 行高 */
+        p.style.setProperty('--mm-lf', fitScale(l.text).toFixed(3));  /* 长行缩字号 */
+        p.textContent = l.text;   /* 一律 textContent：歌词可能含 < > & */
+        frag.appendChild(p);
+      });
+      lyrTrack.appendChild(frag);
+      L.active = -2;              /* 强制重刷层级（-2 不等于任何真实值） */
+      swapContent(lyrView, dir, 'x');
+    }
+    const empty = !lines.length;
+    lyrEl.classList.toggle('is-empty', empty);
+    if (lyrEmpty) lyrEmpty.hidden = !empty;
+    measureLyrics();
+    syncLyricTime();
+  }
+
+  /* 焦点唱片上的一枚提示（需求十一：浏览不出声，但焦点那张要有轻微的
+     「点我播放」暗示）。
+     ⚠️ 它**只**在焦点那张上显形（CSS: .mm-disc.sel .mm-disc-cue），
+        和第六轮删掉的 .mm-disc-label 不是一回事 —— 那是每张唱片下方的
+        歌名胶囊，7 张一起显示会很吵。 */
+  function syncCue() {
+    if (!stageEl) return;
+    Object.keys(state.pool).forEach((id) => {
+      const el = state.pool[id];
+      const cue = el.querySelector('.mm-disc-cue');
+      if (!cue) return;
+      if (!state.detailOpen || Number(el.dataset.at) !== state.selectedIndex) {
+        /* ⚠️ 非焦点时**主动清空**文字（不是「不动它」）。
+           原来直接 return，于是「被焦点过、又离开」的那张会永远留着
+           上一次的 PAUSE / RESUME —— 视觉上被 opacity:0 挡着看不出，
+           但 DOM 里确实存着一个上一状态的字符串（回归装置会读到它）。
+           契约是「DOM 里存着的 = 当前状态」，所以这里必须清。 */
+        if (cue.textContent) cue.textContent = '';
+        return;
+      }
+      const isCur = Number(el.dataset.index) === playingIndex && playingIndex >= 0;
+      cue.textContent = (isCur && state.isPlaying) ? 'PAUSE' : (isCur ? 'RESUME' : 'CLICK TO PLAY');
+    });
+  }
+
 
   /* ============================================================
      play —— 真正按下「播放」
@@ -964,6 +1285,9 @@
       if (isCur) el.setAttribute('aria-current', 'true');
       else el.removeAttribute('aria-current');
     });
+    /* 第八轮：焦点提示与歌词高亮都挂在「谁在播」上 —— 一起刷，别分开写 */
+    syncCue();
+    syncLyricTime();
     syncDetailPlayBtn();
   }
 
@@ -991,6 +1315,8 @@
        现在没有分页，视口变了只要重算几何 + 重摆一次就行，**不用重建 DOM**。 */
     layoutRail();
     applyFan();
+    /* 第八轮：歌词取景框的宽高变了 → 重量一次（长行是按宽度缩字号的） */
+    measureLyrics();
     startFan();
   }
 
@@ -1025,7 +1351,23 @@
     const dy = wheelDelta(e);
     if (!dy) return;
     /* 面板自己滚得动 → 交给面板（不 preventDefault） */
-    const box = e.target && e.target.closest ? e.target.closest('.mm-archive, .mm-lyrics') : null;
+    /* ⚠️⚠️ 这里原来写的是 `.mm-archive, .mm-lyrics` —— 两个都**不是**滚动容器：
+       `.mm-archive` 根本没设 overflow，`.mm-lyrics` 是 overflow:hidden
+       （它必须裁掉被 JS 平移出去的歌词行，那是取景框的语义）。
+       于是 canScrollBox() 恒为 false → 紧跟着的 preventDefault() 一拦，
+       **右轨内容一旦超高就再也滚不动了**（长描述 / 标签多 / 矮窗口时最明显）。
+       真正的滚动容器是：
+         · .mm-detail-card{overflow-y:auto;max-height:100%}  ← 档案太长时它内滚
+         · .mm-detail{overflow-y:auto}                      ← 两行都放不下时整轨滚
+       closest 返回的是**最近的**匹配祖先，所以「卡片能滚就卡片、否则整轨」，
+       两种情况都接得住。滚到边界后 canScrollBox 变 false，滚轮自动交回扇形 ——
+       这正是第六轮「长档案要滚得动」的原意。
+       ⚠️ 这个洞从第六轮就在（那时 `.mm-lyrics` 同样没有 overflow），
+          一直没被发现是因为 O11 把一个不可滚的元素 stub 成了可滚的。
+          O11 已改指向 .mm-detail，并且新增静态契约 O48 守住
+          「让位目标必须真的可滚」，不让它再烂掉。 */
+    const box = e.target && e.target.closest
+      ? e.target.closest('.mm-detail-card, .mm-detail') : null;
     if (canScrollBox(box, dy)) return;
     if (e.preventDefault) e.preventDefault();
 
@@ -1107,6 +1449,7 @@
        而不是正着穿过 1..5（后者会「倒着转一整圈」，很怪） */
     const d = wrapOffset(((Math.round(i) - cur) % n + n) % n, n);
     state.fanTo = cur + d;
+    if (d) state.navDir = d > 0 ? 1 : -1;    /* 走最短路径 → 方向也按最短路径算 */
     state.selectedIndex = ((Math.round(state.fanTo) % n) + n) % n;
     return true;
   }
@@ -1116,6 +1459,8 @@
     /* 需求第八条给的式子就是这一行。⚠️ fanTo 不取模，见 state 上方的注释：
        取模会让「第 0 首向上滚」变成穿过整圈。 */
     state.fanTo += dir > 0 ? 1 : -1;
+    /* 第八轮：记下方向，右侧内容才知道从哪一侧进来（只影响动画，不影响定位） */
+    state.navDir = dir > 0 ? 1 : -1;
     state.selectedIndex = ((Math.round(state.fanTo) % n) + n) % n;
     /* 滚轮浏览**不播放**（需求第十条），但会把面板叫回来 —— 焦点变了，
        右侧没有理由还停在「已收起」状态。 */
@@ -1174,8 +1519,24 @@
       detailEl.classList.toggle('on', !!state.selected);
       detailEl.setAttribute('aria-hidden', state.selected ? 'false' : 'true');
     }
-    if (state.selected) fillDetail(state.selected);
+    /* ⚠️ 内容切换动画的触发判据：焦点**真的换了位置**、而且不是第一次铺。
+       第一次铺（进厅那一次）由面板自身的入场过渡负责 —— 那时再让内容也动一次，
+       看到的是两层动画叠在一起，反而糊。
+       ⚠️ 还要 state.open：enter() 里 render()/syncSelected() 跑在点亮场景之前
+          （真正亮起来是后面的 finishEnter），那时不该播内容切换。 */
+    const moved = state.open && state.lastSel >= 0 && state.lastSel !== state.selectedIndex;
+    const dir = moved ? (state.navDir || 1) : 0;
+    if (state.selected) {
+      fillDetail(state.selected);
+      /* 档案：fade + translateY + blur（需求第二条点名的三样），方向跟着滚轮 */
+      if (dir && detailBody) swapContent(detailBody, dir, 'y');
+    }
+    /* 歌词：同一份 dir 也驱动它（横向进来，因为它是一条「带」）。
+       ⚠️ 传 null 也要走 —— deselect 之后面板上的行必须清掉，不能留着上一张。 */
+    renderLyrics(state.selected, dir);
+    state.lastSel = state.selectedIndex;
     syncDetailPlayBtn();
+    syncCue();
   }
 
   /* ------------------------------------------------------------
@@ -1238,14 +1599,20 @@
     if (detailTitle) detailTitle.textContent = t.title || rec.musicId;
     if (detailArtist) detailArtist.textContent = rec.label || t.artist || '—';
     if (detailKicker) detailKicker.textContent = 'MUSIC ARCHIVE';
-    if (detailIndex) {
-      /* 档案编号：从 01 起，两位补零。总数也报出来，符合「档案馆」的语气。 */
-      detailIndex.textContent = String(rec.order + 1).padStart(2, '0') + ' / ' + String(n).padStart(2, '0');
+    /* 第八轮：档案编号**不再**单独一行 —— 它就是下面资料表里的 ARCHIVE 那一行。
+       （同一条信息两个落点必然漂移，而「01 / 08」在两个地方写反而更乱。） */
+    /* ---- 封面（头部行里的方形缩略）----
+       ⚠️ 第七轮删掉的是「占卡片一整列（1:1）的大封面」，不是「封面」本身；
+          第八轮它按**头部行缩略**的落点回来：只占头部那一行的左格，
+          下面的资料表 / 描述 / 标签仍然通栏。
+       ⚠️ 封面挂了 → 退 .is-empty 的渐变占位（不是一个破图图标）；
+          src 没变就不重设（重设同一个 src 在部分浏览器会闪一下）。 */
+    if (archArt) {
+      const src = res(t.cover);
+      if (src && archArt.getAttribute('src') !== src) archArt.setAttribute('src', src);
+      archArt.setAttribute('alt', src ? ((t.title || rec.musicId) + ' 封面') : '');
+      if (archArtWrap) archArtWrap.classList.toggle('is-empty', !src);
     }
-    /* ⚠️ 第七轮：这里原来有一段「把封面写进档案卡片左栏」的代码，已删。
-       左侧扇面的唱片自己就带封面（.mm-disc-art），档案里再放一张是重复
-       信息 —— 而且它把卡片三成宽度吃掉了。封面现在只出现在两个地方：
-       左侧唱片、右下角播放器。 */
     /* ---- 固定资料表（这两行永远在，因为档案馆需要有编号与日期） ---- */
     if (detailMeta) {
       detailMeta.textContent = '';
@@ -1330,8 +1697,15 @@
     const rec = state.selected;
     const isCur = !!rec && rec.index === playingIndex;
     const playing = isCur && state.isPlaying;
-    detailPlay.classList.toggle('is-playing', playing);
     detailPlay.classList.toggle('is-blocked', !!state.playBlocked && isCur);
+    /* 按钮状态机的**唯一落点**：data-state（play / resume / pause）。
+       ⚠️ 第八轮初版把「在播」同时写进了 .is-playing 和 data-state —— 那是同一个
+          比特的两个落点（债），注释里还写着「CSS 读它」而 CSS 根本没读（假注释）。
+          现在 CSS 的图标切换直接读 [data-state="pause"]，那个类去掉了。
+       ⚠️ 为什么留下的是 data-state 而不是类：类只能表达两值，
+          「选中当前歌但已暂停」需要第三个值 resume。
+       ⚠️ 对外（回归装置）也是读它，不解析中文文案 —— 文案会改，状态不会。 */
+    detailPlay.dataset.state = playing ? 'pause' : (isCur ? 'resume' : 'play');
     const label = playing ? '暂停'
       : (isCur ? '继续播放' : ('播放《' + ((rec && rec.track && rec.track.title) || '') + '》'));
     detailPlay.setAttribute('aria-label', label);
@@ -1568,6 +1942,9 @@
     measureViewport();
     layoutRail();
     applyFan();
+    /* 第八轮：进厅后补一次歌词（rAF 的起停以 state.open 为准，
+       而上面那次 syncSelected 跑在 state.open 变真之前） */
+    syncLyricTime();
     /* ⚠️ 滚轮只在场景里听（需求第八条）——挂在 #mmScene 上而不是 document，
        这样离开展厅后（场景 display:none）不会抢页面的滚动。
        必须 passive:false，否则 preventDefault 无效（浏览器会忽略它）。 */
@@ -1595,6 +1972,8 @@
     state.open = false;
     stopFollow();
     stopFan();
+    /* 第八轮：擦除进度的 rAF 也要停（离厅后没人需要它，别留着空转） */
+    stopLyr();
     if (sceneEl) sceneEl.removeEventListener('wheel', onWheel);
     d.removeEventListener('resize', onResize);
     /* 档案面板跟着场景一起收 —— 否则下次进来会「一开门就有东西摊在桌上」，
@@ -1747,8 +2126,20 @@
     a.addEventListener('pause', onStop);
     /* 播完一首也算「不在播」（music.js 随后会自动接下一首并再派发 play） */
     a.addEventListener('ended', onStop);
+    /* 第八轮：歌词行切换靠它（4Hz 足够 —— 歌词行之间通常好几秒）。
+       擦除进度另由 rAF 驱动（见 lyrTick）。两条路都不新建 audio。 */
+    a.addEventListener('timeupdate', () => { if (state.open) syncLyricTime(); });
   }
   bindAudio();
+
+  /* 第八轮：歌词行高只有一个来源（JS 写进变量、CSS 只读 —— 写两处必然漂移） */
+  if (lyrEl) lyrEl.style.setProperty('--mm-lyr-lh', LYR_LH + 'px');
+  /* 封面图挂了 → 退回渐变占位（与唱片封面的处理一致） */
+  if (archArt) {
+    archArt.addEventListener('error', () => {
+      if (archArtWrap) archArtWrap.classList.add('is-empty');
+    });
+  }
 
   /* 首次交互时预热一下场景渲染（避免第一次点导航时才发现 data 有问题） */
   if (d.readyState === 'loading') {
@@ -1824,6 +2215,53 @@
     syncData: syncData,
     /* 把「退出展厅」交给宿主：script.js 才同时管 body.museum-open 与 URL */
     onExitRequest: (fn) => { state.hostExit = (typeof fn === 'function') ? fn : null; },
-    requestExit: requestExit
+    requestExit: requestExit,
+
+    /* —— 第八轮：右侧 Archive + Lyrics —— */
+    /* 档案封面当前指向的 src（''= 这张没有封面，走渐变占位） */
+    archiveArt: () => (archArt ? (archArt.getAttribute('src') || '') : ''),
+    /* 播放按钮的状态机：'play' / 'resume' / 'pause'（别去解析中文文案） */
+    playState: () => (detailPlay ? (detailPlay.dataset.state || '') : ''),
+    /* 歌词面板的一帧快照 */
+    lyrics: () => ({
+      forId: state.lyr.forId,
+      count: state.lyr.lines.length,
+      active: state.lyr.active,
+      wipe: state.lyr.p,
+      meta: lyrMeta ? lyrMeta.textContent : '',
+      track: lyrTrack ? (lyrTrack.style.transform || '') : '',
+      live: !!(lyrEl && lyrEl.classList.contains('is-live')),
+      idle: !!(lyrEl && lyrEl.classList.contains('is-idle')),
+      empty: !!(lyrEl && lyrEl.classList.contains('is-empty')),
+      blank: !!(lyrEmpty && lyrEmpty.hidden === false)
+    }),
+    /* 第 pos 个位置那张唱片的歌词行（用于「有歌词 / 无歌词」两种数据） */
+    lyricsAt: (pos) => {
+      const n2 = state.records.length;
+      if (!n2) return [];
+      const r = state.records[((Math.round(num(pos, 0)) % n2) + n2) % n2];
+      return lyricLines(r).map((l) => l.text);
+    },
+    /* 每一行的远近档（0=当前句，1/2/3=越远越大；不在播时全是 3 —— 即「没有当前句」） */
+    lineTiers: () => (lyrTrack ? Array.prototype.map.call(lyrTrack.children, (p) => (
+      p.classList.contains('d0') ? 0
+        : p.classList.contains('d1') ? 1
+          : p.classList.contains('d2') ? 2 : 3
+    )) : []),
+    /* 焦点唱片上的提示文字 */
+    cueText: (pos) => {
+      const n2 = state.records.length;
+      const r = n2 ? state.records[((Math.round(num(pos, 0)) % n2) + n2) % n2] : null;
+      const el = r ? state.pool[r.musicId] : null;
+      const cue = el ? el.querySelector('.mm-disc-cue') : null;
+      return cue ? cue.textContent : '';
+    },
+    /* 内容切换动画挂在谁身上（回归装置据此确认「动的是内部内容」） */
+    swapHost: () => ({
+      detail: detailBody ? detailBody.className : '',
+      lyrics: lyrView ? lyrView.className : ''
+    }),
+    /* 手动逼一次歌词同步（回归装置用：虚拟时间下 timeupdate 不会自己来） */
+    syncLyricTime: () => syncLyricTime()
   };
 })();

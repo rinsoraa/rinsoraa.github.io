@@ -192,7 +192,7 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | --- | --- |
 | `music.js` | `.mp-shell .mp-disc .mp-cover .mp-meta .mp-body .mp-progress .mp-btn .mp-eq .mp-track .lb-scroll .lb-line .lb-wrap .lb-base .lb-fill` |
 | `music-upload.js` | `.mm-mask .mm-card .mm-field .mm-btn` |
-| `music-museum.js` | `.mm-load*`（含 `.leaving` 退场帘）`.mm-scene(.on .open .closing) .mm-depth .mm-floor .mm-stage .mm-disc(.sel .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-gloss .mm-disc-art(.is-empty) .mm-hud .mm-hud-mid .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-archive .mm-lyrics .mm-lyrics-kicker .mm-lyrics-slot .mm-lyrics-dash .mm-tag` |
+| `music-museum.js` | `.mm-load*`（含 `.leaving` 退场帘）`.mm-scene(.on .open .closing) .mm-depth .mm-floor .mm-stage .mm-disc(.sel .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-gloss .mm-disc-art(.is-empty) .mm-disc-cue .mm-hud .mm-hud-mid .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-detail-body(.swap-y-fwd .swap-y-back) .mm-archive .mm-archive-head .mm-archive-art(.is-empty) .mm-archive-img .mm-archive-id .mm-lyrics(.is-live .is-idle .is-empty) .mm-lyr-top .mm-lyr-state .mm-lyr-view(.swap-x-fwd .swap-x-back) .mm-lyr-track .mm-lyr-line(.d0 .d1 .d2 .d3) .mm-lyr-empty .mm-tag` |
 | `projects.js` | `.pt-group(.open) .pt-head .pt-body .pt-item .pt-foot .pt-status .pt-go .pt-cat-0..3` |
 | `blog-admin.js` / `projects.js` | `.card-tools .card-tool .tool-edit .tool-del` |
 
@@ -274,8 +274,10 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | `↑` / `↓` | 与滚轮同义（上一位 / 下一位） |
 | 点一张**不是焦点**的唱片 | 把它转到扇形中央，右侧档案跟着换 —— **不出声** |
 | 点**已经是焦点**的那张唱片 | 播放 / 暂停（浏览与聆听是两个动作，别把它们合成一个手势） |
-| 在右侧档案里滚动 | 档案自己滚，扇形不抢事件；档案滚到顶 / 底之后再滚，才交回扇形 |
+| 在右侧那一列里滚动 | 那一列自己滚，扇形不抢事件；滚到顶 / 底之后再滚，才交回扇形 |
+| 滚轮换焦点 | 右侧两块**内容**跟着换（档案纵向、歌词横向地淡入淡出）；**面板本身不重新滑入** |
 | 悬停唱片 | 微微放大、抬一层（几何位置不变 —— 焦点不会因为 hover 而跑） |
+| 焦点那张唱片 | 盘面内侧浮出一枚提示：`CLICK TO PLAY` / 已在播是 `PAUSE` / 暂停中是 `RESUME` |
 | 移动鼠标 | **不驱动画面**：扇形是导航器，几何只由「当前焦点」决定（视差已在第六轮整条删除） |
 | 正在播放的唱片 | 缓慢匀速自转 + 外圈转环 + 边缘极淡呼吸光晕 |
 | 暂停 | 自转与转环当场停住（停在哪就是哪），唱片留一圈静态柔光；再播接着转 |
@@ -387,15 +389,14 @@ x = cx + rx·cos(theta)       y = cy + ry·sin(theta)
 
 ### 档案详情里能显示哪些字段
 
-固定显示的三件套：**歌名 / 歌手 / 档案编号（NN / NN）+ 收录日期**。
+档案**头部**（一行两栏）固定显示：**封面缩略图 / 歌名 / 歌手 / 档案编号（NN / NN）+ 收录日期**。
 
-> ⚠️ **档案里没有封面**（第七轮删掉的）。理由：左侧扇形上的唱片**本来就显示封面**
-> （`.mm-disc-art`），档案里再放一张是同一张图的重复，而且它按 `1:1` 占着卡片
-> 三成横向宽度。删掉之后卡片从两栏 grid 退回**单栏块**，整条宽度都给了文字。
-> 封面现在只出现在两个地方：**左侧唱片** 与 **右下角播放器**。
-> 已删的类：`.mm-detail-art-wrap` / `.mm-detail-glow` / `.mm-detail-art` /
-> `.mm-detail-hole`（含它们的 `.is-empty` 占位与 reduced-motion 条目）。
-> 回归装置 O30 会从 HTML / CSS / JS 三面拦住它们复活。
+> 第八轮把封面**加了回来**，但不是第七轮删掉的那张「`1:1` 整列大图」，而是头部左侧一张
+> `clamp(104px, 22%, 168px)` 的方形缩略图（`.mm-archive-head` = `[缩略图][文字]` 两栏 grid）。
+> 这样「左侧唱片显示封面」与「右侧档案也有封面」不再打架：缩略图不占卡片整列，
+> 歌名/描述/标签照旧拿满剩余宽度，第七轮「别让封面偷走三成横向宽度」的修复没有回退。
+> 已删的**整列大图**类（`.mm-detail-art-wrap` / `.mm-detail-glow` / `.mm-detail-art` / `.mm-detail-hole`）
+> 仍由回归装置 O30 拦住；第八轮的封面走的是新的 `.mm-archive-head` / `.mm-archive-art`，两者不是一回事。
 下面这些**可选字段写在 `music-data.js` 的曲目上**，有就渲染、没有整块不出现
 （不会留空框、空行、空标签）：
 
@@ -415,6 +416,20 @@ x = cx + rx·cos(theta)       y = cy + ry·sin(theta)
 ```
 
 `note`（写在 `music-museum-data.js` 的 `spots` 条目上）优先于曲目的 `description`。
+
+### 歌词面板
+
+右侧下半块是**真歌词**，不再是个占位框。歌词来源是曲目的 `lrc` 字符串，
+由 `RinsoraMusic.parseLrc()` 解析（**没有第二套解析器**，回归装置 O38 会拦）。
+
+- **滚动歌词**：上一句 / **当前句（更亮、更大、带 accent 高亮与从左到右的 wipe）** / 下一句，
+  再远的行淡出加模糊，整块自动跟着当前句上下滚（固定行高 + 整轨 `translateY`，不做逐行量高）。
+- **「不假装正在播放」**：只有当选中的歌 == 右下角播放器正在播的那首时，才按 `#audio.currentTime`
+  高亮当前句；选中的不是正在播的那首时，歌词照常显示但**不高亮任何一行**
+  （面板进入 `.is-idle`，不会蹦出一句错的）。
+- **无歌词**：`lrc` 为空时显示 `.mm-lyr-empty`（「暂无歌词 / This record has no lyric archive.」），
+  不显示空白区域。
+- **整块不重建**：换焦点时只改 transform / opacity / filter / 类名，不做 `innerHTML` 整页重建。
 
 ### 加一个项目
 
