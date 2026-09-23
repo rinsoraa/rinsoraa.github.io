@@ -106,13 +106,15 @@
   const exitBtn = $('#mmExit');
   const emptyEl = $('#mmEmpty');
   /* 右侧档案轨（第六轮）：详情不再是居中 modal，而是页面右侧常驻的一列。
-     ⚠️ 面板**内部**的字段节点 id 全部保留（下面的 detailArt…detailTags）——
+     ⚠️ 面板**内部**的字段节点 id 保留（下面的 detailKicker…detailTags）——
         卡片本身没被拆散，只是换了定位方式（.mm-detail 从「全屏居中网格」
-        变成「右侧那一列」），fillDetail 一个字都不用改。
-     ⚠️ 删掉的是分页器那四个（mmPager/mmPrev/mmNext/mmPage）与遮罩
-        detailScrim：分页没有了，modal 遮罩也没有了。 */
+        变成「右侧那一列」），fillDetail 基本不用改。
+     ⚠️ 已经删掉的：分页器那四个（mmPager/mmPrev/mmNext/mmPage）、
+        modal 遮罩（detailScrim），以及**档案里那张大封面**（detailArt）。
+        封面删掉的理由：左侧扇面上的唱片本来就带着封面，档案里再放一张是
+        重复信息，还占掉卡片三成横向空间（第七轮）。detailArt 这个 id
+        在 index.html 里也已经不存在 —— 别再 `$('#mmDetailArt')` 找它。 */
   const detailEl = $('#mmDetail');
-  const detailArt = $('#mmDetailArt');
   const detailKicker = $('#mmDetailKicker');
   const detailIndex = $('#mmDetailIndex');
   const detailTitle = $('#mmDetailTitle');
@@ -356,6 +358,14 @@
   const RAIL_PAD   = 10;    /* 窄屏：档案轨离底 */
   const RAIL_RATIO = 0.42;  /* 窄屏：档案轨高度占视口比例 */
   const RAIL_MIN = 190, RAIL_MAX = 340;   /* 窄屏轨道高度的钳制区间 */
+  /* 桌面：右侧档案轨的左边界（占视口宽的比例）。
+     ⚠️ 它同时是**两件事的唯一落点**，不要拆成两处调参：
+        (a) 右侧档案轨有多宽 —— 由 layoutRail() 写成 --mm-rail-x，CSS 只读；
+        (b) 左侧唱片簇被推到多左 —— apexX = railX - gap - selR（构造性保证）。
+     所以「唱片往左一点」与「右侧轨道宽一点」是同一个数字的两面。
+     第七轮 0.47 → 0.44：唱片簇左移约 3% 视口宽，轨道同时变宽同样的量，
+     两者中间的 gap 不变 —— 改变的是「整簇在页面里的位置」，不是簇内部。 */
+  const RAIL_X = 0.44;
 
   /* 扇形几何 —— 纯函数：返回一组 px 数值 + 版式契约（不碰 DOM）。
      ⚠️ 半径、间距全部是**比例 + 钳制的公式**，不是某一档屏的解；
@@ -387,7 +397,7 @@
       railY   = RAIL_TOP;
       railB   = RAIL_BOT;
       footB   = FOOT_B;
-      railX   = Math.round(w * 0.47);
+      railX   = Math.round(w * RAIL_X);
       footX   = Math.round(railX / 2);                 /* 提示条对准左半屏 */
       bandTop = hudB;
       bandBot = h - FOOT_B - FOOT_H - FOOT_GAP;        /* 扇区下沿 = 提示条上沿 */
@@ -1232,25 +1242,10 @@
       /* 档案编号：从 01 起，两位补零。总数也报出来，符合「档案馆」的语气。 */
       detailIndex.textContent = String(rec.order + 1).padStart(2, '0') + ' / ' + String(n).padStart(2, '0');
     }
-    if (detailArt) {
-      const cover = res(t.cover);
-      /* 复用一个 <img>：换封面时先摘 onerror 再换 src，否则上一张的
-         error 回调可能把这一张也换成占位图。 */
-      detailArt.onerror = null;
-      if (cover) {
-        detailArt.onerror = function () {
-          detailArt.removeAttribute('src');
-          detailArt.classList.add('is-empty');
-        };
-        detailArt.classList.remove('is-empty');
-        detailArt.src = cover;
-        detailArt.alt = (t.title || '') + ' 封面';
-      } else {
-        detailArt.removeAttribute('src');
-        detailArt.classList.add('is-empty');
-        detailArt.alt = '';
-      }
-    }
+    /* ⚠️ 第七轮：这里原来有一段「把封面写进档案卡片左栏」的代码，已删。
+       左侧扇面的唱片自己就带封面（.mm-disc-art），档案里再放一张是重复
+       信息 —— 而且它把卡片三成宽度吃掉了。封面现在只出现在两个地方：
+       左侧唱片、右下角播放器。 */
     /* ---- 固定资料表（这两行永远在，因为档案馆需要有编号与日期） ---- */
     if (detailMeta) {
       detailMeta.textContent = '';
@@ -1485,7 +1480,23 @@
     const playing = playerIndexNow();
     const playingAt = playing >= 0
       ? state.records.findIndex((r) => r.index === playing) : -1;
-    if (playingAt >= 0) state.selectedIndex = playingAt;
+    if (playingAt >= 0) {
+      /* ⚠️⚠️ 光写 selectedIndex 是**不够的** —— 见 syncSelected() 那条
+         「唯一落点」注释：selectedIndex 是**从 fanTo 反写出来**的，
+         扇形的目标位置 fanTo 才是真相。
+         只改 selectedIndex 的话，紧接着调用的 syncSelected() 会立刻用
+         **上一次残留的 fanTo** 把它改回去。症状很阴：
+           · 首次进厅正常（那条路走 render({rebuild})，而 render 结尾
+             695 行会 `fanPos = fanTo = selectedIndex`，顺手吸附了）；
+           · **第二次**进厅（changed=false，走 else 分支，不碰 fanTo）
+             焦点就停在上一张上 —— 于是「进厅认出正在播的那首」这条
+             只在第一次成立。踩过一次，是回归装置抓出来的。
+         ⚠️ fanPos 一起吸附：不吸附的话唱片会从上一个位置**滑**过来，
+            而曲库可能已经换了，滑动没有意义。 */
+      state.selectedIndex = playingAt;
+      state.fanTo = playingAt;
+      state.fanPos = playingAt;
+    }
     /* ⚠️ 面板默认**展开**：右侧那一列是这个版式的一部分（不是弹窗），
        一进来就该有东西；用户按 Esc 才收起来。 */
     state.detailOpen = true;

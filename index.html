@@ -607,12 +607,11 @@
         </svg>
       </button>
 
-      <div class="mm-detail-art-wrap">
-        <span class="mm-detail-glow" aria-hidden="true"></span>
-        <img class="mm-detail-art" id="mmDetailArt" alt="" decoding="async">
-        <span class="mm-detail-hole" aria-hidden="true"></span>
-      </div>
-
+      <!-- ⚠️ 第七轮：这里原来有一块「大封面」（.mm-detail-art-wrap）——
+           整块删掉。左侧扇面上的唱片本来就显示封面，档案里再放一张是重复
+           信息，而且它占掉卡片三成横向空间。
+           封面现在只出现在「左侧唱片」与「右下角播放器」两处。
+           别再往这里加 <img id="mmDetailArt"> —— JS 侧也已经没有这个引用了。 -->
       <div class="mm-detail-body">
         <p class="mm-detail-kicker" id="mmDetailKicker">MUSIC ARCHIVE</p>
         <p class="mm-detail-idx" id="mmDetailIndex">01 / 01</p>
