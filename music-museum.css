@@ -43,6 +43,17 @@
 .mm-load.on{opacity:1;visibility:visible;pointer-events:auto}
 .mm-load.done{opacity:0;visibility:hidden;pointer-events:none}
 
+/* —— 退场帷幕：同一块 #mmLoad，换成「离场」的语气（用户反馈 4）——
+   退出展厅时它先亮起来，盖住小窝从模糊里恢复的那 400ms，
+   场景在幕布后面淡出，然后一起收掉 —— 退出从「啪一下」变成「一次经过」。
+   为什么要收掉粒子 / 声波：那是「正在检索」的信号，离场不需要它；
+   留一圈慢下来的环 + 一句话就够了。 */
+.mm-load.leaving .mm-load-dust{opacity:0}
+.mm-load.leaving .mm-load-wave{opacity:.45}
+.mm-load.leaving .mm-load-orbit i:nth-child(1){animation-duration:2.6s}
+.mm-load.leaving .mm-load-orbit i:nth-child(2){animation-duration:3.6s}
+.mm-load.leaving .mm-load-bar i:after{animation:none;display:none}
+
 /* 背景底纹：一层极淡的同心圆，暗示「档案柜的层」 */
 .mm-load-bg{
   position:absolute;inset:0;pointer-events:none;
@@ -379,13 +390,33 @@ body.night .mm-floor{opacity:.3}
     radial-gradient(circle at 50% 50%, #221b28 0 12%, transparent 12%),
     conic-gradient(from 0deg,var(--accent-primary),var(--accent-secondary),var(--accent-tertiary),var(--accent-primary));
 }
-/* 高光：一道斜向反光，hover 时扫过去 */
+/* 高光：一道斜向反光，hover 时扫过去。
+   ⚠️⚠️ 这里必须分成「裁剪壳 + 里面的反光」两层，别合回去（用户反馈 3）。
+      原来是把渐变的 background + transform 直接写在 .mm-disc-gloss 上，
+      靠 transform:translateX(-130%) 让它在静止时「停在盘外」——
+      但 .mm-disc-gloss 是 inset:0 盖满盘面的元素，-130% 只是把它整个
+      挪到了**唱片左边**，而父层 .mm-disc-plate **不能**设 overflow:hidden
+      （它得留着可见溢出，给 inset:-9px 的转环和 inset:-16% 的呼吸光晕）。
+      结果：每张唱片左边都常驻挂着一条不会消失的白亮斜条 ——
+      它不是「动画卡住」，是**从来没有被裁掉过**。
+      修法：让 .mm-disc-gloss 自己当裁剪壳（inset:0 + 圆形 + overflow:hidden，
+      它内里只有一个 ::after，裁掉正好），反光画在 ::after 上再平移。
+      这样平移的每一步都被盘面圆形裁住：静止时在盘外 = 完全不可见，
+      扫过时也只在唱片上出现。
+   ⚠️ 环形高光（::after）和呼吸光晕（::before）挂在 .mm-disc-plate 上，
+      不受这一层影响 —— 别把这三个伪元素搞混了。 */
 .mm-disc-gloss{
   position:absolute;inset:0;border-radius:50%;pointer-events:none;
-  background:linear-gradient(118deg,transparent 38%,rgba(255,255,255,.22) 47%,transparent 58%);
-  transform:translateX(-130%);transition:transform .95s var(--ease);
+  overflow:hidden;                 /* ← 这一条就是「白条」的解药 */
 }
-.mm-disc:hover .mm-disc-gloss{transform:translateX(130%)}
+.mm-disc-gloss:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(118deg,transparent 38%,rgba(255,255,255,.22) 47%,transparent 58%);
+  transform:translateX(-130%);
+  transition:transform .95s var(--ease);
+}
+.mm-disc:hover .mm-disc-gloss:after,
+.mm-disc:focus-visible .mm-disc-gloss:after{transform:translateX(130%)}
 
 /* 唱片下方的标签（歌名 + 歌手），亚克力小条
    ⚠️ 反转 rotate 抵消唱片的自转，让它始终正着 —— 说明牌不该跟着盘子转。 */
@@ -597,6 +628,46 @@ body.night .mm-floor{opacity:.3}
 .mm-hud-stat b{color:var(--ink);font-variant-numeric:tabular-nums}
 .mm-hud-stat span{width:6px;height:6px;border-radius:50%;background:var(--accent-primary)}
 
+/* HUD 中段：统计条 + 展区分页并排，共用一条基线 */
+.mm-hud-mid{display:flex;align-items:center;gap:10px;min-width:0}
+
+/* —— 展区分页（第三阶段补丁）：一首歌 = 一张唱片，一页放不下才出现 ——
+   颜色全部走主题变量，五套主题 + 夜间自动跟随（不另起一套皮肤）。
+   .hidden 的选择器必须写在后面，否则 display:flex 会压过 [hidden]。 */
+.mm-pager{
+  position:relative;
+  display:flex;align-items:center;gap:2px;padding:3px 5px;
+  border-radius:999px;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(16px) saturate(1.4);
+  -webkit-backdrop-filter:blur(16px) saturate(1.4);
+}
+.mm-pager[hidden]{display:none}
+.mm-page-btn{
+  width:24px;height:24px;padding:0;border-radius:50%;
+  display:grid;place-items:center;cursor:pointer;
+  background:transparent;border:1px solid transparent;
+  color:var(--muted);font:inherit;font-size:14px;line-height:1;font-weight:900;
+  transition:background .2s,color .2s,border-color .2s;
+}
+.mm-page-btn:hover:not(:disabled){background:var(--glass-h);color:var(--accent-primary);border-color:var(--bd-2)}
+.mm-page-btn:focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px}
+.mm-page-btn:disabled{opacity:.32;cursor:default}
+.mm-pager b{
+  min-width:40px;text-align:center;
+  font-size:10.5px;letter-spacing:.1em;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+/* 「正在播的那张不在这一页」→ 分页器角上点一颗强调色小圆点，
+   免得人以为「歌没了」。有它比多一行文案省地方。 */
+.mm-pager.has-playing:after{
+  content:"";position:absolute;right:-2px;top:-2px;
+  width:7px;height:7px;border-radius:50%;
+  background:var(--accent-primary);
+  box-shadow:0 0 8px var(--accent-glow);
+}
+
 /* 退出按钮：跟顶栏 .dock-btn 一个手感（收起是图标，悬停展开文字） */
 .mm-exit{
   display:inline-flex;align-items:center;gap:0;
@@ -711,6 +782,9 @@ body.museum-open{overflow:hidden}
     max-width:calc(100vw - 28px);overflow:hidden}
   .mm-disc-label{min-width:96px;max-width:150px;padding:6px 10px}
   .mm-disc-label b{font-size:11.5px}
+  /* 一页 6 张时三列并排，基准尺寸要收一档才不挤
+     （.mm-disc 的 width 走 var(--mm-size,168px)，这里只是换掉那个变量） */
+  .mm-disc{--mm-size:132px}
 }
 @media (max-width:560px){
   .mm-load-dust{display:none}         /* 小屏别为装饰堆节点 */
@@ -725,8 +799,10 @@ body.museum-open{overflow:hidden}
   .mm-depth i:nth-child(1){opacity:.6}
   .mm-depth i:nth-child(3){display:none}
   /* 视差总强度减半：--mm-par-k 只影响 --mm-depth-x/y 的最终乘法（见 .mm-disc），
-     JS 侧一行不改 —— 这是需求第九条「不要让手机端同样的视差幅度」的落点。 */
-  .mm-disc{--mm-par-k:.45}
+     JS 侧一行不改 —— 这是需求第九条「不要让手机端同样的视差幅度」的落点。
+     顺带把基准尺寸再收一档 + 一页只放 4 张（每页几张在 JS 的
+     computePerPage() 里，判据是同一个 560px）—— 小屏上 6 张会挤成一片。 */
+  .mm-disc{--mm-par-k:.45;--mm-size:104px}
   /* 详情在窄屏几乎占满：去掉遮罩的模糊，省一次全屏合成 */
   .mm-detail-scrim{backdrop-filter:none;-webkit-backdrop-filter:none}
   /* reduced-motion 之外，小屏也减一档：呼吸幅度小些，避免边缘来回闪 */
@@ -992,6 +1068,7 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   .mm-load-wave b{animation:none;transform:scaleY(.7)}
   .mm-load-dust span{animation:none;opacity:.28}
   .mm-load-bar i:after{animation:none;display:none}
+  .mm-load.leaving .mm-load-orbit i{animation:none}
   .mm-floor{opacity:.35}
   .mm-hud-ring i{animation:none;border-color:var(--accent-primary)}
   .mm-disc.playing .mm-disc-plate:after{animation:none;

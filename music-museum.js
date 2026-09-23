@@ -43,6 +43,12 @@
      syncFromPlayer()   → 按播放器真实状态刷新 .playing（回归装置 / 外部可用）
      isPlayingIndex(i)  → 该曲目是否正在响（含暂停判定）
      playingRecord()    → 当前「正在播放」的 record（无则 null）
+
+   第三阶段补丁（用户反馈修复 —— 只动本文件 + 宿主接线）：
+     page()/pageCount()/gotoPage(p) → 展区分页（一首歌 = 一张唱片，多了分页）
+     autoSpot(i, n, id)             → 自动摆位（没写进 spots 的歌用它算坐标）
+     syncData()                     → 曲库指纹变了就重建唱片墙（新歌立刻上墙）
+     onExitRequest(fn)              → 「退出展厅」交给宿主关（见 requestExit）
    ============================================================ */
 (() => {
   'use strict';
@@ -94,6 +100,11 @@
   const sceneCount = $('#mmSceneCount');
   const exitBtn = $('#mmExit');
   const emptyEl = $('#mmEmpty');
+  /* 展区分页（第三阶段补丁）：一页放不下时才显示 */
+  const pagerEl = $('#mmPager');
+  const pagerPrev = $('#mmPrev');
+  const pagerNext = $('#mmNext');
+  const pagerLabel = $('#mmPage');
   /* 详情面板（第二阶段） */
   const detailEl = $('#mmDetail');
   const detailArt = $('#mmDetailArt');
@@ -126,7 +137,11 @@
     rafId: 0,             /* 视差循环句柄，0 = 未跑 */
     /* —— 第三阶段 —— */
     isPlaying: false,     /* 播放器当前是否在响（body.mp-playing 的真实读数） */
-    playBlocked: false    /* 上一次播放被浏览器自动播放策略拦下了（UI 降级用） */
+    playBlocked: false,   /* 上一次播放被浏览器自动播放策略拦下了（UI 降级用） */
+    /* —— 第三阶段补丁 —— */
+    page: 0,              /* 当前展区（第几页，0 起） */
+    dataSig: '',          /* 曲库指纹：变了就重建唱片墙（上传新歌后能立刻看到） */
+    hostExit: null        /* 宿主（script.js）的退出函数；见 requestExit() */
   };
 
   /* 当前正在响的曲目 index（用来给那张唱片加 .playing）。
@@ -154,37 +169,201 @@
      ⚠️ musicId 对不上的条目直接跳过（而不是抛错）——
      删掉一首歌不应该让整个博物馆打不开。
      ============================================================ */
+  /* ============================================================
+     摆位：自动 + 覆写（第三阶段补丁）
+     ------------------------------------------------------------
+     ⚠️⚠️ 为什么要有「自动摆位」（用户反馈 1 / 2）：
+       原来唱片墙上有什么**完全**由 music-museum-data.js 的 records[] 决定。
+       于是有两个必然的毛病：
+         · 手动表里写重了 → 同一首歌在墙上出现两张（用户报的「3 首歌 5 张唱片」）
+         · 站长加了一首新歌、没手动补一条 → 新歌**永远**上不了墙
+       改成「**以曲库为准**，手动表只做覆写」之后：
+         · 一首歌 = 一张唱片（不会重复、不会漏）
+         · 加歌 / 删歌 / 换封面，墙自己跟着变（配合 syncData() 的重建）
+       手动覆写写在 data 的 spots 里（老的 records[] 仍然认，见 collectSpots）。
+     ============================================================ */
+  function trackList() {
+    return (window.RinsoraMusic && window.RinsoraMusic.tracks)
+      ? (window.RinsoraMusic.tracks() || []) : [];
+  }
+
+  /* 读播放器的「当前曲目下标」。⚠️ getState().index 只在 setIndex() 里写，
+     所以它反映「曲目」而不反映「播放/暂停」—— 播放态另看 body.mp-playing。 */
+  function playerIndexNow() {
+    try {
+      const s = window.RinsoraMusic && window.RinsoraMusic.getState
+        ? window.RinsoraMusic.getState() : null;
+      return (s && typeof s.index === 'number') ? s.index : -1;
+    } catch (e) { return -1; }
+  }
+
+  /* 手动覆写的两种写法都认：
+       spots   : { "曲目 id": {x,y,scale,rotation,depth,note,label} }   ← 推荐
+       records : [ { musicId, ... }, ... ]                              ← 老写法
+     ⚠️ 同一 id 有多条时**只取第一条**：用户反馈 1 就是「表里写重了，
+        墙上出现两张」—— 去重这一步放在这里，别放到渲染里去。 */
+  function collectSpots(raw) {
+    const out = {};
+    const put = (id, o) => { if (id && !Object.prototype.hasOwnProperty.call(out, id)) out[id] = o || {}; };
+    const sp = raw && raw.spots;
+    if (sp && typeof sp === 'object') Object.keys(sp).forEach((id) => put(id, sp[id]));
+    ((raw && raw.records) || []).forEach((r) => put(r && r.musicId, r));
+    return out;
+  }
+
+  /* FNV-1a：用来给「同一首歌」一个稳定的起始角度。
+     确定性很重要 —— 用 Math.random() 的话每刷新一次唱片就换个姿势。 */
+  function hash(str) {
+    const t = String(str == null ? '' : str);
+    let h = 2166136261;
+    for (let i = 0; i < t.length; i++) {
+      h ^= t.charCodeAt(i);
+      h = (h * 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function tilt(id, k) { return (hash(id) % (k * 2 + 1)) - k; }
+
+  /* 自动摆位 —— 按「**这一页里的第几张**」算。
+     为什么用页内序号而不是全局序号：一页最多 6 张，坐标是相对「一屏」定的；
+     用全局序号的话，第 7 张（第二页第 1 张）会算到屏幕外面去。
+     版式沿用原手工表那套语言：越靠下 = 越远（更小更淡、视差更小），
+     两行时上一行满排、下一行居中收窄，奇偶行左右错开半格避免排成表格。 */
+  function autoSpot(i, n, id) {
+    const make = (x, y, scale, depth) =>
+      ({ x: x, y: y, scale: scale, rotation: tilt(id, 9), depth: depth });
+    if (n <= 1) return make(50, 46, 1.16, 0.14);      /* 独一张：正中、放大 */
+
+    const cols = Math.min(3, n);
+    const rows = Math.ceil(n / cols);
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const inRow = Math.min(cols, n - r * cols);       /* 这一行实际几张 */
+    const t = inRow > 1 ? c / (inRow - 1) : 0.5;      /* 行内比例 0~1 */
+    const rowT = rows > 1 ? r / (rows - 1) : 0;       /* 行比例 0~1（0 = 最近） */
+    const span = n <= 2 ? 40 : 56;                    /* 两张时别拉太开 */
+    const stagger = (rows > 1 && inRow === cols) ? (r % 2 ? 5 : -5) : 0;
+
+    return make(
+      50 + (t - 0.5) * span * (inRow / cols) + stagger,
+      36 + rowT * 36,
+      1.02 - rowT * 0.34,
+      0.10 + rowT * 0.56
+    );
+  }
+
+  /* 一页放几张：窄屏 4 张（需求九：手机别硬塞桌面那套阵列），其余 6 张。
+     ⚠️ 这个值直接决定分页，所以 onResize 里会跟着重算。 */
+  function computePerPage() {
+    return (vp.w && vp.w <= 560) ? 4 : 6;
+  }
+  function pageCount() {
+    return Math.max(1, Math.ceil(trackList().length / computePerPage()));
+  }
+  /* 曲目表下标 → 展区号（-1 = 不在曲库里） */
+  function pageOfTrack(i) {
+    const n = trackList().length;
+    if (i < 0 || i >= n) return -1;
+    return Math.floor(i / computePerPage());
+  }
+  /* 要不要翻页去「正在播的那张」：只改 state.page，渲染交给调用方 */
+  function revealCurrent() {
+    const p = pageOfTrack(playerIndexNow());
+    if (p < 0 || p === state.page) return false;
+    state.page = p;
+    return true;
+  }
+
+  /* ============================================================
+     数据装配 —— 把「曲库」和「摆位覆写」拼起来
+     ------------------------------------------------------------
+     ⚠️ 只做 join，任何字段都不复制：track 对象直接引用
+        RinsoraMusic.tracks() 里的那一份，所以改了 music-data.js，
+        场景里的歌名 / 封面立刻就是新的（单一真相）。
+     ⚠️ 没有 id 的条目跳过（而不是抛错）—— 坏一条不该让整个博物馆打不开。
+     ============================================================ */
   function records() {
-    const layout = (window.RINSORA_MUSIC_MUSEUM || {}).records || [];
-    const tracks = (window.RinsoraMusic && window.RinsoraMusic.tracks)
-      ? window.RinsoraMusic.tracks() : [];
-    if (!layout.length || !tracks.length) return [];
+    const spots = collectSpots(window.RINSORA_MUSIC_MUSEUM || {});
+    const tracks = trackList();
+    if (!tracks.length) { state.page = 0; return []; }
 
-    const byId = {};
-    tracks.forEach((t, i) => { if (t && t.id) byId[t.id] = { track: t, index: i }; });
+    const per = computePerPage();
+    const pages = Math.max(1, Math.ceil(tracks.length / per));
+    state.page = clamp(Math.round(num(state.page, 0)), 0, pages - 1);
 
-    return layout.map((rec, i) => {
-      const found = byId[rec && rec.musicId];
-      if (!found) return null;                 /* 对不上：静默跳过 */
-      const depth = clamp(num(rec.depth, 0), 0, 1);
-      return {
-        musicId: rec.musicId,
-        track: found.track,
-        index: found.index,                    /* → RinsoraMusic.playIndex() */
-        /* ⚠️ 「摆在哪」的两个可选字段保留在 record 上，详情可以直接用：
-             label 覆写标签文字；note 是**这一处陈列**的附注（不是曲目字段）。
+    const out = [];
+    tracks.forEach((t, i) => {
+      if (!t || !t.id) return;
+      const page = Math.floor(i / per);
+      const slot = i - page * per;                     /* 这一页里的第几张 */
+      const n = Math.min(per, tracks.length - page * per);  /* 这一页几张 */
+      const auto = autoSpot(slot, n, t.id);
+      const ov = spots[t.id] || {};
+      out.push({
+        musicId: t.id,
+        track: t,
+        index: i,                                      /* → RinsoraMusic.playIndex() */
+        /* ⚠️ 摆位覆写里两个「不是曲目字段」的东西保留在 record 上：
+             label 覆写标签文字；note 是**这一处陈列**的附注。
            其余可展示字段（album/genre/description/source/tags 等）一律
            从 track 上**读**，绝不复制 —— 单一真相在 music-data.js。 */
-        note: rec.note || '',
-        x: clamp(num(rec.x, 50), -20, 120),
-        y: clamp(num(rec.y, 50), -20, 120),
-        scale: num(rec.scale, 1),
-        rotation: num(rec.rotation, 0),
-        depth: depth,
-        label: rec.label || found.track.artist || '',
-        order: i
-      };
-    }).filter(Boolean);
+        note: ov.note || '',
+        x: clamp(num(ov.x, auto.x), -20, 120),
+        y: clamp(num(ov.y, auto.y), -20, 120),
+        scale: num(ov.scale, auto.scale),
+        rotation: num(ov.rotation, auto.rotation),
+        depth: clamp(num(ov.depth, auto.depth), 0, 1),
+        label: ov.label || t.artist || '',
+        page: page,
+        slot: slot,
+        order: out.length                              /* 陈列里的唯一身份（含跨页） */
+      });
+    });
+    return out;
+  }
+
+  /* ============================================================
+     曲库指纹 —— 「数据变了没有」
+     ------------------------------------------------------------
+     用户反馈 2：「又上传了一首，博物馆没有同步显示」。
+     根因有两条，缺一不可：
+       ① 摆位表是手写清单（新歌没有条目 → 上不了墙）→ 已由 autoSpot 解决
+       ② render() 只跑一次（state.rendered 把关）→ 数据变了也不重建
+     这一条就是 ② 的解药：把「曲子是什么」压成一个字符串指纹，
+     每次进厅 / 每次低频轮询比一下，不等就打回去重建。
+     ⚠️ 指纹里带上 title/artist/cover/date：改封面、改歌名也要重建，
+        否则墙上的旧封面会一直留着。
+     ============================================================ */
+  function syncData() {
+    const sig = trackList().map((t) =>
+      [t && t.id, t && t.title, t && t.artist, t && t.cover, t && t.date].join('\u0001')
+    ).join('\u0002');
+    if (sig === state.dataSig) return false;
+    state.dataSig = sig;
+    return true;
+  }
+
+  /* 展区翻页 */
+  function gotoPage(p) {
+    const np = clamp(Math.round(num(p, state.page)), 0, pageCount() - 1);
+    if (np === state.page && state.rendered) return false;
+    state.page = np;
+    render();
+    return true;
+  }
+
+  /* 分页器 UI：只有一页就整个收掉（别让人对着「1 / 1」发呆） */
+  function renderPager() {
+    const pc = pageCount();
+    if (pagerEl) {
+      pagerEl.hidden = pc <= 1;
+      /* 「正在播的那张不在这一页」时给个小圆点，别让人以为歌没了 */
+      const cur = state.records.filter((r) => r.index === playingIndex)[0];
+      pagerEl.classList.toggle('has-playing', !!cur && cur.page !== state.page);
+    }
+    if (pagerLabel) pagerLabel.textContent = (state.page + 1) + ' / ' + pc;
+    if (pagerPrev) pagerPrev.disabled = state.page <= 0;
+    if (pagerNext) pagerNext.disabled = state.page >= pc - 1;
   }
 
   /* ============================================================
@@ -253,13 +432,18 @@
          站长自己也能看到（不需要任何特殊身份 / hash）。 */
       if (emptyEl) emptyEl.hidden = false;
       if (sceneCount) sceneCount.textContent = '0';
+      renderPager();
       state.rendered = true;
       return;
     }
     if (emptyEl) emptyEl.hidden = true;
 
+    /* ⚠️ 只把**当前展区**这一页摆进 DOM。其余页不在 DOM 里，
+       所以任何「按 musicId / layoutId 找元素」的操作都要先确认它在当前页
+       （select() 里会先翻页，见那边的注释）。 */
+    const show = list.filter((r) => r.page === state.page);
     const frag = d.createDocumentFragment();
-    list.forEach((rec, i) => {
+    show.forEach((rec) => {
       const btn = d.createElement('button');
       btn.type = 'button';
       btn.className = 'mm-disc';
@@ -274,7 +458,10 @@
          order 来自 records() 里的布局数组下标，天然唯一且稳定。 */
       btn.dataset.layoutId = String(rec.order);
       btn.dataset.depth = rec.depth.toFixed(3);
-      if (i === playingIndex) btn.classList.add('playing');
+      btn.dataset.page = String(rec.page);
+      /* 用 index（曲目下标）比对，不要用循环变量 —— 渲染的是「页内切片」，
+         而 playingIndex 是曲目下标，两者不是一回事。 */
+      if (rec.index === playingIndex) btn.classList.add('playing');
 
       /* 布局参数 → CSS 变量（music-museum-data.js 是唯一来源） */
       btn.style.setProperty('--mm-x', rec.x + '%');
@@ -288,7 +475,7 @@
          CSS 侧：.mm-disc{--mm-scale:var(--mm-scale-data,1)} 兜底为 data 值。 */
       btn.style.setProperty('--mm-scale-data', String(rec.scale));
       btn.style.setProperty('--mm-rot', rec.rotation + 'deg');
-      btn.style.setProperty('--mm-i', String(i));
+      btn.style.setProperty('--mm-i', String(rec.slot));
       /* 纵深：越远越淡越糊。系数和 music-museum-data.js 里的建议区间对齐：
          depth 0 → opacity 1 / blur 0；depth 1 → opacity .45 / blur 3.4px。
          （data 注释里写的是「远处 0.25~0.45 透明度」，那是最深一层的极端值，
@@ -300,7 +487,9 @@
          ⚠️ 用负数 delay 让动画一开场就处在不同相位，而不是「一起开始」。 */
       const spin = (SPIN_NEAR + (SPIN_BASE - SPIN_NEAR) * rec.depth).toFixed(1);
       btn.style.setProperty('--mm-spin', spin + 's');
-      btn.style.setProperty('--mm-spin-delay', (-(i * 3.7)).toFixed(1) + 's');
+      /* 相位错开用 order（跨页唯一）而不是页内序号 ——
+         否则翻页后每页的第一张都是同一个相位，观感像「重新开始」。 */
+      btn.style.setProperty('--mm-spin-delay', (-(rec.order * 3.7)).toFixed(1) + 's');
       /* 视差系数：近层 = 1，远层 ≈ 0.22。JS 每帧只写这一对变量，
          具体的 translate3d 由 CSS 算 —— 不给每个元素写 inline transform，
          省掉大量样式重算。 */
@@ -376,7 +565,19 @@
     stageEl.appendChild(frag);
 
     if (sceneCount) sceneCount.textContent = String(list.length);
+    renderPager();
     state.rendered = true;
+    /* ⚠️⚠️ 重建之后必须把「选中」重新贴回去。
+       为什么：唱片墙现在**会重建**（上传新歌 / 翻页 / 转屏），
+       而 state.selected 指着的是**上一次构建**出来的那个 record 对象。
+       不重贴的话，新的那张 DOM 没有 .sel / .dim，详情面板却还开着 ——
+       症状是「档案摊在桌上，但墙上一张唱片都没高亮」，看着像选中丢了。 */
+    const prev = state.selected;
+    state.selected = null;
+    if (prev) {
+      const again = list.filter((r) => r.musicId === prev.musicId)[0];
+      if (again) select(again); else deselect();
+    }
     /* ⚠️ 这里用 syncFromPlayer 而不是裸 syncPlaying：
        需求第三条要求「进入博物馆时识别正在播放的那首歌」。播放器的
        真相可能在渲染这段时间里变过（比如上一首播完自动接下一首），
@@ -517,7 +718,16 @@
     vp.w = d.documentElement.clientWidth || 1;
     vp.h = d.documentElement.clientHeight || 1;
   }
-  function onResize() { measureViewport(); }
+  function onResize() {
+    const before = computePerPage();
+    measureViewport();
+    /* ⚠️ 窄屏 / 宽屏切换会改「一页放几张」→ 分页跟着变，必须重建。
+       只在真的变了的时候重建 —— 别每次 resize 都把墙推倒重来。 */
+    if (computePerPage() !== before && state.open) {
+      state.page = clamp(state.page, 0, pageCount() - 1);
+      render();
+    }
+  }
 
   function onPointerMove(e) {
     if (!state.open) return;
@@ -595,6 +805,17 @@
   function select(rec, opts) {
     if (!rec || !stageEl) return false;
     const o = opts || {};
+    /* 目标唱片不在当前展区 → 先翻过去。
+       否则 DOM 里根本没有它，.sel 贴不上去，症状是「点了没高亮」。
+       ⚠️ 翻页前先把旧选中摘掉再重建：render() 结尾有一条「重建后重贴
+          选中」，它会拿**旧**的那张去 select 一遍 —— 多跑一轮渲染，而且
+          如果旧那首在另一个展区，还会再翻一次页（来回跳）。
+          目标马上就会被贴上，这里摘掉不会丢状态。 */
+    if (typeof rec.page === 'number' && rec.page !== state.page) {
+      state.page = rec.page;
+      state.selected = null;
+      render();
+    }
     state.selected = rec;
     state.hovered = null;
 
@@ -645,8 +866,13 @@
   }
 
   function deselect() {
-    if (!state.selected) return false;
+    /* ⚠️ 判据不能只看 state.selected：重建 / 外部收尾之后，面板可能还开着而
+       state.selected 已经是 null —— 那时原来那个早退会让它**永远关不掉**
+       （详情一直摊在桌上，按 X 也没反应）。 */
+    const open = !!state.selected ||
+      !!(detailEl && detailEl.classList.contains('on'));
     state.selected = null;
+    if (!open) return false;
     if (sceneEl) sceneEl.classList.remove('has-sel');
     if (stageEl) {
       $$('.mm-disc', stageEl).forEach((el) => {
@@ -868,6 +1094,9 @@
         两个来源合起来覆盖全部四种变化，且都不需要改 music.js。 */
   function followPlayer() {
     if (!state.open || !window.RinsoraMusic || !window.RinsoraMusic.getState) return;
+    /* 站长在展厅里点了「＋ 添加音乐」→ 曲库指纹就变了 → 立刻重建唱片墙。
+       低频轮询正好顺手干这件事：最多 1s 后新唱片自己出现在墙上。 */
+    if (syncData()) render();
     try {
       const s = window.RinsoraMusic.getState();
       lastSeenIndex = s && typeof s.index === 'number' ? s.index : -1;
@@ -890,11 +1119,7 @@
      ============================================================ */
   function syncFromPlayer() {
     if (!window.RinsoraMusic || !window.RinsoraMusic.getState) return;
-    let idx = -1;
-    try {
-      const s = window.RinsoraMusic.getState();
-      idx = (s && typeof s.index === 'number') ? s.index : -1;
-    } catch (e) { return; }
+    const idx = playerIndexNow();
     state.isPlaying = body.classList.contains('mp-playing');
     if (idx !== playingIndex) {
       playingIndex = idx;
@@ -934,8 +1159,18 @@
     const token = ++state.token;
     state.entering = true;
 
-    /* 先把数据渲好：预加载要拿封面地址，加载层结束后要立刻能看见内容 */
-    if (!state.rendered) render();
+    /* 先把数据渲好：预加载要拿封面地址，加载层结束后要立刻能看见内容。
+       ⚠️ 每次都问一次 syncData()：曲库可能在上次进厅之后变了（站长刚上传了
+          一首），变了就必须重建 —— 原来只渲一次（state.rendered 把关），
+          新歌永远等不到那张唱片（用户反馈 2）。 */
+    /* ⚠️ 先把视口量出来再算分页：computePerPage() 读 vp.w，而 vp 只在
+       enter / resize 时更新。不先量的话，手机第一次进厅会按「桌面 6 张/页」
+       排一次，等 resize 事件到了再推倒重建（白闪一下）。 */
+    measureViewport();
+    const changed = syncData();
+    /* 需求三：进厅要能认出「当前正在播的那首」—— 它在别的展区就翻过去 */
+    const moved = revealCurrent();
+    if (changed || !state.rendered || moved) render();
     else syncPlaying();
 
     const imgs = state.records
@@ -952,6 +1187,9 @@
     /* —— 加载层上场 —— */
     if (loadEl) {
       loadEl.classList.remove('done');
+      /* 上一轮退场帷幕可能还挂着（退出后马上重进）：连 leaving 一起摘，
+         否则「离开展厅」的那套装饰会跟着新一轮的加载层一起出现。 */
+      loadEl.classList.remove('leaving');
       /* 先让上一轮可能残留的 .done 提交过，再挂 .on，否则 transition 不动 */
       void loadEl.offsetHeight;
       loadEl.classList.add('on');
@@ -1011,7 +1249,8 @@
      ⚠️ 只收自己这一层的 DOM，**绝不动播放器 / audio / 音乐状态** ——
         音乐继续播是「博物馆」这个功能的卖点之一，不是副作用。
      ============================================================ */
-  function exit() {
+  function exit(opts) {
+    const o = opts || {};
     state.token += 1;               /* 让还在跑的预加载回调作废 */
     state.entering = false;
     if (!state.open && !(sceneEl && sceneEl.classList.contains('open')) &&
@@ -1031,16 +1270,60 @@
       sceneEl.classList.remove('on');
       sceneEl.classList.add('closing');
       sceneEl.setAttribute('aria-hidden', 'true');
-      const el = sceneEl;
-      setTimeout(() => {
-        /* 只有确实还关着才摘 .open（这中间又进去了就别动） */
-        if (!state.open) {
-          el.classList.remove('open', 'closing');
-        }
-      }, reduceMotion() ? 0 : 340);
     }
-    if (loadEl) loadEl.classList.remove('on', 'done');
+
+    /* —— 退场帷幕（用户反馈 4 的另一半）——
+       退出时把「加载层」借来当幕布：先亮起来，盖住小窝从模糊里恢复的过程，
+       场景在幕布后面淡出，最后幕布和场景一起收掉。
+       这样退出是一次**经过**（有交代、有落点），而不是
+       「啪一下切回去，页面还糊着」。
+       ⚠️ 幕布用的就是同一个 #mmLoad —— 不新增元素、不新增层级，
+          所以「全屏遮罩只有一个」这条不变量还成立。 */
+    const instant = !!o.instant || reduceMotion();
+    if (loadEl) {
+      loadEl.classList.remove('done');
+      if (instant) {
+        loadEl.classList.remove('on', 'leaving');
+      } else {
+        setProgress(100, '正在离开展厅');
+        /* 先把上一次可能残留的 .done 提交掉，再挂 .on，否则 opacity 过渡不动 */
+        void loadEl.offsetHeight;
+        loadEl.classList.add('on', 'leaving');
+      }
+    }
+
+    /* ⚠️⚠️ 拆 DOM 的判定用**令牌**，不要用 state.open。
+       为什么：enter() 会先把 token 加一、再花 ~1s 预加载，那段时间里
+       state.open 还是 false —— 用 state.open 判会把它误当成「还关着」，
+       于是把新一轮刚点亮的幕布和场景一起拆掉（症状：退出后马上重进，
+       加载层一闪就没了，或者场景刚亮就被收走）。 */
+    const tk = state.token;
+    const scene = sceneEl;
+    setTimeout(() => {
+      if (tk !== state.token) return;        /* 中途又进去 / 又退出过了 */
+      if (scene) scene.classList.remove('open', 'closing');
+      if (loadEl) loadEl.classList.remove('on', 'done', 'leaving');
+    }, instant ? 0 : 340 + 420);
     return true;
+  }
+
+  /* ============================================================
+     requestExit —— 「退出展厅」由谁执行
+     ------------------------------------------------------------
+     用户反馈 4：点右上角「退出展厅」后页面被一层模糊盖住，要再按一次 Esc
+     才恢复。根因是**两套状态各关各的**：
+       · 本文件只管自己这一层（场景 + 加载层）
+       · 「小窝淡出」（body.museum-open 的模糊）与 URL 里的 #museum
+         是 script.js 的 AppState 在管
+     按钮原来直接调 exit() → 只关了前者 → 模糊层被留下。
+     Esc 之所以正常，是因为那次按键走的是 script.js 的 exitMuseum()，两件都做了。
+
+     所以这里改成：**按钮不自己关，先请宿主来关**（onExitRequest 注册）。
+     没有宿主时（单独打开本文件做实验）才退化成自己关。
+     ============================================================ */
+  function requestExit() {
+    if (typeof state.hostExit === 'function') { state.hostExit(); return true; }
+    return exit();
   }
 
   /* ============================================================
@@ -1068,7 +1351,10 @@
   /* 捕获阶段：抢在 script.js 的 window 监听之前拿到这次 Esc */
   d.addEventListener('keydown', onKeydown, true);
 
-  if (exitBtn) exitBtn.addEventListener('click', () => exit());
+  /* ⚠️ 走 requestExit（= 请宿主关），不要直接 exit() —— 见 requestExit 的注释 */
+  if (exitBtn) exitBtn.addEventListener('click', () => requestExit());
+  if (pagerPrev) pagerPrev.addEventListener('click', () => gotoPage(state.page - 1));
+  if (pagerNext) pagerNext.addEventListener('click', () => gotoPage(state.page + 1));
 
   /* ============================================================
      bindAudio —— 直接听那唯一的 <audio> 的 play / pause / ended
@@ -1162,6 +1448,18 @@
     playingIndex: () => playingIndex,
     isPlaying: () => state.isPlaying,
     allPlaying: () => $$('.mm-disc.playing', stageEl || d).length,
-    isPaused: () => $$('.mm-disc.is-paused', stageEl || d).length
+    isPaused: () => $$('.mm-disc.is-paused', stageEl || d).length,
+    /* —— 第三阶段补丁 —— */
+    page: () => state.page,
+    pageCount: pageCount,
+    perPage: computePerPage,
+    gotoPage: gotoPage,
+    /* 回归装置用：直接问自动摆位算出来的坐标（不经过 DOM） */
+    autoSpot: autoSpot,
+    /* 回归装置用：曲库指纹比对（true = 这次发现了变化） */
+    syncData: syncData,
+    /* 把「退出展厅」交给宿主：script.js 才同时管 body.museum-open 与 URL */
+    onExitRequest: (fn) => { state.hostExit = (typeof fn === 'function') ? fn : null; },
+    requestExit: requestExit
   };
 })();

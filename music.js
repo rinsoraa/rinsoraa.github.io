@@ -317,12 +317,38 @@
     buildLines();
     renderAll();
 
+    /* ⚠️⚠️ 这个 seek 只能对「刚恢复的那一首」生效**一次**，绝不能变成常驻监听。
+       ------------------------------------------------------------
+       为什么必须改成 once + src 比对（用户反馈 5：切歌时新歌不是从头播，
+       而是接着上一首的进度）：
+
+       原来写的是 `audio.addEventListener('loadedmetadata', seek)` ——
+       既没有 { once:true }，也没有在回调里摘掉。于是这个闭包捕获的
+       「上次离开时的秒数」会被应用到**之后每一次 loadedmetadata** 上。
+       而 setIndex()（上一首 / 下一首 / 点播放器列表 / 点博物馆唱片，
+       所有切歌都走它）每次都会 `audio.src = ...; audio.load();` ——
+       load() 必然重新派发一次 loadedmetadata —— 于是新歌被 seek 到
+       旧的那一秒。表现为「切歌后不是从头播，而是从上一个进度继续」，
+       而且只在「这次会话里有过一次成功的位置恢复」之后才出现
+       （restoreResume() 只在文档初始化时跑），所以看起来时有时无、极难查。
+
+       改法两件套：
+         · { once:true }         —— 只认第一次 loadedmetadata
+         · src 比对              —— 恢复的那首可能还没加载完用户就切走了，
+                                    那一次 seek 必须作废，别去动别人的位置
+
+       影响面：只影响「恢复上次进度」这一条路径，而且只有变好 ——
+       恢复的那一首照旧 seek（跨文档回来接着听这个功能没变），
+       但**不会再**污染之后加载的任何一首。setIndex / 自动连播 / 单曲循环
+       全是 audio.src + load()，本来就该从 0 起，行为不变。 */
+    var wantSrc = audio.src;
     var seek = function () {
+      if (audio.src !== wantSrc) return;            /* 已经不是那一首了 → 作废 */
       var t = Number(s.t) || 0;
       if (t > 0.3 && isFinite(audio.duration) && t < audio.duration - 0.5) audio.currentTime = t;
     };
     if (audio.readyState >= 1) seek();
-    else audio.addEventListener('loadedmetadata', seek);
+    else audio.addEventListener('loadedmetadata', seek, { once: true });
 
     tracked.src = list[i].src;
     tracked.t = Number(s.t) || 0;

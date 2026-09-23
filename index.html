@@ -561,7 +561,16 @@
         <small>MUSIC MUSEUM</small>
       </span>
     </div>
-    <div class="mm-hud-stat"><span></span>ARCHIVE <b id="mmSceneCount">0</b> RECORDS</div>
+    <div class="mm-hud-mid">
+      <div class="mm-hud-stat"><span></span>ARCHIVE <b id="mmSceneCount">0</b> RECORDS</div>
+      <!-- 展区分页：一首歌 = 一张唱片；只有一页时 JS 会把整块收掉（hidden）。
+           数字是「第几展区 / 共几展区」，不是「第几张唱片」。 -->
+      <div class="mm-pager" id="mmPager" hidden>
+        <button class="mm-page-btn" id="mmPrev" type="button" aria-label="上一个展区">&#8249;</button>
+        <b id="mmPage">1 / 1</b>
+        <button class="mm-page-btn" id="mmNext" type="button" aria-label="下一个展区">&#8250;</button>
+      </div>
+    </div>
     <button class="mm-exit" id="mmExit" type="button" aria-label="退出音乐博物馆">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
            stroke-width="2" stroke-linecap="round" aria-hidden="true">

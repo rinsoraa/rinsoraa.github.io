@@ -42,9 +42,9 @@ rinsora-home/                  ← 就是仓库根
 │
 │   ── 数据层（三个纯数据文件，站点里唯一需要手改的内容源）──
 ├── music-data.js              window.RINSORA_MUSIC  = { version, tracks[] }
-├── music-museum-data.js       window.RINSORA_MUSIC_MUSEUM = { version, records[] }
-│                              （只存 musicId + 布局 x/y/scale/rotation/depth，
-│                                一个字的歌曲信息都不复制 —— 改 music-data.js 博物馆自动跟着变）
+├── music-museum-data.js       window.RINSORA_MUSIC_MUSEUM = { version, spots{} }
+│                              （只是**摆位覆写**：键 = 曲目 id，值 = x/y/scale/rotation/depth。
+│                                没有它就按曲库自动摆 —— 一个字的歌曲信息都不复制）
 ├── projects-data.js           window.RINSORA_PROJECTS = { version, categories[], items[] }
 │
 │   ── 渲染 / 逻辑层 ──
@@ -192,7 +192,7 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | --- | --- |
 | `music.js` | `.mp-shell .mp-disc .mp-cover .mp-meta .mp-body .mp-progress .mp-btn .mp-eq .mp-track .lb-scroll .lb-line .lb-wrap .lb-base .lb-fill` |
 | `music-upload.js` | `.mm-mask .mm-card .mm-field .mm-btn` |
-| `music-museum.js` | `.mm-load* .mm-scene(.on .open .has-sel) .mm-stage .mm-disc(.sel .dim .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-art .mm-disc-label .mm-hud .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-tag` |
+| `music-museum.js` | `.mm-load*`（含 `.leaving` 退场帘）`.mm-scene(.on .open .has-sel) .mm-stage .mm-disc(.sel .dim .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-gloss .mm-disc-art .mm-disc-label .mm-hud .mm-hud-mid .mm-pager(.has-playing) .mm-page-btn .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-tag` |
 | `projects.js` | `.pt-group(.open) .pt-head .pt-body .pt-item .pt-foot .pt-status .pt-go .pt-cat-0..3` |
 | `blog-admin.js` / `projects.js` | `.card-tools .card-tool .tool-edit .tool-del` |
 
@@ -212,6 +212,19 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 - **播放状态只认两个来源**，缺一不可：`RinsoraMusic.getState().index`（换曲目才变）
   和 `body.mp-playing`（播放/暂停才变）。读取口子是 `syncFromPlayer()`。
   **不要用「我上次点了什么」推断播放状态** —— 播放器那边切歌 / 暂停就会不同步。
+- **唱片的「高光白条」必须被裁**：`.mm-disc-gloss` 自己是圆形裁剪壳（`inset:0` + `border-radius:50%`
+  + `overflow:hidden`），扫光写在它的 `::after` 上（默认 `translateX(-130%)`）。
+  **别把扫光直接写在 `.mm-disc-gloss` 上**，也别想靠 `.mm-disc-plate` 去裁 ——
+  `plate` 有 `inset:-9px` 的圈和 `inset:-16%` 的呼吸光晕，**必须允许溢出**，一裁就掉。
+  没有裁剪祖先时，`translateX(-130%)` 的扫光会**常驻停在唱片左边**（就是「唱片附近有条白杠」）。
+- **退出展厅只有一条路径**：`#mmExit` / Esc 最后都要走 `state.hostExit`（由 `script.js` 注入的
+  `exitMuseum`），**别在博物馆里自己收尾**。`script.js` 那边的 `body.museum-open`、
+  `AppState.museumOpen`、`#museum` hash 才是「展厅开着」的唯一真相；
+  博物馆的 `exit()` 只负责自己的场景层，收不掉宿主的三个状态 → 症状是
+  **「点了退出，页面糊着一层，要再按一次 Esc 才正常」**。
+- **曲库是唯一真相，`music-museum-data.js` 只是覆写表**：唱片由 `RINSORA_MUSIC.tracks[]`
+  生成（一首歌 = 一张唱片），`spots{ id → {x,y,scale,rotation,depth} }` 只是可选覆盖。
+  上传一首新歌就多一张，**不需要动数据文件**；改完曲库靠 `syncData()` 的指纹自动重排。
 
 ---
 
@@ -239,11 +252,19 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | 正在播放的唱片 | 缓慢匀速自转 + 外圈转环 + 边缘极淡呼吸光晕 |
 | 暂停 | 自转与转环当场停住（停在哪就是哪），唱片留一圈静态柔光；再播接着转 |
 | 右下角播放器切歌 | 博物馆里高亮的那张立刻跟着换（同一个音乐状态，双向同步） |
+| 点唱片 / 切歌 | **新歌从 0:00 开始**（不从上一首接着放）；「恢复上次进度」只在**刚打开站点**时发生一次 |
 | 已在别处播放时进入博物馆 | 认得出是哪一首，把它标成 `PLAYING`；**不会**打断或换歌 |
 | 点详情里的「播放这首」 | 走现有播放器播放（右下角播放器 / 歌词栏同步）；已是当前曲目时变成暂停 / 继续 |
 | `Esc`（详情打开时） | 先关详情，**仍在**博物馆里（只退一层，不会一次退出整个展厅） |
 | 点详情外的场景空白 | 只关详情，**不退**展厅 |
-| `Esc`（未开详情） | 退出博物馆，回到小窝 |
+| `Esc`（未开详情） | 退出博物馆，回到小窝（带一层「正在离开展厅」的退场帷幕） |
+| 点右上角「退出展厅」 | 与 `Esc` **同一条路径**（都走 `exitMuseum()`）：场景、小窝淡出、URL 一起收拾干净 |
+| 点 HUD 上的 `‹ 1 / 2 ›` | 翻展区（只有一页时整块收起，不占地方） |
+
+⚠️ **退出展厅只有一条路径**：`music-museum.js` 的退出按钮**不自己收尾**，
+它通过 `onExitRequest` 请 `script.js` 的 `exitMuseum()` 来关。
+自己关的后果是只关了场景层，「小窝淡出」的 `body.museum-open` 和 URL 里的
+`#museum` 会留下 —— 表现就是「退出来了但页面一直糊着，要再按一次 Esc」。
 
 **地址直达**：`#about` / `#blog` / `#projects` 会跳过欢迎页直接落到对应板块；
 `#museum` 直接进音乐博物馆。
@@ -279,20 +300,45 @@ python new-post.py                 # Windows 也可以直接双击 new-post.cmd
 
 ### 把一首歌摆进音乐博物馆
 
-博物馆的**内容**来自 `music-data.js`（歌名/歌手/封面/音频/歌词），
-`music-museum-data.js` 只负责**摆在哪**。加一条：
+**不用管** —— 加歌走播放器的「＋ 添加音乐」就行，博物馆会自动跟着变。
+
+博物馆的内容来自 `music-data.js`（歌名/歌手/封面/音频/歌词）。
+**「一首歌 = 一张唱片」，这是引擎按 `tracks[]` 自己生成的**：
+加一首就多一张、删一首就少一张，不需要在任何地方补条目。
+
+只想给某几首**指定摆位**时，才写进 `music-museum-data.js` 的 `spots`：
 
 ```js
-{ musicId: "shelter", x: 50, y: 33, scale: 0.98, rotation: 6, depth: 0.28 }
+spots: {
+  "shelter": { x: 50, y: 33, scale: 0.98, rotation: 6, depth: 0.28 }
+}
 ```
 
-- `musicId` 必须对得上 `music-data.js` 里的 `id`；**对不上的条目会被静默跳过**，
-  所以删歌不会让整个展厅挂掉。
+- 键（`shelter`）必须对得上 `music-data.js` 里的 `id`；**对不上的键会被忽略**。
+- 没写进 `spots` 的歌由引擎**自动摆位**（`autoSpot`）：不重复、不漏、不塌在一起，
+  角度按曲目 id 做 hash，所以**刷新多少次都是同一个姿势**。
+- 想覆写一首歌的全部字段不必写全：缺哪个字段就用自动摆位算出来的那个值。
 - `x` / `y` 是 %（相对可视区），`depth` 0~1 越大越远（越淡、越糊、移动越少）。
-- **同一个 `musicId` 可以出现多次**（同一张唱片摆两处陈列）。
 - 可选 `note`：**这一处陈列**的附注（写进详情的 `NOTE` 一行）。
+- ⚠️ **同一首歌只会有一张唱片**。想摆两处陈列？那是旧版行为，已经取消 ——
+  写重了也不会多出一张（用户反馈过「3 首歌却看到 5 张唱片」）。
 - 点唱片 = 打开档案详情 **+ 尝试播放**；被浏览器自动播放策略拦下时详情照常打开，
   点详情里的按钮即可。全程复用右下角那个播放器，博物馆**不新建** `<audio>`。
+
+### 唱片多了会怎样（可拓展性）
+
+一页（一个「展区」）最多 **6 张**（窄屏 4 张，判据是 560px），
+超过就自动分展区，HUD 上出现 `‹ 1 / 2 ›`：
+
+| 曲库规模 | 博物馆的行为 |
+| --- | --- |
+| 1~6 首 | 一页摆完，分页器收起 |
+| 7 首以上 | 自动分页，每页重新排版（每页都是「进门第一眼」的构图） |
+| 换曲目 / 换封面 | 进厅或 1s 内自动重建唱片墙（指纹比对，不做无谓重建） |
+| 当前在播的歌不在本页 | 分页器角上点一颗强调色圆点提示；进厅时会自动翻到它那一页 |
+
+`spots` 里的手写坐标是**按页**生效的：覆写的坐标写的是「那一页里的位置」，
+所以给第 7 首写死坐标时，它落在第 2 页的那个位置上。
 
 ### 档案详情里能显示哪些字段
 
@@ -315,7 +361,7 @@ python new-post.py                 # Windows 也可以直接双击 new-post.cmd
   tags: ["electronic", "animation"] }
 ```
 
-`note`（写在 `music-museum-data.js` 的陈列条目上）优先于曲目的 `description`。
+`note`（写在 `music-museum-data.js` 的 `spots` 条目上）优先于曲目的 `description`。
 
 ### 加一个项目
 
@@ -358,3 +404,9 @@ git push
 - 本地开发时如果 `git push` 被代理挡掉（`CONNECT tunnel failed`），
   可以改走 REST API 推送（`push_via_api.py`）—— 但**不要用 GitHub MCP 的 `push_files`**，
   它只接受字符串，会把 `assets/` 下的 PNG / MP3 等二进制文件写坏。
+- **音乐博物馆的数据源只有一个**：`music-data.js` 的 `tracks[]`。
+  `music-museum-data.js` 只是**可选覆写表**，别往里加歌曲条目（加了也不会多出唱片）。
+- **改 `music-museum.js` 时守住三条不变量**：① 整站只有一个 `<audio>`（博物馆一律走
+  `RinsoraMusic.playIndex()`，不新建播放器、不改 `src`）；② 退出展厅只能走宿主注入的
+  `exitMuseum()`（别在博物馆里自己收尾）；③ 唱片摆位必须确定性（用 `hash(id)`，**不能用
+  `Math.random`**，否则每次刷新角度都变）。
