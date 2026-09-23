@@ -1073,13 +1073,20 @@
      ⚠️ 这是**每次换焦点 / resize 读一次**的布局读（和 canScrollBox 同类），
         不是每帧的。放在独立函数里，回归装置才能把它从「热路径」里排除掉。
      ============================================================ */
-  function measureLyrics() {
+  function measureLyrics(force) {
     if (!lyrEl || !lyrView || !lyrTrack) return;
     const L = state.lyr;
     const empty = lyrEl.classList.contains('is-empty');
-    /* 先读后写是刻意的：刚从 display:none 变回来时，要读变更**之后**的值 */
-    L.h = empty ? 0 : (lyrView.clientHeight || 0);
-    L.cap = empty ? 0 : Math.max(20, ((lyrView.clientWidth || 0) - 26) / 15.5);
+    /* 尺寸只在「视口变化 / 空态切换」时变，换歌不需要重读 —— 避免每次换焦点
+       都强制一次同步布局（读 clientHeight 会让滚轮切歌时整场闪一下）。
+       force 由 onResize 传；空态切换靠 measuredEmpty 对比兜住。 */
+    if (force || L.measuredEmpty !== empty || !L.measured) {
+      /* 先读后写是刻意的：刚从 display:none 变回来时，要读变更**之后**的值 */
+      L.h = empty ? 0 : (lyrView.clientHeight || 0);
+      L.cap = empty ? 0 : Math.max(20, ((lyrView.clientWidth || 0) - 26) / 15.5);
+      L.measured = true;
+      L.measuredEmpty = empty;
+    }
     /* 长行是按宽度缩字号的 → 宽度变了（resize）要把每一行重算一遍 */
     Array.prototype.forEach.call(lyrTrack.children, (p, i) => {
       if (L.lines[i]) p.style.setProperty('--mm-lf', fitScale(L.lines[i].text).toFixed(3));
@@ -1316,7 +1323,7 @@
     layoutRail();
     applyFan();
     /* 第八轮：歌词取景框的宽高变了 → 重量一次（长行是按宽度缩字号的） */
-    measureLyrics();
+    measureLyrics(true);
     startFan();
   }
 

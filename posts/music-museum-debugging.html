@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffb6d5">
+  <title>给音乐博物馆写回归装置：抓那些「看着对、其实没生效」的 bug · 空凛 · Rinsora 的小窝</title>
+  <meta name="description" content="一个纯静态小站为什么需要 1685 条自动化断言，以及几类只有测试才能抓住的静默 bug。">
+  <link rel="canonical" href="https://rinsora.dpdns.org/posts/music-museum-debugging.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="空凛 · Rinsora 的小窝">
+  <meta property="og:title" content="给音乐博物馆写回归装置：抓那些「看着对、其实没生效」的 bug · 空凛 · Rinsora 的小窝">
+  <meta property="og:description" content="一个纯静态小站为什么需要 1685 条自动化断言，以及几类只有测试才能抓住的静默 bug。">
+  <meta property="og:url" content="https://rinsora.dpdns.org/posts/music-museum-debugging.html">
+  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+  <link rel="stylesheet" href="../style.css">
+  <!-- V3 组件 / 动画层：主题令牌、转场遮罩、无障碍都在这里 -->
+  <link rel="stylesheet" href="../v3.css">
+  <link rel="stylesheet" href="post.css">
+  <script>
+  /* 主题在首帧之前落定：键名和首页完全一致（rinsora-palette / rinsora-theme / rinsora-hue），
+     所以「在首页换了主题再点进文章」两边是同一套配色，不会闪回默认色。 */
+  try{
+    var root=document.documentElement;
+    var PAL={'candy':'candy','sunset':'sunset','lavender':'lavender','lilac':'lavender','mint':'mint'};
+    var pal=PAL[localStorage.getItem('rinsora-palette')]||'candy';
+    var night=localStorage.getItem('rinsora-theme')==='night';
+    root.setAttribute('data-theme',night?'night':pal);
+    root.classList.add('pal-'+((pal==='lavender')?'lilac':pal));
+    if(night) root.classList.add('night');
+    var hue=localStorage.getItem('rinsora-hue');
+    if(hue) root.style.setProperty('--hue',hue+'deg');
+    /* 从站内跳过来时先把转场遮罩放上场；掀开这件事交给纯 CSS 动画，
+       不依赖任何一个脚本 —— 脚本没跑也不会留下一层盖住整页的遮罩。 */
+    try{ if(sessionStorage.getItem('rinsora-nav')) root.setAttribute('data-enter','1'); }catch(e){}
+  }catch(e){}
+  </script>
+</head>
+<body>
+  <!-- 把 <html> 上的主题类镜像到 <body>：颜色变量是「html.x,body.x」两边都写的 -->
+  <script>try{var _b=document.body,_r=document.documentElement;_b.className=_r.className;_b.setAttribute('data-theme',_r.getAttribute('data-theme')||'candy');}catch(e){}</script>
+  <div class="page-cover" id="pageCover" aria-hidden="true"></div>
+
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-a"></span><span class="blob blob-b"></span><span class="blob blob-c"></span>
+    <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+  </div>
+  <div class="screen-grain" aria-hidden="true"></div>
+
+  <main class="post-wrap">
+    <article class="post-card glass">
+      <div class="post-top">
+        <a class="post-back" href="../index.html#blog">← 回到博客列表</a>
+        <span class="post-brand">空凛 / Rinsora</span>
+      </div>
+
+      <p class="post-kicker">✿ BLOG / 开发</p>
+      <h1 class="post-title">给音乐博物馆写回归装置：抓那些「看着对、其实没生效」的 bug</h1>
+      <p class="post-meta">
+        <span class="date">2026.09.24</span>
+        <span class="dot"></span><span>空凛 / Rinsora</span>
+        <span class="dot"></span><span>约 7 分钟</span>
+      </p>
+      <hr class="post-divider">
+
+      <div class="post-body">
+        <p>音乐博物馆这个板块做到第八轮，我已经不太相信自己的眼睛了——太多 bug 是「看着对、实际上根本没生效」的：类名、DOM、数据全都对，但功能就是不动。这种 bug 没有报错、没有堆栈，只能靠一套自动化的回归装置把它们一个个逼出来。</p>
+        <p>这套装置现在是一行命令跑完：<code>python _mm3all.py</code>，五件套共 <strong>1685 条断言</strong>，全绿。写下这篇，是想把这段时间踩过的几类坑和它们的解法记下来，省得以后重蹈覆辙。</p>
+
+        <h2>一、「看着对、其实没生效」的三兄弟</h2>
+        <p>第一类最阴，我给它起了个名字叫「inline 压死样式表」。</p>
+        <p>唱片的基础缩放由 JS 按「离焦点的距离」算出来，写成内联样式 <code>--mm-scale</code>。然后我想让 hover、选中的时候再放大一点，就在 CSS 里写了 <code>.mm-disc:hover{--mm-scale:calc(...)}</code>。结果 hover 完全没反应，而类名、DOM、computed 值全都对。</p>
+        <p>根因是：<strong>内联样式的优先级高于样式表</strong>，JS 写的那个同名变量把 CSS 里的覆盖规则「压死」了。解法是把变量拆两层——<code>--mm-scale-data</code>（内联，给底值）+ <code>--mm-scale:var(--mm-scale-data,1)</code>（样式表默认，状态规则只覆盖它）。这个坑后来在 z-index 上又原样复现了一次，只是换了个属性名。</p>
+        <p>第二类是「声明了，但没进属性」。写过 <code>--depth-x</code> 却忘了把它拼进 <code>transform</code>，结果是五张唱片位移完全一致——功能看着有，其实每一张都在原地。</p>
+        <p>第三类更气人：<strong>代数恒等不是修复</strong>。<code>(a-1)*-0.6</code> 和 <code>(1-a)*0.6</code> 是同一个数，换了写法等于没改。我调「方向符号」调了半天，数值一个都没动。</p>
+
+        <h2>二、「第二真相」：一条状态只能有一个落点</h2>
+        <p>好几次 bug 的根子是同一个：同一件事被存了两份，两份会慢慢漂移。</p>
+        <p>比如播放按钮的「在播 / 暂停」这个 bit，一度同时存在 <code>is-playing</code> 和 <code>data-state</code> 两个地方。再比如歌词高亮：博物馆选中的唱片，和播放器正在播的唱片，是两件事——如果你去读播放器内部的 <code>active</code> 状态，就写了一份「第二真相」，选中的歌没在播时歌词会假装在播。</p>
+        <p>现在的铁律是：<strong>一条状态只有一个落点，而且别去读别人的内部状态当真相。</strong></p>
+
+        <h2>三、改「派生值」之前，先问一句「谁反写它」</h2>
+        <p>「进厅认出正在播的那首」这个需求，第一版只在 <code>enter()</code> 里写了 <code>selectedIndex</code>。但 <code>selectedIndex</code> 是个派生值，它会从 <code>fanTo</code> 反写回来——于是紧接着那次同步，用上一次残留的 <code>fanTo</code> 把它又改了回去。</p>
+        <p>症状是：首次进厅正常，第二次进厅焦点停在上一张。修法是把 <code>selectedIndex / fanTo / fanPos</code> 三件一起写。教训：<strong>动一个派生值之前，先搞清楚谁在反写它。</strong></p>
+
+        <h2>四、回归装置自己也会骗人</h2>
+        <p>写完测试不等于安全。这套装置自己就出过三种「假红」，还有一种更危险的「假绿」。</p>
+        <p>假红最好查——一般是断言写错了，或者设计变了旧期望没跟上。值得警惕的是假绿：有一条断言是靠「强行给对象安一个假属性」才通过的，它其实在替一个真 bug 打掩护。那次是滚轮让位的目标，我给它 stub 了 <code>scrollHeight</code> 才绿，实际上那个容器从来就不能滚动。</p>
+        <p>教训写成了两条：<strong>期望值要从数据推导，别硬写条数；每条断言的前置状态要自己造，别继承上一个用例的残留。</strong></p>
+
+        <h2>五、无头浏览器挂了，jsdom 顶上</h2>
+        <p>本机的无头 Edge 突然「死了」——启动返回 0，但什么都不干，连 <code>--version</code> 都零输出。真截图这条路断了，我改用 jsdom 承担逻辑与结构验证。</p>
+        <p>jsdom 有六条必踩的坑：脚本要 <code>runScripts:'dangerously'</code> 才会执行；<code>clientWidth</code> 恒为 0，任何按视口分支的逻辑都会走窄屏那条；<code>setInterval</code> 会让进程永不结束，得手动 <code>close()</code> + <code>exit()</code>……但这些都比不上「浏览器真机目视」——像素、配色、动画观感，jsdom 一个都验不了。</p>
+
+        <h2>六、性能上的静默 bug（这轮刚修的）</h2>
+        <p>第八轮上线后，滚轮切歌时唱片会短暂闪没。查下来是两件事叠在一起：焦点唱片上的提示条嵌在带 <code>filter</code> 的唱片里，又用了 <code>backdrop-filter</code>，每次换焦点改它的文字，都会连累整张唱片重新光栅化；再加上歌词面板每次换歌都读一次 <code>clientHeight</code>，强制了一次同步布局。</p>
+        <p>修法很朴素：去掉那个不必要的 <code>backdrop-filter</code>，把歌词取景框的尺寸缓存起来，只在真正变化时才重读。</p>
+
+        <h2>小结</h2>
+        <p>原生 JS 的静态站，最可怕的不是报错，是静默失效。报错至少告诉你哪里错了；静默失效只会让你在 CSS 里调半天数值，然后怀疑人生。所以我把这段时间的每一类坑都沉淀成了断言——不是因为我喜欢写测试，是因为我实在不想再被同一类 bug 骗第二次。</p>
+      </div>
+
+      <div class="post-footer">
+        <div class="post-tags"><span>开发</span><span>前端</span><span>测试</span><span>踩坑</span></div>
+        <a class="enter-btn" href="../index.html#blog"><span>看更多文章</span><span class="enter-arrow">→</span></a>
+      </div>
+    </article>
+  </main>
+
+  <audio id="audio" preload="metadata"></audio>
+  <aside id="floatingPlayer" aria-label="音乐播放器"></aside>
+  <script src="../gh-api.js"></script>
+  <script src="../music-data.js"></script>
+  <script src="../music.js"></script>
+  <script src="../music-upload.js"></script>
+</body>
+</html>

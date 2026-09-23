@@ -977,8 +977,8 @@ body.museum-open{overflow:hidden}
 
 /* 右上关闭 */
 .mm-detail-x{
-  position:absolute;right:14px;top:14px;
-  width:34px;height:34px;border-radius:50%;
+  position:absolute;right:10px;top:10px;
+  width:44px;height:44px;border-radius:50%;
   display:grid;place-items:center;
   /* ⚠️ 走 --glass-2 而不是写死 rgba(255,255,255,.55)：
      夜间 --glass-2 是 rgba(255,255,255,.07)，自动就是「暗底上的浅一层」，
@@ -1176,10 +1176,11 @@ body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
   transform:translateX(-50%);
   padding:4px 12px;border-radius:999px;white-space:nowrap;
   font-size:9.5px;font-weight:900;letter-spacing:.16em;
-  color:#fff;background:rgba(24,16,28,.62);
+  color:#fff;background:rgba(24,16,28,.74);
   border:1px solid rgba(255,255,255,.24);
-  backdrop-filter:blur(6px);
-  -webkit-backdrop-filter:blur(6px);
+  /* ⚠️ 不放 backdrop-filter：它嵌在带 filter 的唱片里，syncCue 每次换焦点
+     都改它的文字，backdrop-filter 会连累整张唱片重新光栅化 → 滚轮切歌时
+     唱片短暂闪没。深底实色(.74)已够保证白字可读，玻璃感让位给流畅。 */
   opacity:0;pointer-events:none;       /* 只是提示，点击归唱片自己 */
   transition:opacity .3s var(--ease);
 }
@@ -1233,7 +1234,7 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   .mm-archive-art{display:none}
   .mm-detail-meta{max-width:320px;margin-left:auto;margin-right:auto}
   .mm-detail-acts{justify-content:center}
-  .mm-detail-x{right:11px;top:11px}
+  .mm-detail-x{right:8px;top:8px}
 }
 @media (max-width:560px){
   .mm-detail-card{padding:22px 16px 20px}
