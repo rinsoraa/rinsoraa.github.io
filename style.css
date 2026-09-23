@@ -318,7 +318,22 @@ body.night .boot-progress{background:rgba(255,255,255,.12)}
 .app:not(.visible){display:none}
 /* 侧栏单独淡入一下，让「进入小窝」不至于是一记硬切。
    刻意不写 fill 模式（不用 both）：万一动画没跑起来（被节流 / 降级关掉），
-   元素要落在「正常态」，而不是卡在 from 那帧的 translateY(10px) 上。 */
+   元素要落在「正常态」，而不是卡在 from 那帧的 translateY(10px) 上。
+
+   ⚠️⚠️ 已知现象（不是 bug，真机看不出来，但会误导一切几何测量）：
+   无头浏览器用 --virtual-time-budget 时**虚拟时间不推进 CSS animation**
+   （只把 transition 抹平）。于是 appIn 永远停在 currentTime=0 / from 帧，
+   整条侧栏（含头像、.side-name、.side-links、.side-status 四个禁入区）
+   比真实位置**低 10px**，playState 却仍是 'running'、fill 是 'none'。
+   后果：任何「侧栏内元素有没有对齐 / 有没有压住导航」的探针或截图
+   都会凭空多出 10px 的系统偏差，看上去像布局写错了。
+
+   已实测确认（_animdiag.js）：
+     未干预 → .side-rail transform = matrix(1,0,0,1,0,10)，avatar.top = 121
+     设 animation:none → transform = none，              avatar.top = 111
+   所以：**凡是要量侧栏几何的探针，量之前先 `railEl.style.animation='none'`**。
+   这里刻意不改行为 —— 真机上动画正常跑完会落到 to 帧，没有可见缺陷；
+   改它等于动一个与此无关的既有动画，收益不值风险。（用户已确认只加注释。） */
 .app.visible .side-rail{animation:appIn .85s var(--ease)}
 @keyframes appIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
@@ -362,7 +377,18 @@ body.spa-post-open #floatingPlayer{z-index:45}
 body.spa-post-open .lyricbar{z-index:46}
 body.spa-post-open .mobile-nav{display:none}
 
-.side-rail{position:fixed;z-index:18;left:0;top:0;bottom:0;width:var(--rail);display:flex;flex-direction:column;align-items:center;padding:24px 18px 22px;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.12));border-right:1px solid var(--bd-2);backdrop-filter:blur(26px) saturate(1.25);-webkit-backdrop-filter:blur(26px) saturate(1.25);will-change:backdrop-filter}
+/* ⚠️ isolation:isolate 是给扇形导航「借」一个层叠上下文，不是装饰。
+   4 个节点绕头像铺开时，最下面两张卡（碎碎念 / 音乐博物馆）会落在
+   .side-name 那几行字上。就算把卡片的 z-index 提到天上也没用 ——
+   .side-name 不是层叠上下文，它和 .side-rail 的子节点们在**同一个**上下文里
+   按绘制顺序比大小，而正文/装饰里的正 z-index 元素会整层压在 z-index:18 之上。
+   在 .side-rail 上开一个上下文 (=18,0 这一层），侧栏内部就自成一片天地：
+   卡片想压过署名只需要在自己家里赢。副作用是侧栏整体被关进 z-index:18 这一层，
+   而它本来就是 18，所以对外**零变化**（页面上没有 z-index 在 18~40 之间、
+   又真的和侧栏重叠的东西）。
+   （只写 isolation 不写 z-index 的话会创建 z-index:auto 的上下文，
+     等于「一个不可提升的层」—— 将来一旦真要抬侧栏就得多改一处，索性定住 18。） */
+.side-rail{position:fixed;z-index:18;isolation:isolate;left:0;top:0;bottom:0;width:var(--rail);display:flex;flex-direction:column;align-items:center;padding:24px 18px 22px;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.12));border-right:1px solid var(--bd-2);backdrop-filter:blur(26px) saturate(1.25);-webkit-backdrop-filter:blur(26px) saturate(1.25);will-change:backdrop-filter}
 body.night .side-rail{background:rgba(22,17,29,.58);border-right-color:rgba(255,255,255,.08)}
 .rail-top{width:100%;display:flex;justify-content:space-between;align-items:center;color:#b99bad;font-size:10px;letter-spacing:.18em}
 .rail-index{letter-spacing:.18em}
@@ -413,7 +439,7 @@ body.night .radial-item small{color:#c0a9bb}
 .avatar-nav-wrap.nav-closed:hover .radial-item{opacity:0;pointer-events:none;transform:translate3d(0,0,0) scale(.4)}
 .avatar-nav-wrap.nav-closed .avatar-sidebar{transform:none;filter:none}
 
-.side-name{text-align:center;margin-top:8px}
+.side-name{position:relative;z-index:2;text-align:center;margin-top:8px}
 .side-name strong{display:block;font-size:24px;letter-spacing:-.06em}
 .side-name span{display:block;margin-top:5px;font-size:12px;color:#b58fa7;font-weight:900;letter-spacing:.04em}
 .side-name small{display:block;margin-top:6px;color:#cf9fbb;font-size:10px;letter-spacing:.12em}
@@ -442,7 +468,7 @@ body.night .side-status{background:rgba(255,255,255,.08);color:#c3b2c2}
 .side-link:active{transform:translateY(-1px) scale(.94)}
 body.night .side-link{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#c9b3c4}
 body.night .side-link:hover{background:rgba(255,255,255,.14);color:var(--accent-primary);border-color:var(--accent-primary)}
-.rail-bottom{margin-top:auto;text-align:center;color:#ae9aaa;font-size:10px;letter-spacing:.16em;display:flex;flex-direction:column;gap:9px}
+.rail-bottom{margin-top:auto;position:relative;z-index:2;text-align:center;color:#ae9aaa;font-size:10px;letter-spacing:.16em;display:flex;flex-direction:column;gap:9px}
 .rail-bottom i{font-style:normal;font-size:18px;animation:bob 2.2s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(5px)}}
 

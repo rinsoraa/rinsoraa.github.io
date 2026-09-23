@@ -95,6 +95,7 @@
     isEntering: false,
     entered: false,
     isTransitioning: false,
+    museumOpen: false,      /* 是否在「音乐博物馆」浮层里（见下面 enterMuseum 区块） */
     theme: 'candy',
     effects: {}
   };
@@ -102,6 +103,7 @@
   /* ---------------------------------------------------- 状态 ---- */
   const state = {
     section: 'about',
+    museumOpen: false,      /* 与 AppState.museumOpen 同步维护，见 enterMuseum */
     night: store.get('rinsora-theme') === 'night',
     palette: (() => {
       const p = store.get('rinsora-palette', 'candy');
@@ -278,33 +280,96 @@
        rot   = angle / 10                    （跟着弧线轻轻转，别太夸张）
 
      ⚠️ 下面这几个数不是「看着差不多」调出来的，是解出来的。
-        扇形要同时避开三块东西，而侧栏只有 220px 宽（头像就占 147px）：
+        扇形要同时避开四块东西，而侧栏只有 248px 宽（头像就占 132px）：
 
-          · 头像      page (50,121)-(197,267)
-          · 侧栏署名  page (99,316)-(148,405)   ← 在头像正下方
-          · ONLINE    page (77,415)-(167,440)
-          · 内容首栏  page x >= 300             ← 扇形是浮层，最好别压过去
+          · 头像      page (50.5,121)-(196.5,267)   半径 66，锚点就在它中心
+          · 侧栏署名  page (39,316)-(208,405)       ← 在头像正下方
+          · 联系方式  page (35.5,419)-(211.5,457)   ← 4 颗按钮一排
+          · ONLINE    page (77.5,473)-(169.5,509)
+          · 内容首栏  page x >= 300                 ← 硬边界（真的压住内容）
+                                    x >= 248 是侧栏右缘，但 248~300 是
+                                    .content 的 padding，探进去不压东西
 
-        4 张 90x52 的卡片绕 147px 的头像摆一圈，靠手调是调不出来的：
-        半径小了压头像，半径大了顶出侧栏；角度跨到 0° 附近（头像正右）
-        时怎么放都不行 —— 要清出头像得 R>=126，可那样右边界必然 >300。
-        所以扇形整体开在**右上方**，从 -110° 转到 +22°。
-        参数由 `_navfit.py` 用 SAT（分离轴）在旋转矩形上搜出来，
-        满足「离禁入区 >=8px、互不重叠、x 落在 [0,300]」，见该脚本注释。
+        卡片绕头像摆一圈，靠手调是调不出来的：半径小了压头像（卡片内缘
+        必须 >= 头像半径 66 + 8px 间隙），半径大了顶出侧栏。
+        5 张卡（4 个分栏 + 音乐博物馆）比 4 张挤得多，所以整组参数用
+        `_navfit.py` 重解过 —— 那个脚本把上面每块都写成了几何约束再搜。
 
-     节点多的时候单圈会挤在一起，所以奇偶分两圈
-     （内圈 / 外圈差 58px），相邻两项永远落在不同半径上，不会叠。
-     参数都在下面 NAV_CFG 里，改一个数就能整圈变形 —— 但改完请重跑
-     `_navfit.py` 与 `_navcheck.py`，别只靠眼睛。
-     ============================================================ */
+        现行值：72x42 卡片、R=136、start=-128°、arc=148°（每 37° 一个）。
+        这一组只在 **≥1151px** 生效；861~1150px 见下面的 NAV_CFG_COMPACT。
+
+        ⚠️ 自转系数固定 **angle/10**（见下面 layoutRadialNav 里那行），
+        这个不用搜 —— 卡片沿圆周切线取向，本来就该是极角本身。
+        搜出来的是「位置」：把自转固定成 angle/10 之后，5 张卡刚好
+        均匀铺在 148° 上（-128° / -91° / -54° / -17° / +20°），
+        间距全部够宽，没有任何两张挨上（最近一对还留 6.2px）。
+
+        ⚠️ 头像必须按**展开态**建模，不能按静态 132x132：
+        `.avatar-nav-wrap.open .avatar-sidebar` 会加
+        `translateY(-4px) scale(1.07) rotate(-2deg)`，真实 bbox 变成
+        146x146、中心从 y=198 抬到 194。按静态值建模会让求解器
+        「以为离头像 10.4px」，实测只有 3.1px —— 差的就是那 7%。
+        改头像样式后请跑 `_navgeom.js` 看 zones.avatar 再同步。
+
+        位置和自转必须一起想 —— 单独调其中任何一个都会撞。
+
+        ⚠️ 搜索参数与生产参数**必须一致**：`_navfit.py` 里 PROD_ROT_K
+        就是这里的 10。曾经求解器按 6 搜、生产用 10，于是「搜出来无重叠」
+        的参数在线上是真叠的（blog/projects 叠 4.66px），而且不报错。
+        改这里那行，务必同步改 PROD_ROT_K，再重跑求解器。
+
+        ⚠️ 边界也别写错（踩过两次）：硬边界是「内容真正开始的地方」
+        page x = 300；写成 248（侧栏右缘）会导致**全域无解**，
+        写成 297.5 会卡在临界。`_navfit.py` 的 MAX_X / RAIL_SOFT 有详注。
+
+        节点多的时候单圈会挤在一起，所以奇偶分两圈
+        （内圈 / 外圈差 58px），相邻两项永远落在不同半径上，不会叠。
+        参数都在下面 NAV_CFG 里，改一个数就能整圈变形 —— 但改完请重跑
+        `_navfit.py` 与 `_navcheck.py`，别只靠眼睛。
+        ============================================================ */
   const NAV_CFG = {
-    startAngle: -110,  /* 一度为单位；-90 是正上方，0 是正右，90 是正下方 */
-    arc: 132,          /* 扇形张开的总角度 → 4 个节点每 44° 一个 */
-    radius: 138,       /* 内圈半径 */
-    ringGap: 58,       /* 两圈之间的半径差（节点 >4 时才用） */
-    twoRingAbove: 4    /* 超过这个数量就分两圈；5 个以上时外圈会顶到内容栏，
-                          那时得把 arc 收窄，别硬加节点 */
+    startAngle: -128,  /* 一度为单位；-90 是正上方，0 是正右，90 是正下方 */
+    arc: 148,          /* 扇形张开的总角度 → 5 个节点每 37° 一个 */
+    radius: 136,       /* 内圈半径 */
+    ringGap: 58,       /* 两圈之间的半径差（节点 >6 时才用） */
+    twoRingAbove: 6    /* 超过这个数量就分两圈 */
   };
+
+  /* ------------------------------------------------------------
+     compact-radial —— 861~1150px 那一档
+     ------------------------------------------------------------
+     210px 的侧栏里塞不下 72×42 的文字卡（缺口约 100px），
+     所以这一档整组换成 44px 圆点 + tooltip，参数**另解一组**。
+     详情与求解过程写在 v3.css 第 21.b 节。
+
+     ⚠️ 这三条必须和 v3.css 的 @media (min-width:861px) and
+     (max-width:1150px) 一一对应：JS 负责把 --nx/--ny/--nr 写到
+     极坐标位置，CSS 负责把节点画成 44px 圆；两边任一改动都要重跑
+     `_navscan_sz.js` + `_navfit_soft.py`，改完再用
+     `_compactfinal.js` 复核（跟宽屏那组的规矩一样）。
+
+     ⚠️ navScale 不是在「缩放整个扇形」，而是把 .radial-nav 的
+     transform 从宽屏档的 scale(.85) 明确**还原**成 scale(1)。
+     别的档位靠残留的 .85 把半径和卡片一起缩，紧凑档的半径/尺寸
+     本来就是按 210px 侧栏解出来的，再缩一层会把 44px 圆压到 37px。 */
+  const NAV_CFG_COMPACT = {
+    startAngle: -80,
+    arc: 204,
+    radius: 144,
+    ringGap: 58,
+    twoRingAbove: 6,
+    navScale: 1
+  };
+
+  /* 唯一的口径：低于这个宽度就进紧凑档。
+     必须写在 JS 里而不是每处 innerWidth 判断里 ——
+     否则「解算用的断点」和「运行时用的断点」各写一份，早晚漂移。
+     同一个数字在 CSS 里对应 v3.css 的两条 @media，改一处要同步三处。 */
+  const COMPACT_MAX = 1150;
+
+  function activeNavCfg() {
+    return window.innerWidth <= COMPACT_MAX ? NAV_CFG_COMPACT : NAV_CFG;
+  }
 
   function layoutRadialNav() {
     if (!radialNav) return;
@@ -312,15 +377,20 @@
     if (!items.length) return;
     radialNav.classList.remove('no-js');
 
+    const cfg = activeNavCfg();
     const n = items.length;
-    const twoRing = n > NAV_CFG.twoRingAbove;
-    const step = n > 1 ? NAV_CFG.arc / (n - 1) : 0;
-    const start = NAV_CFG.startAngle;
+    const twoRing = n > cfg.twoRingAbove;
+    const step = n > 1 ? cfg.arc / (n - 1) : 0;
+    const start = cfg.startAngle;
+
+    /* 档位缩放挂在 .radial-nav 上（宽屏 .85 / 紧凑 1），
+       这样 resize 跨过断点时不需要重算任何极坐标。 */
+    if (cfg.navScale != null) radialNav.style.transform = 'scale(' + cfg.navScale + ')';
 
     items.forEach((el, i) => {
-      const angle = n === 1 ? start + NAV_CFG.arc / 2 : start + step * i;
+      const angle = n === 1 ? start + cfg.arc / 2 : start + step * i;
       const rad = (angle * Math.PI) / 180;
-      const radius = NAV_CFG.radius + (twoRing && i % 2 ? NAV_CFG.ringGap : 0);
+      const radius = cfg.radius + (twoRing && i % 2 ? cfg.ringGap : 0);
       el.style.setProperty('--nx', (Math.cos(rad) * radius).toFixed(1) + 'px');
       el.style.setProperty('--ny', (Math.sin(rad) * radius).toFixed(1) + 'px');
       el.style.setProperty('--nr', (angle / 10).toFixed(1) + 'deg');
@@ -413,6 +483,10 @@
   function navigateTo(page, opts) {
     const o = opts || {};
     if (!TITLES[page]) page = 'about';
+    /* 切分栏 = 退出音乐博物馆浮层。放在最前面（比「已经在目标分栏」的
+       提前返回还早）：在博物馆里点键盘 1~4 想回小窝，如果先提前返回，
+       展厅会一直盖在上面，看着像按键失灵。 */
+    if (AppState.museumOpen) exitMuseum();
 
     if (page === AppState.currentPage && !o.force) {
       /* 已经在目标分栏：不用转场，但**必须**照样把首帧兜底交班，
@@ -476,6 +550,11 @@
   $$('.radial-item,.mobile-nav button').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      /* 音乐博物馆那一项进的是 overlay 场景，不是分栏 ——
+         它带 data-museum 而不是 data-target，所以不能走 navigateTo。
+         （走 navigateTo 会被 TITLES 兜底成「主页」，正好是最糟的结果。） */
+      if (btn.dataset.museum) { enterMuseum(); return; }
+      if (!btn.dataset.target) return;
       navigateTo(btn.dataset.target);
       closeNav(true);
     });
@@ -504,6 +583,7 @@
 
   /* -------------------------------------------------- hash 路由 --- */
   /* 直达链接：#about / #blog / #projects / #moments 跳过欢迎页，
+     #museum / #musicmuseum 直达音乐博物馆，
      #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
      #admin / #write / #editor / #project 跳后台页 */
   function routeHash() {
@@ -511,6 +591,14 @@
     const h = raw.toLowerCase();
     if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
     if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
+    /* 音乐博物馆：先进小窝（不然侧栏/播放器都没上场，退出来是一片欢迎页），
+       再盖上展厅浮层。用 instant 进小窝 —— 这里已经在等一个加载动画了，
+       再叠一层 Room Reveal 会很啰嗦。 */
+    if (h === 'museum' || h === 'musicmuseum') {
+      skipBoot(); enterApp(true);
+      enterMuseum();
+      return true;
+    }
     /* 文章：先落回博客分栏（首帧 CSS 已经把欢迎页按住了），再盖上浮层 */
     const pm = /^\/post\/([^/?#]+\.html)$/i.exec(raw);
     if (pm) {
@@ -525,7 +613,12 @@
     /* 没命中任何路由也要把浮层收掉：从「主页」的最近发布点进文章时，
        进站时的 hash 本来就是空的，后退回来只会把 hash 清掉，
        不在这里收就永远卡在文章上。 */
-    if (!routeHash()) hidePost();
+    if (!routeHash()) {
+      hidePost();
+      /* hash 被清掉（浏览器后退）时，博物馆也该跟着退场 —— 否则
+         地址已经不是 #museum 了，展厅还盖在上面，进退两难。 */
+      if (AppState.museumOpen && (location.hash || '') !== '#museum') exitMuseum();
+    }
   });
 
   /* ============================================================
@@ -731,6 +824,72 @@
     startRoomEntry();
   }
   enterBtn && enterBtn.addEventListener('click', () => startRoomEntry());
+
+  /* ============================================================
+     音乐博物馆 —— 页面入口 / 状态 / 开关
+     ------------------------------------------------------------
+     这个区块**只做接线**，一行场景逻辑都不写。分工：
+
+       script.js（这里）               music-museum.js
+       ────────────────────           ─────────────────────────
+       页面入口（扇形导航 / 移动端底栏） 加载层进度
+       页面状态（AppState.museumOpen）  资源预加载
+       打开 / 关闭的时机                场景渲染与唱片对象
+       与小窝淡出 / 路由 / Esc 的配合    点击唱片 → 复用现有播放器
+
+     三条不变量（破坏了整个站就散架）：
+       ① **绝不创建第二个 <audio>**。点唱片只是 RinsoraMusic.playIndex(i)，
+          所以进博物馆时音乐一直在播、不断不重来。
+       ② **绝不给 .app 或它的祖先加 transform / filter**。侧栏 / 悬浮播放器 /
+          歌词栏都是 position:fixed，加了会把它们的包含块改掉推飞出屏。
+          所以「小窝淡出」走的是**改子元素**（.side-rail / .content），
+          不是给 .app 本身加 filter。
+       ③ **不换文档**。这是站内浮层，location.href 一换 <audio> 就随旧文档销毁。
+     ============================================================ */
+  function enterMuseum(opts) {
+    const o = opts || {};
+    const M = window.RinsoraMuseum;
+    if (!M) return Promise.resolve(false);
+
+    closeNav(true);                 /* 导航先收，别压在加载层上 */
+    hidePost();                     /* 文章浮层让位 */
+    closeSettings();                /* 设置抽屉也收掉 */
+
+    AppState.museumOpen = true;
+    state.museumOpen = true;
+    /* 小窝淡出：只作用于侧栏与内容这两块**子元素** ——
+       .app 自己保持 opacity:1 / 无 filter（不变量 ②）。 */
+    body.classList.add('museum-open');
+    if (history.replaceState) history.replaceState(null, '', '#museum');
+
+    return Promise.resolve(M.enter(o)).then((list) => {
+      /* 加载层被 Esc 中途掐掉的情况：enter 的 token 会作废，
+         这里跟着把状态摆正，别留下「museumOpen=true 但没进场景」。 */
+      if (!M.isOpen() && !M.isEntering()) AppState.museumOpen = false;
+      return list;
+    });
+  }
+
+  function exitMuseum() {
+    const M = window.RinsoraMuseum;
+    if (!M) return false;
+    const was = !!(AppState.museumOpen || M.isOpen());
+    M.exit();
+    AppState.museumOpen = false;
+    state.museumOpen = false;
+    body.classList.remove('museum-open');
+    if (was && history.replaceState) {
+      history.replaceState(null, '', '#' + (AppState.currentPage || 'about'));
+    }
+    return was;
+  }
+
+  /* 移动端底栏那一项也走同一个入口（上面的委托已经覆盖，这里只是兜底：
+     万一将来节点结构变了，`data-museum` 仍然认得出来）。 */
+  $$('[data-museum]').forEach((b) => {
+    if (b.classList.contains('radial-item') || b.closest('.mobile-nav')) return;
+    b.addEventListener('click', (e) => { e.stopPropagation(); enterMuseum(); });
+  });
 
   /* ============================================================
      站内打开文章 —— 内容换掉，文档不换
@@ -1417,7 +1576,14 @@
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSettings(); return; }
     if (e.key === 'Escape') {
-      /* Escape 的收口顺序：文章浮层 → 设置抽屉 → 添加音乐弹窗 */
+      /* Escape 的收口顺序：
+         音乐博物馆 → 文章浮层 → 设置抽屉 → 导航 → 添加音乐弹窗。
+         博物馆排最前：它是「最外面那一层」，Esc 应该先退它。
+         两边都幂等，误调不会出事。 */
+      if (AppState.museumOpen || (window.RinsoraMuseum && window.RinsoraMuseum.isOpen())) {
+        exitMuseum();
+        return;
+      }
       if (postUrl) { closePost(); return; }
       closeSettings();
       closeNav(true);
@@ -1569,6 +1735,10 @@
        （两条规则特异性相同、.nav-closed 写在后面），量出来还是收起态。 */
     openNav: () => openNav(true),
     closeNav: (soft) => closeNav(soft !== false),
+    /* 音乐博物馆：入口在 script.js，场景在 music-museum.js。
+       暴露出来是为了让回归装置能走**真实入口**，而不是直接改类名。 */
+    enterMuseum,
+    exitMuseum,
     showSection,
     enterApp,
     openSettings,

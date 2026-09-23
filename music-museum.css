@@ -1,0 +1,1033 @@
+/* ============================================================
+   music-museum.css —— 「音乐博物馆」场景层
+   ------------------------------------------------------------
+   三块内容：
+     A. 进入加载层（.mm-load）—— 圆环 / 声波 / 加载线 / 微粒子
+     B. 场景本体（.mm-scene）—— 纵深走廊 + 唱片陈列
+     C. 顶部状态条 / 底部提示（.mm-hud）
+
+   与站点既有约定的三条对齐（很重要，别自己发明一套）：
+     ① 亚克力四要素 = 低透底 + 真 backdrop-filter + 1px 亮边 + 顶部内高光
+        （inset 0 1px 0 var(--hi)）—— 见 style.css 第 6 节
+     ② 颜色一律走主题变量（--accent-primary/secondary/tertiary、--glass、
+        --bd、--hi、--ink、--muted），换主题 / 夜间自动跟着变
+     ③ ⚠️ 本文件里的元素都在 .app 之外或 .app 内部，但**绝不给 .app 或
+        任何祖先加 transform / filter / backdrop-filter** ——
+        那会把 position:fixed 的后代（侧栏、悬浮播放器、歌词栏）的
+        包含块改掉，全部被推出首屏。纵深效果只做在 .mm-scene 自己的
+        层上，且 .mm-scene 内部没有 fixed 后代。
+
+   层级：mm overlay 在 .app 之外（body 直接子元素），所以只跟
+         .boot-screen(500) / 播放器 / 歌词栏这些比。
+         z-index:400 压在 .app(5) 之上、开屏(500) 之下。
+   ============================================================ */
+
+/* ============================================================
+   A. 进入加载层
+   ------------------------------------------------------------
+   「档案系统 / 加载终端」的交互语言：一圈细环 + 一圈声波 + 一条
+   加载线 + 几颗微粒子。不模仿任何具体产品的视觉素材，只用
+   「正在检索 → 正在载入」这套通用语法。
+   时序：JS 调 open() → .on（淡入）→ 预加载 → .done（淡出）。
+   进度条宽度由 JS 按「已预加载 / 总数」直接写（0~100%），
+   所以真实资源预加载可以直接接上去。
+   ============================================================ */
+.mm-load{
+  position:fixed;inset:0;z-index:400;
+  display:grid;place-items:center;
+  background:var(--bg);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .45s var(--ease),visibility .45s;
+  overflow:hidden;
+}
+.mm-load.on{opacity:1;visibility:visible;pointer-events:auto}
+.mm-load.done{opacity:0;visibility:hidden;pointer-events:none}
+
+/* 背景底纹：一层极淡的同心圆，暗示「档案柜的层」 */
+.mm-load-bg{
+  position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 46%, var(--accent-soft), transparent 58%),
+    repeating-radial-gradient(circle at 50% 46%,
+      transparent 0 78px, var(--ring) 78px 79px);
+  opacity:.5;
+}
+
+.mm-load-card{
+  position:relative;z-index:2;
+  width:min(520px,calc(100vw - 56px));
+  padding:38px 40px 30px;
+  border-radius:30px;text-align:center;
+  /* 亚克力四要素 */
+  background:var(--glass);
+  border:1px solid var(--bd);
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(var(--blur)) saturate(1.45);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.45);
+}
+@supports not ((backdrop-filter:blur(4px)) or (-webkit-backdrop-filter:blur(4px))){
+  .mm-load-card{background:var(--glass-solid)}
+}
+
+/* —— 圆环 + 声波：一个 SVG 都不加，纯 CSS 同心圆 + 旋转 —— */
+.mm-load-orbit{
+  position:relative;width:118px;height:118px;margin:0 auto 22px;
+}
+.mm-load-orbit i{
+  position:absolute;inset:0;border-radius:50%;
+  border:1.5px solid transparent;
+}
+/* 外环：一段强调色弧 + 慢转 */
+.mm-load-orbit i:nth-child(1){
+  border-top-color:var(--accent-primary);
+  border-right-color:var(--accent-primary);
+  animation:mmSpin 1.5s cubic-bezier(.6,.15,.4,.85) infinite;
+}
+/* 内环：反向快转，紫色弧 */
+.mm-load-orbit i:nth-child(2){
+  inset:16px;
+  border-bottom-color:var(--accent-tertiary);
+  border-left-color:var(--accent-tertiary);
+  animation:mmSpin 2.2s linear reverse infinite;
+}
+/* 圆心：一条上下跳动的声波（3 根竖条，靠 scaleY 错峰） */
+.mm-load-wave{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:center;gap:4px;height:34px;
+}
+.mm-load-wave b{
+  display:block;width:4px;height:100%;border-radius:99px;
+  background:linear-gradient(180deg,var(--accent-secondary),var(--accent-primary));
+  transform-origin:50% 50%;animation:mmWave 1.05s ease-in-out infinite;
+}
+.mm-load-wave b:nth-child(2){animation-delay:.13s}
+.mm-load-wave b:nth-child(3){animation-delay:.26s}
+.mm-load-wave b:nth-child(4){animation-delay:.39s}
+.mm-load-wave b:nth-child(5){animation-delay:.52s}
+@keyframes mmSpin{to{transform:rotate(360deg)}}
+@keyframes mmWave{0%,100%{transform:scaleY(.28)}50%{transform:scaleY(1)}}
+
+.mm-load-kicker{
+  margin:0 0 6px;font-size:10px;letter-spacing:.3em;
+  color:var(--accent-primary);font-weight:900;text-transform:uppercase;
+}
+.mm-load-title{
+  margin:0 0 8px;font-size:34px;letter-spacing:-.05em;color:var(--ink);
+}
+.mm-load-title em{
+  font-style:normal;
+  background:linear-gradient(100deg,var(--accent-primary),var(--accent-tertiary));
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+}
+.mm-load-sub{margin:0 0 4px;font-size:13.5px;color:var(--muted)}
+.mm-load-en{
+  margin:0 0 22px;font-size:10.5px;letter-spacing:.22em;
+  color:var(--muted);opacity:.75;text-transform:uppercase;
+}
+
+/* —— 加载线：外层是轨道，内层宽度由 JS 按预加载进度直接写 —— */
+.mm-load-bar{
+  height:3px;border-radius:99px;overflow:hidden;
+  background:var(--bd-2);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.05);
+}
+.mm-load-bar i{
+  display:block;height:100%;width:0;border-radius:inherit;
+  background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary),var(--accent-tertiary));
+  transition:width .3s var(--ease);
+  /* 顶部一道跑动的光，让「在动」这件事始终可见 */
+  position:relative;overflow:hidden;
+}
+.mm-load-bar i:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);
+  animation:mmShine 1.1s linear infinite;
+}
+@keyframes mmShine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+.mm-load-meta{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:11px;font-size:10.5px;letter-spacing:.14em;color:var(--muted);
+}
+.mm-load-meta b{font-variant-numeric:tabular-nums;color:var(--ink)}
+
+/* —— 微粒子：8 颗，纯 CSS 漂浮（不是 Canvas —— 加载层生命周期很短，
+     为它拉一块画布不值得，也会跟 Room Reveal 的粒子抢概念） —— */
+.mm-load-dust{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.mm-load-dust span{
+  position:absolute;width:5px;height:5px;border-radius:50%;
+  background:var(--accent-primary);opacity:.5;
+  animation:mmFloat 6.5s ease-in-out infinite;
+}
+.mm-load-dust span:nth-child(1){left:12%;top:26%;animation-delay:0s;background:var(--accent-primary)}
+.mm-load-dust span:nth-child(2){left:23%;top:72%;animation-delay:.8s;background:var(--accent-secondary);width:4px;height:4px}
+.mm-load-dust span:nth-child(3){left:78%;top:22%;animation-delay:1.6s;background:var(--accent-tertiary);width:7px;height:7px}
+.mm-load-dust span:nth-child(4){left:88%;top:64%;animation-delay:2.4s;background:var(--accent-primary);width:4px;height:4px}
+.mm-load-dust span:nth-child(5){left:34%;top:12%;animation-delay:3.2s;background:var(--accent-secondary)}
+.mm-load-dust span:nth-child(6){left:64%;top:84%;animation-delay:4s;background:var(--accent-tertiary);width:4px;height:4px}
+.mm-load-dust span:nth-child(7){left:8%;top:52%;animation-delay:4.8s;background:var(--accent-tertiary)}
+.mm-load-dust span:nth-child(8){left:92%;top:40%;animation-delay:5.6s;background:var(--accent-secondary)}
+@keyframes mmFloat{
+  0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.25}
+  50%{transform:translate3d(9px,-26px,0) scale(1.5);opacity:.75}
+}
+
+/* ============================================================
+   B. 场景本体
+   ------------------------------------------------------------
+   结构：.mm-scene（fixed 全屏、深底）
+           > .mm-depth（几层同心光晕，做纵深）
+           > .mm-floor（地面网格，透视感）
+           > .mm-stage（唱片陈列区，唱片按 data 的比例坐标摆放）
+   所有 .mm-scene 内的定位都用 absolute + %，所以窗口变化时
+   陈列比例不变（唱片不会跑出视口）。
+   ============================================================ */
+.mm-scene{
+  position:fixed;inset:0;z-index:400;
+  display:none;
+  overflow:hidden;
+  background:var(--bg);
+  /* 入场：整块淡入 + 轻微推进，不做 transform-origin 位移 */
+  opacity:0;
+  transition:opacity .6s var(--ease);
+}
+.mm-scene.open{display:block}
+.mm-scene.on{opacity:1}
+/* 退出时快速淡掉，别拖拖拉拉 */
+.mm-scene.closing{opacity:0;transition-duration:.3s}
+
+/* —— 纵深：三层同心柔光，越靠中心越亮 —— */
+.mm-depth{position:absolute;inset:0;pointer-events:none}
+.mm-depth i{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);border-radius:50%}
+.mm-depth i:nth-child(1){
+  width:min(120vw,1500px);height:min(120vw,1500px);
+  background:radial-gradient(circle,var(--accent-soft),transparent 62%);
+}
+.mm-depth i:nth-child(2){
+  width:min(72vw,900px);height:min(72vw,900px);
+  background:radial-gradient(circle,var(--accent-soft),transparent 66%);
+  filter:blur(6px);
+}
+.mm-depth i:nth-child(3){
+  width:min(34vw,420px);height:min(34vw,420px);
+  background:radial-gradient(circle,rgba(255,255,255,.5),transparent 70%);
+  filter:blur(14px);
+}
+/* 中心那层「亮斑」是全站唯一对背景亮度有实质影响的写死白色，
+   日间的 .5 在夜间会变成一块发灰的白饼，所以必须压到 .13。
+   这一条是**有意保留**的主题特例（不是漏改）。 */
+body.night .mm-depth i:nth-child(3){
+  background:radial-gradient(circle,rgba(255,255,255,.13),transparent 70%);
+}
+
+/* —— 地面：一条透视网格，铺在最下层 —— */
+.mm-floor{
+  position:absolute;left:50%;bottom:0;width:190%;height:52%;
+  transform:translateX(-50%) perspective(520px) rotateX(66deg);
+  transform-origin:50% 100%;
+  background-image:
+    linear-gradient(var(--ring) 1px,transparent 1px),
+    linear-gradient(90deg,var(--ring) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:linear-gradient(transparent,transparent 18%,#000 68%,#000);
+  -webkit-mask-image:linear-gradient(transparent,transparent 18%,#000 68%,#000);
+  opacity:.55;pointer-events:none;
+}
+body.night .mm-floor{opacity:.3}
+
+/* —— 陈列区：唱片的定位容器 ——
+   ⚠️ 视差就写在这一层（--mm-px-pos / --mm-py-pos 由 JS 每帧写一次）。
+   为什么不在每张唱片上各写一份：每张唱片自己的 transform 已经在做
+   「居中 + 缩放 + 自转」，再叠 translate 要把它从 % 混进来重算一遍，
+   既难读也容易写错。分两层合成，顺序天然正确。
+   ⚠️ translate3d（不是 translate）—— 强制上合成层，避免每帧重绘。 */
+.mm-stage{position:absolute;inset:0;transform:translate3d(0,0,0);will-change:transform}
+.mm-scene.on .mm-stage{
+  transform:translate3d(var(--mm-px-pos,0px),var(--mm-py-pos,0px),0);
+}
+
+/* 一张唱片 = 一个按钮（点击 → 打开档案详情）。
+   定位百分比直接来自 music-museum-data.js 的 x / y。 */
+.mm-disc{
+  position:absolute;
+  left:var(--mm-x,50%);top:var(--mm-y,50%);
+  /* 基准尺寸，scale 由 data 给 */
+  width:var(--mm-size,168px);
+  /* ⚠️ scale 走 --mm-scale-data（**不是** --mm-scale）：
+     data 给的基础缩放由 JS 写成 inline style，而 inline 声明是压不住的 ——
+     选中态那条 `.mm-scene.has-sel .mm-disc.sel{--mm-scale:...}` 如果也用
+     同一个变量名，会被 inline 的同名声明直接盖掉（症状：选中了但唱片不变大，
+     computed 里 --mm-scale 永远等于 base，特别难发现）。
+     所以变量分两层：
+       --mm-scale-data  ← data 的基础缩放（inline，JS 写）
+       --mm-scale       ← 最终生效缩放（CSS 算：base * 状态系数），默认取 data
+     状态规则只覆盖 --mm-scale，永远不与 inline 打架。 */
+  --mm-scale:var(--mm-scale-data,1);
+  /* ⚠️ translate3d 里那两个 --mm-depth-x / --mm-depth-y 就是「按 depth 分权」
+     的落点 —— 别删，删了整个阵列会变成一块刚性的板子一起平移
+     （需求第六条明确要「远层动得少、近层动得多」）。
+     ⚠️ 三者必须在**同一个 transform** 里，分开写会被后面的覆盖掉（踩过：
+     变量声明了却没进 transform，症状是「视差有、但所有唱片位移完全一致」）。 */
+  transform:translate(-50%,-50%)
+            translate3d(var(--mm-depth-x,0px),var(--mm-depth-y,0px),0)
+            rotate(var(--mm-rot,0deg)) scale(var(--mm-scale,1));
+  /* 纵深：越远越淡越糊（depth 0~1 → opacity 1→0.45、blur 0→3.4px） */
+  opacity:var(--mm-op,1);
+  filter:blur(var(--mm-blur,0px));
+  border:0;padding:0;background:transparent;cursor:pointer;
+  transition:transform .45s var(--ease),opacity .4s,filter .4s;
+  display:block;color:inherit;text-align:inherit;
+  font:inherit;
+  /* —— 纵深位移：整体视差按 depth 再分权一次（近层跟得多、远层跟得少）
+     --mm-px 由 JS 按 depth 写（近 1 → 远 .22）。
+     ⚠️⚠️ 这里是 **减号**（offset 减去 offset*(1-px)*0.6），不是加号。
+        推导一遍（别凭感觉改符号，改错方向正好反过来）：
+          offset = -p.x * SPAN                    → p.x=1 时 = -34px
+          近层 depth .10 → px .92 → (1-px) = .08
+          远层 depth .72 → px .44 → (1-px) = .56
+          减号：近 = -34 - (-34*.08*.6)  = -32.4px   ← 基准 34 里几乎没被削
+                远 = -34 - (-34*.56*.6)  = -22.5px   ← 被削掉 1/3
+          加号：近 = -35.6 / 远 = -45.5 → **远的比近的动得多**，方向正好反了。
+        ⚠️ 注意 (px-1)*-0.6 与 (1-px)*0.6 是**代数恒等**的，换这两个写法等于没改 ——
+           要让方向反过来必须把「加」改成「减」（踩过：以为改了符号，其实恒等，数值一个不动）。
+        改符号后务必跑 _museumstage.js 的 P2b 确认。
+     ⚠️ --mm-par-k 是「视差总强度系数」，默认 1；窄屏（见 @media）调到 .45，
+        实现需求第九条「手机端减少视差」——**不改 JS**，只在 CSS 收一次乘法。 */
+  --mm-depth-x:calc((var(--mm-px-pos,0px) - var(--mm-px-pos,0px) * (1 - var(--mm-px,1)) * 0.6) * var(--mm-par-k,1));
+  --mm-depth-y:calc((var(--mm-py-pos,0px) - var(--mm-py-pos,0px) * (1 - var(--mm-py,1)) * 0.6) * var(--mm-par-k,1));
+}
+.mm-disc:focus-visible{outline:2px solid var(--accent-primary);outline-offset:10px;border-radius:8px}
+
+/* —— 自转：每张唱片的周期与相位都不同（周期由 JS 按 depth 写进 --mm-spin）
+   为什么不做在 .mm-disc-plate 上：盘面里还有封面和一圈高光，
+   整盘一起转会带着封面转 —— 黑胶的封面是印在盘面中心的，本来就会转，
+   所以这里确实要整盘转；但标签条（.mm-disc-label）不能跟着转，
+   它是「浮在唱片前的说明牌」，所以标签走反向旋转抵消（见下）。 */
+.mm-disc-plate{
+  /* ⚠️⚠️ display:block 是必须的，别删 —— .mm-disc-plate 是 <span>，
+     而 <span> 默认 inline：inline 元素上 width:100% 与 aspect-ratio
+     都不生效，盘面会被压成一条 ~20px 高的细条（症状是「场景里只看得到
+     一条线 / 看不见唱片」，而 DOM / 数据全都是对的，特别难查）。
+     同理 .mm-disc-art 也是 <span>/<img>，下面的 display:block 同样不能省。 */
+  display:block;
+  position:relative;width:100%;aspect-ratio:1/1;border-radius:50%;
+  /* 黑胶：中心孔 + 细纹 + 封面 */
+  background:
+    radial-gradient(circle at 50% 50%, #2b2430 0 4.5%, transparent 4.5%),
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.055) 0 1.5px, transparent 1.5px 6px),
+    radial-gradient(circle at 42% 34%, #3a3140, #191420 72%);
+  box-shadow:0 22px 44px rgba(40,18,40,.34),inset 0 1px 0 rgba(255,255,255,.14);
+  /* ⚠️⚠️ 自转**默认是停的**（paused），只有 .playing 才跑起来。
+     为什么不做成「默认转 + 播放时暂停」：需求第四条要求
+     「播放时缓慢匀速自转、暂停时停止、恢复时继续」，而「暂停中」这件事
+     用户看到的应该是「静止的唱片」，一个停不下来的展厅里 5 张唱片
+     全在空转，也不像博物馆（更像展销会）。
+     ⚠️ 用 animation-play-state 控制，**不要增删 animation 属性** ——
+        增删会让角度从 0 重新开始（视觉上「跳回起点」），
+        而 play-state 能真的「停在哪就是哪，继续时接着转」。
+     ⚠️ 动画本身要一直在（declared），只是暂停着。
+        如果只在 .playing 里声明 animation，暂停的瞬间属性被移除，
+        角度立刻回到 0 —— 那也是「跳」。 */
+  animation:mmSpin var(--mm-spin,28s) linear infinite;
+  animation-delay:var(--mm-spin-delay,0s);
+  animation-play-state:paused;
+  /* 呼吸光晕的载体：默认关（播放时才亮） */
+  --mm-breathe:0;
+}
+/* 正在播的那张：转起来 */
+.mm-disc.playing .mm-disc-plate{animation-play-state:running}
+/* hover 时「轻微旋转速度变化」—— 不是改 animation-duration（那会让角度
+   跳一下，因为进度是按时间比例算的），而是用一个更快的动画叠上去。
+   做法：hover 时换一条同名动画但周期更短 + 保持当前角度没法做到，
+   所以改成「叠一层轻微的往复摆动」—— 视觉上是「摸到唱片它抖了一下」，
+   比硬切速度自然得多，也绝不会跳角度。
+   ⚠️ 这条动画只在 hover 期间存在，且是 finite(1) 的，所以不受
+      play-state 影响；但它会把「暂停中」的唱片也晃动一下 ——
+      那正好是有意的回馈（鼠标碰到它它就动，和播不播放无关）。 */
+.mm-disc:hover .mm-disc-plate,
+.mm-disc:focus-visible .mm-disc-plate{
+  animation: mmSpin var(--mm-spin,28s) linear infinite,
+             mmDiscNudge .9s var(--ease) 1;
+  animation-delay:var(--mm-spin-delay,0s),0s;
+  animation-play-state:var(--mm-plate-run,paused),running;
+}
+.mm-disc.playing:hover .mm-disc-plate,
+.mm-disc.playing:focus-visible .mm-disc-plate{
+  --mm-plate-run:running;
+}
+@keyframes mmDiscNudge{
+  0%{transform:rotate(0) scale(1)}
+  35%{transform:rotate(-2.4deg) scale(1.03)}
+  70%{transform:rotate(1.6deg) scale(1.01)}
+  100%{transform:rotate(0) scale(1)}
+}
+
+/* 封面图：盖住盘面中间那块，只留一圈黑胶边 */
+.mm-disc-art{
+  /* ⚠️ display:block 必须有：占位分支 .is-empty 是个 <span>，
+     没有 position:absolute 兜底时 inline 元素吃不到 width/height%。 */
+  display:block;
+  position:absolute;left:14%;top:14%;width:72%;height:72%;
+  border-radius:50%;object-fit:cover;
+  background:linear-gradient(135deg,var(--accent-primary),var(--accent-tertiary));
+  box-shadow:0 6px 18px rgba(20,8,20,.4);
+}
+/* 没有封面时的占位唱片：一圈渐变小洞 */
+.mm-disc-art.is-empty{
+  background:
+    radial-gradient(circle at 50% 50%, #221b28 0 12%, transparent 12%),
+    conic-gradient(from 0deg,var(--accent-primary),var(--accent-secondary),var(--accent-tertiary),var(--accent-primary));
+}
+/* 高光：一道斜向反光，hover 时扫过去 */
+.mm-disc-gloss{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:linear-gradient(118deg,transparent 38%,rgba(255,255,255,.22) 47%,transparent 58%);
+  transform:translateX(-130%);transition:transform .95s var(--ease);
+}
+.mm-disc:hover .mm-disc-gloss{transform:translateX(130%)}
+
+/* 唱片下方的标签（歌名 + 歌手），亚克力小条
+   ⚠️ 反转 rotate 抵消唱片的自转，让它始终正着 —— 说明牌不该跟着盘子转。 */
+.mm-disc-label{
+  position:absolute;left:50%;top:calc(100% + 12px);
+  transform:translateX(-50%) rotate(calc(var(--mm-rot,0deg) * -1));
+  min-width:120px;max-width:210px;
+  padding:7px 12px;border-radius:14px;
+  background:var(--glass);
+  border:1px solid var(--bd);
+  box-shadow:0 12px 26px rgba(120,70,110,.16),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(16px) saturate(1.4);
+  -webkit-backdrop-filter:blur(16px) saturate(1.4);
+  text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.mm-disc-label b{display:block;font-size:12.5px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.mm-disc-label small{display:block;margin-top:2px;font-size:10px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis}
+
+/* —— hover / 键盘聚焦：抬起来（只动 scale，不改 left/top —— 百分比定位不抖） ——
+   需求第五条要的四件事：scale 增大、微微向前、边缘发光、出现歌名歌手。
+   前三条这里做；「出现歌名歌手」是标签条 —— 默认它就是显示着的（阵列里
+   全是未选中状态，没有标签会让人不知道点了会怎样），hover 时把它提到最清晰。
+   cursor:pointer 在 .mm-disc 上已经有了。 */
+.mm-disc{
+  --mm-hover-lift:0px;
+}
+.mm-disc:hover,.mm-disc:focus-visible{
+  --mm-scale:calc(var(--mm-scale-data,1) * 1.08);
+  opacity:1;                      /* hover 时无视纵深透明度，先看清这一张 */
+  transition-duration:.32s;
+  z-index:6;                      /* 抬到同层其他唱片之上 */
+}
+.mm-disc:hover .mm-disc-plate,.mm-disc:focus-visible .mm-disc-plate{
+  box-shadow:0 30px 60px rgba(40,18,40,.42),
+             inset 0 1px 0 rgba(255,255,255,.2),
+             0 0 0 1.5px var(--accent-primary),
+             0 0 34px var(--accent-glow);
+}
+.mm-disc:hover .mm-disc-label,.mm-disc:focus-visible .mm-disc-label{
+  border-color:var(--accent-primary);
+  box-shadow:0 16px 34px var(--accent-glow),inset 0 1px 0 var(--hi);
+}
+.mm-disc:active{--mm-scale:calc(var(--mm-scale-data,1) * 1.02)}
+/* 正在播放的那张：外圈加一道转动的强调色环（::after）
+   ⚠️ 这里用 2.6s 快转是刻意的：「转环」是**状态指示器**，
+     要一眼看出来它在动；而盘面的自转是「唱片在放」的隐喻，慢而匀速。
+     两者速度差就是「状态 vs 质感」的区分。 */
+.mm-disc .mm-disc-plate:after{
+  content:"";position:absolute;inset:-9px;border-radius:50%;
+  border:2px solid transparent;
+  opacity:0;
+  border-top-color:var(--accent-primary);
+  border-right-color:var(--accent-secondary);
+  animation:mmSpin 2.6s linear infinite;
+  animation-play-state:paused;
+  transition:opacity .45s var(--ease);
+  pointer-events:none;
+}
+.mm-disc.playing .mm-disc-plate:after{
+  opacity:1;
+  animation-play-state:running;
+}
+/* 暂停但仍为「当前曲目」：环留着但停住、淡一点 ——
+   表示「就是这张，只是停了」，和「完全不是这张」区分开 */
+.mm-disc.is-paused .mm-disc-plate:after{
+  opacity:.42;
+  animation-play-state:paused;
+}
+/* —— 呼吸光晕（::before）：播放时唱片边缘极淡地明暗起伏 ——
+   需求第五条：「可以有极轻微的光晕 / 波纹 / 呼吸，但不要喧宾夺主」。
+   所以：幅度小（透明度 .0→.55）、周期长（4.6s 正弦）、
+        颜色走 --accent-soft（本来就是极低饱和的强调色）。
+   暂停 / 未播放时 --mm-breathe:0，整层不显示，零 CPU。 */
+.mm-disc .mm-disc-plate:before{
+  content:"";position:absolute;inset:-16%;border-radius:50%;
+  background:radial-gradient(circle,var(--accent-soft) 42%,transparent 70%);
+  opacity:var(--mm-breathe,0);
+  animation:mmBreathe 4.6s ease-in-out infinite;
+  animation-play-state:paused;
+  transition:opacity .6s var(--ease);
+  pointer-events:none;
+}
+.mm-disc.playing .mm-disc-plate:before{
+  --mm-breathe:.55;
+  animation-play-state:running;
+}
+@keyframes mmBreathe{
+  0%,100%{transform:scale(.94)}
+  50%{transform:scale(1.06)}
+}
+/* 当前曲目（含暂停）：给一个不动的静态柔光底，让「就是它」这件事
+   在暂停时也看得出来 —— 不呼吸，但有一圈软边。 */
+.mm-disc.is-current .mm-disc-plate{box-shadow:0 22px 44px rgba(40,18,40,.34),
+  inset 0 1px 0 rgba(255,255,255,.14),0 0 0 1.5px var(--accent-primary)}
+
+/* ============================================================
+   B2. 阵列的「选中 / 弱化」状态（第二阶段）
+   ------------------------------------------------------------
+   选中一张之后：
+     被选中的   → 向前、放大、最清晰（.sel）
+     其余       → 降透明度 + 加模糊 + 降饱和（.dim）
+   500~900ms 的平滑聚焦，禁止瞬移 → 全部走 transition（.62s）。
+
+   ⚠️⚠️ 为什么 .dim 不直接写 opacity/filter 的**绝对值**：
+   每张唱片的基础 opacity/filter 来自 --mm-op / --mm-blur（纵深信息），
+   如果 .dim 写死 opacity:.3，取消选中后就没法还原纵深了。
+   所以这里用「二次合成」：
+     opacity: calc(var(--mm-op) * .34)
+     filter : blur(calc(var(--mm-blur) + 2.6px)) saturate(.55)
+   —— 基值原封不动参与运算，摘掉类就完全复原。
+   ⚠️ blur() 里套 calc() 是合法的（blur 吃 <length>），但**加号两侧
+      必须有空格**，而且两个长度单位必须一致（px + px）。
+   ============================================================ */
+.mm-disc{
+  transition:transform .62s var(--ease),opacity .62s var(--ease),
+             filter .62s var(--ease);
+}
+.mm-scene.has-sel .mm-disc.dim{
+  opacity:calc(var(--mm-op,1) * .34);
+  filter:blur(calc(var(--mm-blur,0px) + 2.6px)) saturate(.55);
+  z-index:1;
+}
+.mm-scene.has-sel .mm-disc.dim:hover{
+  /* 弱化状态下仍然可以点别的唱片换档案 —— 给一点回馈，但不要抢焦点 */
+  opacity:calc(var(--mm-op,1) * .68);
+  filter:blur(calc(var(--mm-blur,0px) + 1px)) saturate(.8);
+}
+.mm-scene.has-sel .mm-disc.sel{
+  --mm-scale:calc(var(--mm-scale-data,1) * 1.28);
+  opacity:1;filter:none;
+  z-index:7;
+  transition-duration:.72s;       /* 需求给的 500~900ms 区间里取偏慢的 */
+}
+.mm-scene.has-sel .mm-disc.sel .mm-disc-plate{
+  box-shadow:0 40px 80px rgba(40,18,40,.46),
+             inset 0 1px 0 rgba(255,255,255,.22),
+             0 0 0 1.5px var(--accent-primary),
+             0 0 46px var(--accent-glow);
+}
+/* 选中时标签条放大一点，跟唱片一起「前移」 */
+.mm-scene.has-sel .mm-disc.sel .mm-disc-label{
+  border-color:var(--accent-primary);
+  box-shadow:0 16px 34px var(--accent-glow),inset 0 1px 0 var(--hi);
+}
+/* 详情打开时，底部提示条会被详情面板压住，先收掉（少一层干扰） */
+.mm-scene.has-sel .mm-foot{opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
+.mm-foot{transition:opacity .3s var(--ease)}
+
+/* —— 空场景占位：data 为空或全对不上时给个说明，而不是一片黑 —— */
+.mm-empty{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  text-align:center;padding:30px 34px;border-radius:26px;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:var(--shadow),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(var(--blur));
+  -webkit-backdrop-filter:blur(var(--blur));
+  max-width:min(460px,calc(100vw - 56px));
+}
+.mm-empty strong{display:block;font-size:19px;color:var(--ink);margin-bottom:8px}
+.mm-empty p{margin:0;font-size:13px;line-height:1.9;color:var(--muted)}
+.mm-empty code{
+  font-size:12px;padding:1px 6px;border-radius:6px;
+  background:var(--accent-soft);color:var(--ink);
+}
+
+/* ============================================================
+   C. HUD（顶部状态条 / 底部提示 / 退出按钮）
+   ------------------------------------------------------------
+   ⚠️ HUD 是 .mm-scene 的子元素。.mm-scene 上有 transform 吗？
+     没有 —— .mm-floor 才有（而且是它自己的局部透视）。
+     所以 HUD 用 absolute 铺在场景内，不用 fixed，行为可预期。
+   ============================================================ */
+.mm-hud{
+  position:absolute;left:0;right:0;top:0;z-index:5;
+  display:flex;align-items:center;justify-content:space-between;gap:20px;
+  padding:22px 30px;pointer-events:none;
+}
+.mm-hud > *{pointer-events:auto}
+
+.mm-hud-brand{display:flex;align-items:center;gap:12px}
+.mm-hud-ring{
+  width:38px;height:38px;border-radius:50%;flex:0 0 auto;
+  border:1.5px solid var(--bd-2);
+  display:grid;place-items:center;
+  background:var(--glass);
+  box-shadow:inset 0 1px 0 var(--hi);
+}
+.mm-hud-ring i{
+  display:block;width:15px;height:15px;border-radius:50%;
+  border:1.5px solid transparent;
+  border-top-color:var(--accent-primary);
+  border-bottom-color:var(--accent-tertiary);
+  animation:mmSpin 3.4s linear infinite;
+}
+.mm-hud-brand b{display:block;font-size:13px;letter-spacing:.02em;color:var(--ink)}
+.mm-hud-brand small{display:block;font-size:9.5px;letter-spacing:.24em;color:var(--muted)}
+
+.mm-hud-stat{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 15px;border-radius:999px;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(16px) saturate(1.4);
+  -webkit-backdrop-filter:blur(16px) saturate(1.4);
+  font-size:10.5px;letter-spacing:.13em;color:var(--muted);
+}
+.mm-hud-stat b{color:var(--ink);font-variant-numeric:tabular-nums}
+.mm-hud-stat span{width:6px;height:6px;border-radius:50%;background:var(--accent-primary)}
+
+/* 退出按钮：跟顶栏 .dock-btn 一个手感（收起是图标，悬停展开文字） */
+.mm-exit{
+  display:inline-flex;align-items:center;gap:0;
+  height:42px;min-width:42px;padding:0 13px;border-radius:999px;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:0 10px 24px rgba(169,113,154,.16),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(18px) saturate(1.45);
+  -webkit-backdrop-filter:blur(18px) saturate(1.45);
+  /* ⚠️ 走 --muted 而不是写死的 #b083a3：五套主题下都能保证对比度，
+     夜间 --muted 自动变浅（原来还专门写了 body.night 覆盖，现在不需要了）。 */
+  color:var(--muted);font-size:12px;font-weight:900;cursor:pointer;
+  transition:transform .3s var(--ease),background .25s,color .25s;
+}
+.mm-exit:hover{transform:translateY(-3px) scale(1.04);background:var(--glass-h);color:var(--accent-primary)}
+.mm-exit .mm-exit-txt{
+  max-width:0;opacity:0;overflow:hidden;white-space:nowrap;
+  transition:max-width .38s var(--ease),opacity .3s var(--ease),margin-left .38s var(--ease);
+}
+.mm-exit:hover .mm-exit-txt,.mm-exit:focus-visible .mm-exit-txt{max-width:110px;opacity:1;margin-left:8px}
+/* ⚠️ 原来这里有一条 body.night .mm-exit 写死 rgba(255,255,255,.1) ——
+   已删：--glass / --bd / --muted 在夜间本来就换好了，多加一条只会
+   制造「夜间专属样式」这种需要同步维护的第二真相（需求第六条明确不要）。 */
+
+/* 底部提示条 */
+.mm-foot{
+  position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+  z-index:5;display:flex;align-items:center;gap:16px;
+  padding:10px 20px;border-radius:999px;
+  background:var(--glass);border:1px solid var(--bd);
+  box-shadow:0 14px 30px rgba(150,90,130,.14),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);
+  font-size:11px;color:var(--muted);white-space:nowrap;
+}
+.mm-foot kbd{
+  display:inline-block;margin:0 4px;padding:2px 7px;border-radius:7px;
+  background:var(--accent-soft);border:1px solid var(--bd-2);
+  font:inherit;font-size:10px;font-weight:900;color:var(--ink);
+}
+.mm-foot em{font-style:normal;color:var(--accent-primary)}
+
+/* 场景整体入场：HUD / 唱片错峰浮现。
+   ------------------------------------------------------------
+   ⚠️⚠️ fill-mode 一律用 **backwards，不用 both**，而且动画**只负责「从隐到显」，
+      最终可见状态挂在元素自己的基础 CSS 上**（.mm-disc 已有
+      opacity:var(--mm-op) / filter:blur(var(--mm-blur))）。
+      为什么（两个都踩过）：
+        ① fill-mode:both 会在动画「没跑完」时把元素**按 to 帧**扣住 ——
+           一旦动画不推进（后台标签页降频、reduced-motion 环境、
+           无头虚拟时钟不推进 CSS 动画），唱片就永久停在 from 的
+           opacity:0 上，**整场唱片全部隐形**，而 DOM / 数据全是对的。
+        ② 所以最终态绝不能只由动画给出。backwards 只在 delay 期间用 from 帧，
+           动画结束（或被取消 / 不推进）后元素回到自己的基础样式，
+           那本来就是最终值 —— 也就是说「动画没跑」的降级结果就是
+           「直接显示」，而不是「永远不显示」。
+      这条和项目里那条铁律是同一条：「最终可见状态别只挂在动画上」。 */
+.mm-scene.on .mm-hud,
+.mm-scene.on .mm-foot{animation:mmFadeUp .55s var(--ease) backwards}
+.mm-scene.on .mm-foot{animation-delay:.12s}
+.mm-scene.on .mm-disc{animation:mmDiscIn .6s var(--ease) backwards;
+  animation-delay:calc(var(--mm-i,0) * 70ms + 120ms)}
+@keyframes mmFadeUp{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+/* to 帧省略 opacity / filter —— 让元素回到自己的基础值（--mm-op / --mm-blur），
+   避免动画在声明层「赢过」元素的纵深设置。 */
+@keyframes mmDiscIn{
+  from{opacity:0;filter:blur(9px)}
+}
+.mm-scene.on .mm-foot{animation-name:mmFadeUpFoot}
+@keyframes mmFadeUpFoot{from{opacity:0;transform:translateX(-50%) translateY(14px)}}
+
+/* ============================================================
+   F. 「小窝淡出」—— 进博物馆时把下面的小窝让开
+   ------------------------------------------------------------
+   ⚠️⚠️ 这里是全站最容易犯的错误，说清楚：
+   绝对**不能**给 .app 或它的任何祖先加 filter / transform /
+   opacity≠1 —— 那会让它成为 position:fixed 后代的包含块，
+   侧栏、悬浮播放器、歌词栏会瞬间被推出首屏（历史上踩过，
+   症状是「按钮组跑到 bottom:2010px」）。
+   所以淡出走的是**改子元素**：只给 .side-rail 和 .content 加
+   filter + opacity，.app 自己保持 opacity:1、无 filter。
+   （body 上也没有 transform/filter —— #mmLoad / #mmScene 是它的
+   直接子元素，一旦给 body 加 filter，它们的 position:fixed 同样会失效。）
+   ============================================================ */
+body.museum-open .side-rail,
+body.museum-open .content{
+  filter:blur(9px) saturate(.7);
+  opacity:.28;
+  transition:filter .42s var(--ease),opacity .42s var(--ease);
+  pointer-events:none;          /* 别让人隔着场景点到下面的卡片 */
+}
+/* 日常状态也要有过渡，退出时才能平滑回来 */
+.side-rail,.content{transition:filter .42s var(--ease),opacity .42s var(--ease)}
+body.museum-open #floatingPlayer,
+body.museum-open .lyricbar{
+  /* 播放器与歌词栏是「还在播」的证据，留一点可见度（不模糊整块，
+     只降一点不透明度），让人知道音乐没断 */
+  opacity:.9;
+}
+body.museum-open{overflow:hidden}
+
+/* ============================================================
+   D. 响应式
+   ============================================================ */
+@media (max-width:900px){
+  .mm-load-card{padding:30px 24px 24px}
+  .mm-load-title{font-size:27px}
+  .mm-load-orbit{width:96px;height:96px}
+  .mm-hud{padding:16px 18px;gap:12px}
+  .mm-hud-stat{display:none}          /* 窄屏先砍统计条，保证标题 + 退出按钮 */
+  .mm-hud-brand small{display:none}
+  .mm-foot{font-size:10px;padding:9px 15px;gap:11px;
+    max-width:calc(100vw - 28px);overflow:hidden}
+  .mm-disc-label{min-width:96px;max-width:150px;padding:6px 10px}
+  .mm-disc-label b{font-size:11.5px}
+}
+@media (max-width:560px){
+  .mm-load-dust{display:none}         /* 小屏别为装饰堆节点 */
+  .mm-foot span:nth-child(2){display:none}
+  /* —— 窄屏把「纵深走廊」收掉，只留唱片阵列 ——
+     需求第九条：不要强行把桌面的复杂 2.5D 场景缩到手机。
+     做法（纯 CSS，不靠 JS 判设备）：
+       · 地面网格收掉（透视网格在窄屏会挤成一片噪点）
+       · 外层柔光收掉（小屏上它只是让字更难读）
+       · 视差幅度减半（--mm-par-k 由 JS 侧读不到，所以这里直接钳变量） */
+  .mm-floor{display:none}
+  .mm-depth i:nth-child(1){opacity:.6}
+  .mm-depth i:nth-child(3){display:none}
+  /* 视差总强度减半：--mm-par-k 只影响 --mm-depth-x/y 的最终乘法（见 .mm-disc），
+     JS 侧一行不改 —— 这是需求第九条「不要让手机端同样的视差幅度」的落点。 */
+  .mm-disc{--mm-par-k:.45}
+  /* 详情在窄屏几乎占满：去掉遮罩的模糊，省一次全屏合成 */
+  .mm-detail-scrim{backdrop-filter:none;-webkit-backdrop-filter:none}
+  /* reduced-motion 之外，小屏也减一档：呼吸幅度小些，避免边缘来回闪 */
+  .mm-disc.playing .mm-disc-plate:before{--mm-breathe:.4}
+}
+
+/* ============================================================
+   G. Music Archive Detail —— 唱片详情面板（第二阶段）
+   ------------------------------------------------------------
+   「左封面 / 右档案」两栏，亚克力材质，属于 Rinsora 的视觉语言
+   （渐变小药丸、圆角 28、--glass + backdrop-filter + inset 高光），
+   不复制任何具体产品的 UI。
+
+   时序：.mm-detail 默认 opacity:0 / visibility:hidden / pointer-events:none
+         → 加 .on 才淡入。入场带 fade + translateY + blur（需求第七条）。
+   ⚠️ .mm-detail 是 .mm-scene 的子元素，而 .mm-scene 自己没有 transform
+      （只有 .mm-stage / .mm-floor 有局部 transform），所以这里用
+      absolute 铺满场景即可，不需要 fixed。
+   ============================================================ */
+.mm-detail{
+  position:absolute;inset:0;z-index:20;
+  display:grid;place-items:center;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .42s var(--ease),visibility .42s;
+}
+.mm-detail.on{opacity:1;visibility:visible;pointer-events:auto}
+
+/* 遮罩：点它 = 关闭档案。刻意做得很淡 —— 展厅本身还要看得见，
+   不然「其他唱片弱化」这件事就白做了。 */
+.mm-detail-scrim{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 50%,transparent 8%,rgba(30,14,26,.34) 78%);
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+}
+body.night .mm-detail-scrim{
+  background:radial-gradient(circle at 50% 50%,transparent 8%,rgba(0,0,0,.5) 78%);
+}
+
+.mm-detail-card{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:238px 1fr;gap:30px;align-items:center;
+  width:min(720px,calc(100vw - 56px));
+  max-height:calc(100vh - 120px);
+  padding:34px 34px 30px;
+  border-radius:30px;
+  /* 亚克力四要素 */
+  background:var(--glass);
+  border:1px solid var(--bd);
+  box-shadow:0 40px 90px rgba(90,40,80,.28),inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(var(--blur)) saturate(1.5);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.5);
+  /* 入场：fade + translateY + blur（需求第七条点名要这三样） */
+  transform:translateY(22px) scale(.985);
+  filter:blur(7px);
+  opacity:0;
+  transition:transform .58s var(--ease),filter .58s var(--ease),opacity .52s var(--ease);
+}
+.mm-detail.on .mm-detail-card{transform:none;filter:none;opacity:1}
+@supports not ((backdrop-filter:blur(4px)) or (-webkit-backdrop-filter:blur(4px))){
+  .mm-detail-card{background:var(--glass-solid)}
+}
+
+/* 右上关闭 */
+.mm-detail-x{
+  position:absolute;right:14px;top:14px;
+  width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;
+  /* ⚠️ 走 --glass-2 而不是写死 rgba(255,255,255,.55)：
+     夜间 --glass-2 是 rgba(255,255,255,.07)，自动就是「暗底上的浅一层」，
+     不需要再写一条 body.night 覆盖（原来那条已删）。 */
+  background:var(--glass-2);border:1px solid var(--bd);
+  color:var(--muted);cursor:pointer;
+  transition:transform .25s var(--ease),background .2s,color .2s,border-color .2s;
+}
+.mm-detail-x:hover{transform:rotate(90deg) scale(1.06);color:var(--accent-primary);
+  border-color:var(--accent-primary);background:var(--glass-h)}
+
+/* —— 左：大封面（做成一张「大唱片」的样子，和阵列里的视觉同源） —— */
+.mm-detail-art-wrap{
+  position:relative;width:100%;aspect-ratio:1/1;
+  display:grid;place-items:center;
+}
+.mm-detail-glow{
+  position:absolute;inset:-14%;border-radius:50%;
+  background:radial-gradient(circle,var(--accent-soft),transparent 66%);
+  filter:blur(10px);
+}
+.mm-detail-art{
+  position:relative;z-index:1;
+  width:100%;height:100%;border-radius:50%;object-fit:cover;
+  background:linear-gradient(135deg,var(--accent-primary),var(--accent-tertiary));
+  box-shadow:0 30px 60px rgba(40,18,40,.4),inset 0 1px 0 rgba(255,255,255,.16);
+  /* 大封面也缓慢自转 —— 和阵列里的唱片是同一件东西 */
+  animation:mmSpin 40s linear infinite;
+}
+/* 封面缺失时的占位（和阵列里的 .is-empty 同一套语言） */
+.mm-detail-art.is-empty{
+  background:
+    radial-gradient(circle at 50% 50%, #221b28 0 12%, transparent 12%),
+    conic-gradient(from 0deg,var(--accent-primary),var(--accent-secondary),var(--accent-tertiary),var(--accent-primary));
+}
+/* 中心孔：盖在封面上，标明「这是一张唱片而不是一张图」 */
+.mm-detail-hole{
+  position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:11%;height:11%;border-radius:50%;
+  background:radial-gradient(circle at 42% 38%, #4a4050eee, #14101a);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.6),0 0 0 4px rgba(255,255,255,.08);
+}
+
+/* —— 右：档案信息 —— */
+.mm-detail-body{min-width:0}
+.mm-detail-kicker{
+  margin:0;font-size:9.5px;letter-spacing:.3em;font-weight:900;
+  color:var(--accent-primary);text-transform:uppercase;
+}
+.mm-detail-idx{
+  margin:6px 0 12px;
+  font-size:11px;letter-spacing:.18em;color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.mm-detail-title{
+  margin:0;font-size:30px;line-height:1.24;letter-spacing:-.04em;color:var(--ink);
+  /* 长标题最多两行，超出省略 —— 详情面板不能因为歌名很长就撑变形 */
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;overflow-wrap:anywhere;
+}
+.mm-detail-artist{
+  margin:9px 0 0;font-size:13px;color:var(--muted);font-weight:900;letter-spacing:.02em;
+}
+
+/* 小资料表：四行 key/value，克制一点，别堆信息（需求第七条） */
+.mm-detail-meta{
+  display:grid;grid-template-columns:auto 1fr;gap:7px 14px;
+  margin:18px 0 0;font-size:11.5px;
+}
+.mm-detail-meta dt{
+  letter-spacing:.14em;color:var(--muted);font-weight:900;font-size:10px;
+  align-self:center;white-space:nowrap;
+}
+.mm-detail-meta dd{
+  margin:0;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* —— 可选资料区（album / genre / source / note）——
+   和上面固定表共用一套 dt/dd 排版，色调略淡一档，
+   让「编号 / 日期」是骨架、「专辑 / 风格」是补充，层级不打架。 */
+.mm-detail-extra:empty{display:none}      /* JS 没塞东西时整块消失（不留间距） */
+.mm-detail-meta-extra{margin-top:11px}
+.mm-detail-meta-extra dt{opacity:.72}
+
+/* —— 描述段：整段文字，允许换行（区别于 meta 的 nowrap）—— */
+.mm-detail-desc{
+  margin:16px 0 0;font-size:12.5px;line-height:1.85;color:var(--muted);
+  /* 长文最多 5 行，超出省略 —— 详情面板不能因为一段自述撑到溢出 */
+  display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;
+  overflow:hidden;overflow-wrap:anywhere;
+}
+
+/* —— 标签胶囊 —— */
+.mm-detail-tags{
+  margin-top:14px;display:flex;flex-wrap:wrap;gap:7px;
+}
+.mm-detail-tags[hidden]{display:none}
+.mm-tag{
+  display:inline-block;padding:4px 11px;border-radius:999px;
+  font-size:10.5px;letter-spacing:.06em;font-weight:900;
+  /* 亚克力小药丸：底走 --accent-soft、边 1px、顶部高光，夜间自动跟着变 */
+  background:var(--accent-soft);color:var(--ink);
+  border:1px solid var(--bd-2);
+  box-shadow:inset 0 1px 0 var(--hi);
+}
+
+/* 播放按钮：整块的主行动（强调色实心 + 光晕），和站内 .enter-btn 一个手感 */
+.mm-detail-acts{margin-top:22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mm-detail-play{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:12px 22px;border-radius:999px;border:0;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));
+  /* ⚠️ 按钮是「亮色强调底 + 深色字」，所以字色必须固定成深色，
+     不能跟着 --ink 走（夜间 --ink 是浅色，会变成浅字压亮底 = 看不见）。
+     这一处写死的深色是有意的、且对所有五套主题都成立。 */
+  color:#4a2b3a;font-size:13px;font-weight:1000;letter-spacing:.02em;
+  box-shadow:0 16px 34px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.5);
+  transition:transform .28s var(--ease),box-shadow .28s var(--ease),filter .28s;
+}
+.mm-detail-play:hover{transform:translateY(-3px) scale(1.03);
+  box-shadow:0 22px 44px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.55)}
+.mm-detail-play:active{transform:translateY(-1px) scale(.99)}
+/* 播放被浏览器拦下 / 已暂停且不是当前曲目：按钮退回「描边」而不是实心，
+   让「现在没声音」这件事一眼可见（需求第一条的降级 UI）。 */
+.mm-detail-play.is-blocked{
+  background:var(--glass);color:var(--ink);
+  border:1px solid var(--bd);
+  box-shadow:inset 0 1px 0 var(--hi);
+}
+body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
+.mm-detail-play-ic{display:grid;place-items:center;width:18px;height:18px}
+/* 播放 / 暂停图标二选一：默认只显示播放三角；.is-playing 时换成暂停条。
+   两个 path 都在同一个 <svg> 里，用 CSS 切换显示 —— 不额外加 DOM。 */
+.mm-detail-play .mm-ic-pause{display:none}
+.mm-detail-play.is-playing .mm-ic-play{display:none}
+.mm-detail-play.is-playing .mm-ic-pause{display:block}
+
+/* ============================================================
+   G2. 主题兼容收口（第三阶段）
+   ------------------------------------------------------------
+   需求第六条：「Museum 应该读取现有 CSS Variables，随着网站主题
+   切换自动变化；不要给 Museum 单独设计完全割裂的主题系统。」
+   本文件绝大多数颜色都已经走变量（--glass / --bd / --ink / --muted /
+   --accent-*），换主题自动跟着变 —— 这一节只处理**确实做不到自动**
+   的少数几处，并说明为什么它们必须写死 / 必须特判。
+
+   写死的前提是「该颜色对所有五套主题都成立」：
+     · 播放按钮的深色字 #4a2b3a —— 因为它压在自己的亮色强调渐变上，
+       而这个渐变在五套主题里都是明亮的（candy 粉 / sunset 珊瑚 /
+       lavender 紫 / mint 绿 / night 粉紫），深棕字都读得清。
+     · 黑胶盘面（#2b2430 / #3a3140 / #191420）—— 唱片就该是黑的，
+       这是「实物」而不是「皮肤」，不参与主题色。
+   除此之外不应该有写死色。
+   ============================================================ */
+/* 详情面板的阴影走的是暖紫调 rgba(90,40,80,.28)，夜间偏暖会有点脏，
+   换成 --shadow（夜间是 rgba(6,3,11,.46)）就干净了。 */
+body.night .mm-detail-card{box-shadow:var(--shadow),inset 0 1px 0 var(--hi)}
+body.night .mm-disc-label{box-shadow:0 12px 26px rgba(0,0,0,.4),inset 0 1px 0 var(--hi)}
+body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14)}
+
+/* ============================================================
+   H. 响应式（第二阶段新增部分，接在原 D 节后面）
+   ============================================================ */
+@media (max-width:900px){
+  /* 详情改成上下结构：左右两栏在窄屏会把封面压得太小 */
+  .mm-detail-card{
+    grid-template-columns:1fr;gap:18px;
+    width:min(440px,calc(100vw - 32px));
+    padding:26px 22px 24px;
+    border-radius:26px;
+  }
+  .mm-detail-art-wrap{width:min(190px,52vw);margin:0 auto}
+  .mm-detail-title{font-size:24px;text-align:center}
+  .mm-detail-kicker,.mm-detail-idx,.mm-detail-artist{text-align:center}
+  .mm-detail-meta{max-width:320px;margin-left:auto;margin-right:auto}
+  .mm-detail-acts{justify-content:center}
+  .mm-detail-x{right:11px;top:11px}
+}
+@media (max-width:560px){
+  .mm-detail-card{padding:22px 16px 20px}
+  .mm-detail-title{font-size:21px}
+  .mm-detail-art-wrap{width:min(152px,46vw)}
+  .mm-detail-play{width:100%;justify-content:center}
+}
+
+/* ============================================================
+   E. reduced-motion 收口
+   ------------------------------------------------------------
+   加载层不能「什么都不动」—— 那看着像卡死了。改成：
+   环不转、声波不跳、微粒子隐藏，只留加载线随进度增长。
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  .mm-load-orbit i{animation:none}
+  .mm-load-orbit i:nth-child(1){border-color:var(--accent-primary)}
+  .mm-load-orbit i:nth-child(2){border-color:var(--accent-tertiary)}
+  .mm-load-wave b{animation:none;transform:scaleY(.7)}
+  .mm-load-dust span{animation:none;opacity:.28}
+  .mm-load-bar i:after{animation:none;display:none}
+  .mm-floor{opacity:.35}
+  .mm-hud-ring i{animation:none;border-color:var(--accent-primary)}
+  .mm-disc.playing .mm-disc-plate:after{animation:none;
+    border-color:var(--accent-primary)}
+  .mm-disc-gloss{display:none}
+  .mm-scene.on .mm-hud,
+  .mm-scene.on .mm-foot,
+  .mm-scene.on .mm-disc{animation:none}
+  /* —— 第二阶段：动态效果全关 ——
+     唱片不自转、hover 不做摆动、详情不做位移/模糊，只保留 opacity 的
+     淡入淡出（「看不见」才是真的有问题，「不动」不是）。
+     视差由 JS 侧直接不启动（见 music-museum.js 的 startParallax）。 */
+  .mm-disc-plate{animation:none}
+  .mm-disc:hover .mm-disc-plate,
+  .mm-disc:focus-visible .mm-disc-plate{animation:none}
+  .mm-detail-card{transform:none;filter:none}
+  .mm-detail-art{animation:none}
+  .mm-disc,.mm-scene.has-sel .mm-disc{transition-duration:.01ms}
+  /* —— 第三阶段：播放相关的动效也收掉 ——
+     不再有自转、转环、呼吸，只留「静态的强调色描边」表示正在播放。
+     需求第十条：禁止高速旋转 / 大幅 zoom；用简单形态代替。
+     ⚠️ 注意「不动」不等于「看不见」：环要留下并保持常亮，
+        否则用户完全无法知道哪张在播（那是比「没动画」更严重的问题）。 */
+  .mm-disc .mm-disc-plate:before{animation:none;opacity:0}
+  .mm-disc.playing .mm-disc-plate:after{
+    animation:none;opacity:1;
+    border-color:transparent;border-top-color:var(--accent-primary);
+    border-right-color:var(--accent-secondary);border-bottom-color:var(--accent-primary);
+    border-left-color:var(--accent-secondary);
+  }
+}
+body.reduce-motion .mm-load-orbit i,
+body.reduce-motion .mm-load-wave b{animation:none}
+body.reduce-motion .mm-load-dust span{animation:none}
+body.reduce-motion .mm-disc-plate{animation:none}
+body.reduce-motion .mm-detail-art{animation:none}
+/* 第三阶段：站内「减少动态」开关打开时，同样收掉播放动画（和媒体查询一致） */
+body.reduce-motion .mm-disc .mm-disc-plate:before{animation:none;opacity:0}
+body.reduce-motion .mm-disc.playing .mm-disc-plate:after{animation:none}

@@ -67,10 +67,15 @@
   z-index:9;                       /* 必须高于 .avatar-button(5)，否则会被头像盖住 */
 }
 .radial-item{
-  /* 90x52 与 NAV_CFG 是一对：卡片再大就得往外扩，一扩就压侧栏署名/内容栏。
-     尺寸、半径、角度这三者必须一起改，改完跑 _navfit.py 复核。 */
-  left:0;top:0;width:90px;height:52px;margin:-26px 0 0 -45px;
-  padding:4px 6px;border-radius:17px;
+  /* 72x42 与 NAV_CFG(R=136, start=-128, arc=148) 是一对，
+     由 `_navfit.py` 解出来的（那个脚本把头像/署名/联系方式/ONLINE
+     四块禁入区 + 内容栏硬边界都写成几何约束再搜）。
+     ⚠️ 改尺寸 / 半径 / 角度三者任何一个都必须重解，改完跑 _navcheck.py 复核。
+     ⚠️ 42 高是「三行文字能塞下」的下限：见下面 span/b/small 的 line-height。
+     ⚠️ 这一组只在 **≥1151px** 生效。861~1150px 走 21.b 的紧凑档
+     （44px 圆点 + NAV_CFG_COMPACT），两组的尺寸/半径/角度互不通用。 */
+  left:0;top:0;width:72px;height:42px;margin:-21px 0 0 -36px;
+  padding:3px 5px;border-radius:16px;
   z-index:1;
   /* 收起态：缩到锚点上，锚点在头像中心，所以看起来是「藏在头像里」 */
   transform:translate3d(0,0,0) scale(.4);
@@ -95,13 +100,13 @@
   border-color:var(--accent-primary);
 }
 .radial-item:hover span{transform:rotate(-12deg) scale(1.16)}
-/* 三行文字要一起塞进 52px 里（减去 padding 只剩 44）：
-   16.5 + 14.4 + 9.8 = 40.7 —— 所以 line-height 必须显式钉住，
+/* 三行文字要一起塞进 42px 里（减去 padding 只剩 36）：
+   13.2 + 12.1 + 9.8 = 35.1 —— 所以 line-height 必须显式钉住，
    靠继承的 1.5 会算成 53px，直接把 "PROJECTS" 挤出卡片外。 */
-.radial-item span{display:block;line-height:1.1;font-size:15px;
+.radial-item span{display:block;line-height:1.1;font-size:12px;
   transition:transform .3s var(--ease);color:var(--accent-primary)}
-.radial-item b{font-size:12.5px;line-height:1.15}
-.radial-item small{font-size:8.5px;line-height:1.15;letter-spacing:.06em}
+.radial-item b{font-size:11px;line-height:1.1}
+.radial-item small{font-size:8.5px;line-height:1.15;letter-spacing:.04em}
 /* 当前项：底色用强调色渐变，和主题联动 */
 .radial-item.active{
   background:linear-gradient(135deg,var(--accent-soft),rgba(255,255,255,.72));
@@ -117,13 +122,17 @@ body.night .radial-item.active{
   opacity:0;pointer-events:none;
   transform:translate3d(0,0,0) scale(.4);transition-delay:0ms;
 }
-/* 无 JS 兜底：脚本没跑时至少把四个节点按 NAV_CFG 的默认值摆出来。
-   数值 = 固定的 (cos/sin(角度) * 138, 角度/10)，从 NAV_CFG 手算一遍即可
-   （改了 NAV_CFG 记得回来同步，否则「脚本挂了」和「脚本正常」会长得不一样）。 */
-.radial-nav.no-js .radial-item:nth-child(1){--nx:-47.2px;--ny:-129.7px;--nr:-11deg}
-.radial-nav.no-js .radial-item:nth-child(2){--nx:56.1px;--ny:-126.1px;--nr:-6.6deg}
-.radial-nav.no-js .radial-item:nth-child(3){--nx:127.9px;--ny:-51.7px;--nr:-2.2deg}
-.radial-nav.no-js .radial-item:nth-child(4){--nx:127.9px;--ny:51.7px;--nr:2.2deg}
+/* 无 JS 兜底：脚本没跑时至少把五个节点按 NAV_CFG 的默认值摆出来。
+   数值 = 固定的 (cos/sin(角度) * 136, 角度/10)，从 NAV_CFG 手算一遍即可
+   （改了 NAV_CFG 记得回来同步，否则「脚本挂了」和「脚本正常」会长得不一样）。
+   现行 NAV_CFG：R=136 start=-128 arc=148 rot_k=10
+     角度 = -128 / -91 / -54 / -17 / +20
+   直接跑 `python _navfit.py` 会在末尾把这五行打出来，照抄即可。 */
+.radial-nav.no-js .radial-item:nth-child(1){--nx:-83.7px;--ny:-107.2px;--nr:-12.8deg}
+.radial-nav.no-js .radial-item:nth-child(2){--nx:-2.4px;--ny:-136.0px;--nr:-9.1deg}
+.radial-nav.no-js .radial-item:nth-child(3){--nx:79.9px;--ny:-110.0px;--nr:-5.4deg}
+.radial-nav.no-js .radial-item:nth-child(4){--nx:130.1px;--ny:-39.8px;--nr:-1.7deg}
+.radial-nav.no-js .radial-item:nth-child(5){--nx:127.8px;--ny:46.5px;--nr:2.0deg}
 
 /* 展开时，弧线会掠过头顶那两块「背景装饰」：
      · .rail-top 的 "RINSORA / 01"
@@ -448,13 +457,125 @@ body.night .card-tools{filter:none}
    32. 新增响应式
    ============================================================ */
 @media (max-width:1150px){
-  /* 侧栏从 248px 收到 210px，四个节点按原尺寸摆会顶进内容栏。
-     不逐个改数字 —— 那就等于维护两套几何，早晚漂移；
-     直接在锚点上整体等比缩小：.radial-nav 是 0×0、transform-origin
-     恰好落在锚点上，所以 scale 会把「极坐标位移 + 卡片尺寸 + 字号」
-     一起缩，相对关系一点不变，碰撞结论也依然成立。 */
+  /* 侧栏从 248px 收到 210px。这里只保留「宽屏扇形整体等比缩小」这一条 ——
+     861~1150px 区间会被下面 21.b 的 compact-radial 覆盖掉 transform，
+     所以下面再给一条 @media 把它还原成 scale(1)。 */
   .radial-nav{transform:scale(.85)}
 }
+
+/* ============================================================
+   21.b compact-radial —— 861~1150px 的紧凑扇形
+   ------------------------------------------------------------
+   背景：≥1151px 的 72×42 文字卡 + R136/arc148 那组参数，
+   放到 210px 侧栏里是**没有可行解**的。侧栏变窄 38px、可用竖向
+   空间只有 ~48px，而卡片需要 ≥148px 的竖向空间 —— 缺口约 100px。
+
+   结论：这不是「扇形不可行」，是「这一档需要换密度」。
+   ≥1151px 保持文字卡扇形不动；这一档把节点换成 44px 圆点按钮：
+     · 常显只有图标（♡ ✎ ✦ ☁ ◎），文字移到 hover/focus 的 tooltip
+     · 形状从圆角矩形改成圆，尺寸 72×42 → 44×44
+     · 整圈重新解算：R=144 / start=-80° / arc=204° / navScale=.85
+   这三档（文字扇形 / 紧凑扇形 / 手机底栏）是**同一套导航的三种密度**，
+   不是三套导航：锚点依然是头像中心，依然是极坐标摆位，依然由
+   script.js 的 NAV_CFG_COMPACT 写 --nx/--ny/--nr。
+
+   ⚠️ 参数不是手调的：_navscan_sz.js 在浏览器里逐尺寸扫过（44/48/52/56），
+   _navfit_soft.py 按 SAT 打分挑最优，_compactverify.js / _compactfinal.js
+   复核。硬约束（不遮头像 / 不越视口左边 / 离内容栏 ≥6px /
+   不压 rail-top / 节点净间距 ≥4px）全部满足；唯一放宽的是
+   「允许压住 .side-name 署名」—— 这是 210px 侧栏里唯一拿得到的空间，
+   而且展开时署名本来就不是必需信息（收起后它完好无损）。
+
+   ⚠️ 这一档还借了 .side-rail 的 isolation:isolate（见 style.css）：
+   卡片要压过 .side-name，必须在侧栏自己的层叠上下文里比分。
+   ------------------------------------------------------------
+   用 min-width 划下界：≤860px 时 sidebar display:none，整块自然失效。 */
+@media (min-width:861px) and (max-width:1150px){
+  /* 这两条是给「鼠标悬停头像 / 键盘 focus」也进紧凑态用的。
+     ≤1150px 时扇形的几何由 NAV_CFG_COMPACT 负责，旧的 scale(.85) 会
+     再缩一层（44px 圆 → 37px，太小），所以这里必须还原成 scale(1)。 */
+  .radial-nav{transform:scale(1)}
+  /* 紧凑扇形允许压过署名，所以展开时把署名淡下去，两层字不糊在一起。
+     只降透明度、不动布局 —— 收起 (nav-closed / 鼠标离开) 后立刻回来。 */
+  .avatar-nav-wrap:hover ~ .side-name,
+  .avatar-nav-wrap.open ~ .side-name{opacity:.16;transition:opacity .22s var(--ease)}
+
+  .radial-item{
+    /* 44px 圆：最小的「还看得出是个按钮」的尺寸，也是触屏推荐的最小可点区。
+       负 margin 把自己的中心对到锚点（头像中心）上。 */
+    width:44px;height:44px;margin:-22px 0 0 -22px;
+    padding:0;border-radius:50%;
+    display:grid;place-items:center;
+    box-sizing:border-box;
+  }
+  /* 圆里只放图标：b（中文名）与 small（英文名）收起来交给 tooltip，
+     否则三行文字会把 42px 的内容盒撑破（实测 overflow 2px）。 */
+  .radial-item b,
+  .radial-item small{display:none}
+  /* ⚠️ span 必须同时钉住 font-size 与 line-height 两个 1em：
+     字形本身的行盒高度在许多字体下是 1.12~1.35em，只写 font-size
+     会得到一个比圆还高的行盒，图标看着「没居中」并被裁掉 2px。
+     实测（_cfinal4.js）：19px 字号下 span 的 line box 是 21px，
+     overflow = 2px/侧。 */
+  .radial-item span{
+    display:block;
+    width:1em;height:1em;
+    font-size:19px;line-height:1;
+    overflow:hidden;              /* 行盒多出来的那点像素直接裁掉，不参与撑高 */
+    transform:none;               /* 宽屏那条 hover 时 rotate(-12deg) 在圆里会甩出圆外 */
+  }
+  /* hover/focus 只是「亮起来」，不再放大 —— 圆已经贴着头像和内容栏，
+     scale(1.09) 会把内缘推进头像 2px（实测）。 */
+  .radial-item:hover,
+  .radial-item:focus-visible{transform:translate3d(var(--nx,0),var(--ny,0),0) rotate(var(--nr,0deg)) scale(1)}
+
+  /* ---- tooltip：hover / focus 时显示中文名 ----
+     纯 CSS 用 attr() 取不到子元素文字，所以 index.html 给每个节点加了
+     data-label；::after 读它。这样零 JS、零额外 DOM。
+
+     ⚠️ z-index:2 + isolation:isolate 这两条**必须有**，少一条 tooltip 就是隐形的。
+     原因：.radial-item 的 transform 让它成为一个层叠上下文，所以它的 ::after
+     只能在这个上下文内部参与排序。而 .radial-item.active / :hover 那条规则带
+     background（渐变）—— .glass/.card/.radial-item 那条共享规则里写的是
+     `background:var(--glass)`，**只有一层背景**。::after 没设 z-index 时和
+     元素自身的背景同在「步骤 2：负 z-index 子元素之后、步骤 3：块级后代之前」
+     这一层，谁在源码里靠后谁画在上面 → 伪元素被自己的背景**整个盖住**。
+     实测：opacity 已经是 1、content 也对，屏幕上什么也看不见。
+     给 ::after 一个正 z-index 才能跳到元素背景之上。
+     isolation:isolate 是防反向问题：元素自身背景在「步骤 2」的层级低于
+     z-index:auto 的子元素，加个隔离层让伪元素的 z-index 语义不被外部干扰。 */
+  .radial-item:after{
+    content:attr(data-label);
+    position:absolute;top:50%;right:calc(100% + 7px);      /* 默认向左弹 */
+    transform:translateY(-50%) translateX(6px);
+    white-space:nowrap;padding:4px 9px;border-radius:999px;
+    font-size:11px;font-weight:900;letter-spacing:.04em;
+    background:var(--glass-h);border:1px solid var(--bd);
+    color:var(--accent-primary);
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+    z-index:2;isolation:isolate;
+    opacity:0;pointer-events:none;
+    transition:opacity .18s var(--ease),transform .22s var(--ease);
+  }
+  .radial-item:hover:after,
+  .radial-item:focus-visible:after{opacity:1;transform:translateY(-50%) translateX(0)}
+  /* 锚点左侧的节点（音乐博物馆）反向弹出 —— 它贴着侧栏左缘，
+     向左弹会直接出视口（实测 left 64.4 → 13.8，差 5px 撞边）。
+     ⚠️ 这里同时把 z-index 提到 1，**比其余节点低**：它和「碎碎念」在
+     视觉上贴得很近，两者都 hover 的瞬间（鼠标扫过）谁高谁低会决定
+     蹭到的那个 tooltip 压住谁。让它低一层，靠外侧的提示永远更靠上。 */
+  .radial-item:nth-of-type(5):after{right:auto;left:calc(100% + 7px);transform:translateY(-50%) translateX(-6px);z-index:1}
+  .radial-item:nth-of-type(5):hover:after,
+  .radial-item:nth-of-type(5):focus-visible:after{transform:translateY(-50%) translateX(0)}
+
+  body.night .radial-item:after{background:rgba(52,40,62,.94);border-color:rgba(255,255,255,.16);color:#f7a8c9}
+}
+
+/* reduced-motion 下把 tooltip 的位移收掉（保留淡入，不然等于没有提示） */
+@media (prefers-reduced-motion:reduce){
+  .radial-item:after{transform:translateY(-50%)}
+}
+
 @media (max-width:860px){
   /* 底栏从 3 格变 4 格（新增「碎碎念」）。style.css 里是 repeat(3,1fr)。 */
   .mobile-nav{grid-template-columns:repeat(4,1fr)}

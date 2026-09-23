@@ -42,11 +42,15 @@ rinsora-home/                  ← 就是仓库根
 │
 │   ── 数据层（三个纯数据文件，站点里唯一需要手改的内容源）──
 ├── music-data.js              window.RINSORA_MUSIC  = { version, tracks[] }
+├── music-museum-data.js       window.RINSORA_MUSIC_MUSEUM = { version, records[] }
+│                              （只存 musicId + 布局 x/y/scale/rotation/depth，
+│                                一个字的歌曲信息都不复制 —— 改 music-data.js 博物馆自动跟着变）
 ├── projects-data.js           window.RINSORA_PROJECTS = { version, categories[], items[] }
 │
 │   ── 渲染 / 逻辑层 ──
 ├── music.js                   播放器引擎 + 列表 + 歌词栏（两个播放器实例共用）
 ├── music-upload.js            「＋ 添加音乐」弹窗（写 assets/music/ + music-data.js）
+├── music-museum.js            音乐博物馆场景（进馆 / 唱片阵列 / 视差 / 选中 / 档案详情）
 ├── projects.js                项目树渲染 + 管理 UI；暴露 window.RinsoraProjects
 ├── blog-admin.js              首页卡片上的编辑 / 删除按钮，以及写作台入口
 ├── gh-api.js                  GitHub Contents API 封装（读 / 写 / 删 / 传二进制）
@@ -188,6 +192,7 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | --- | --- |
 | `music.js` | `.mp-shell .mp-disc .mp-cover .mp-meta .mp-body .mp-progress .mp-btn .mp-eq .mp-track .lb-scroll .lb-line .lb-wrap .lb-base .lb-fill` |
 | `music-upload.js` | `.mm-mask .mm-card .mm-field .mm-btn` |
+| `music-museum.js` | `.mm-load* .mm-scene(.on .open .has-sel) .mm-stage .mm-disc(.sel .dim .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-art .mm-disc-label .mm-hud .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-tag` |
 | `projects.js` | `.pt-group(.open) .pt-head .pt-body .pt-item .pt-foot .pt-status .pt-go .pt-cat-0..3` |
 | `blog-admin.js` / `projects.js` | `.card-tools .card-tool .tool-edit .tool-del` |
 
@@ -197,6 +202,16 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
   靠 `.blog-card:hover .card-tools` / `.pt-item:hover .card-tools` 显形。`projects.js` 生成时
   `className` 是 `card-tools pt-tools` —— **`card-tools` 不能少**。
 - **项目树用 `.open` 表示展开**（不是 `.closed`）：`.pt-group:not(.open) .pt-body { display: none }`。
+- **博物馆的缩放分两层**：JS 只写 inline 的 `--mm-scale-data`（基础值），样式表里的
+  `.mm-disc{--mm-scale:var(--mm-scale-data,1)}` 兜底，hover / `:active` / 选中态只覆盖 `--mm-scale`。
+  **别把基础值写回 `--mm-scale`** —— inline 会压死状态规则，症状是「hover 和选中都不放大」。
+- **博物馆的自转用 `animation-play-state` 开关**，不是增删 `animation`：
+  `.mm-disc-plate` 永远声明着 `mmSpin`，只是默认 `paused`；`.playing` 把它改成 `running`。
+  **别改成「只在 `.playing` 里声明 animation」** —— 那样暂停时属性被移除、角度立刻回 0，
+  视觉上是「一暂停就跳回起点」；用 play-state 才能真的「停在哪、继续时接着转」。
+- **播放状态只认两个来源**，缺一不可：`RinsoraMusic.getState().index`（换曲目才变）
+  和 `body.mp-playing`（播放/暂停才变）。读取口子是 `syncFromPlayer()`。
+  **不要用「我上次点了什么」推断播放状态** —— 播放器那边切歌 / 暂停就会不同步。
 
 ---
 
@@ -217,8 +232,21 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | `Ctrl + Shift + P` | 进项目编辑台 |
 | 悬停博客卡片 | 右上角浮出编辑 / 删除按钮（仅管理员） |
 | 点项目分类标题 | 折叠 / 展开该分类 |
+| 点侧栏「音乐博物馆」 | 进音乐博物馆（加载层 → 唱片阵列场景） |
+| 在博物馆里移动鼠标 | 整个阵列按景深做视差（远层动得少、近层动得多）；视口尺寸走缓存，滑动过程中不读布局 |
+| 悬停唱片 | 放大、抬升、边缘发光，并高亮歌名 / 歌手 |
+| 点唱片 | 打开该唱片的**档案详情**，并**自动播放**（被浏览器拦下时详情照常打开，点详情里的按钮即可） |
+| 正在播放的唱片 | 缓慢匀速自转 + 外圈转环 + 边缘极淡呼吸光晕 |
+| 暂停 | 自转与转环当场停住（停在哪就是哪），唱片留一圈静态柔光；再播接着转 |
+| 右下角播放器切歌 | 博物馆里高亮的那张立刻跟着换（同一个音乐状态，双向同步） |
+| 已在别处播放时进入博物馆 | 认得出是哪一首，把它标成 `PLAYING`；**不会**打断或换歌 |
+| 点详情里的「播放这首」 | 走现有播放器播放（右下角播放器 / 歌词栏同步）；已是当前曲目时变成暂停 / 继续 |
+| `Esc`（详情打开时） | 先关详情，**仍在**博物馆里（只退一层，不会一次退出整个展厅） |
+| 点详情外的场景空白 | 只关详情，**不退**展厅 |
+| `Esc`（未开详情） | 退出博物馆，回到小窝 |
 
-**地址直达**：`#about` / `#blog` / `#projects` 会跳过欢迎页直接落到对应板块。
+**地址直达**：`#about` / `#blog` / `#projects` 会跳过欢迎页直接落到对应板块；
+`#museum` 直接进音乐博物馆。
 
 **移动端**：左侧导航改为底部三按钮，设置抽屉铺满宽度，播放器收成小胶囊，歌词栏整条贴底。
 
@@ -248,6 +276,46 @@ python new-post.py                 # Windows 也可以直接双击 new-post.cmd
 `.mp-body` 右下角的「＋」（需 Token），或直接编辑 `music-data.js` 的 `tracks[]`：
 音频放 `assets/music/<id>.<ext>`、封面 `<id>-cover.<ext>`，歌词作为 `lrc` 字符串内联。
 单文件上限 45 MB（超过 20 MB 会警告）。
+
+### 把一首歌摆进音乐博物馆
+
+博物馆的**内容**来自 `music-data.js`（歌名/歌手/封面/音频/歌词），
+`music-museum-data.js` 只负责**摆在哪**。加一条：
+
+```js
+{ musicId: "shelter", x: 50, y: 33, scale: 0.98, rotation: 6, depth: 0.28 }
+```
+
+- `musicId` 必须对得上 `music-data.js` 里的 `id`；**对不上的条目会被静默跳过**，
+  所以删歌不会让整个展厅挂掉。
+- `x` / `y` 是 %（相对可视区），`depth` 0~1 越大越远（越淡、越糊、移动越少）。
+- **同一个 `musicId` 可以出现多次**（同一张唱片摆两处陈列）。
+- 可选 `note`：**这一处陈列**的附注（写进详情的 `NOTE` 一行）。
+- 点唱片 = 打开档案详情 **+ 尝试播放**；被浏览器自动播放策略拦下时详情照常打开，
+  点详情里的按钮即可。全程复用右下角那个播放器，博物馆**不新建** `<audio>`。
+
+### 档案详情里能显示哪些字段
+
+固定显示的四件套：**封面 / 歌名 / 歌手 / 档案编号（NN / NN）+ 收录日期**。
+下面这些**可选字段写在 `music-data.js` 的曲目上**，有就渲染、没有整块不出现
+（不会留空框、空行、空标签）：
+
+| 字段 | 位置 | 类型 |
+| --- | --- | --- |
+| `album` | 资料表 `ALBUM` 行 | 字符串 |
+| `genre` | 资料表 `GENRE` 行 | 字符串 |
+| `source` | 资料表 `SOURCE` 行 | 字符串 |
+| `description` | 出一段描述文字（最多 5 行，超出省略） | 字符串 |
+| `tags` | 出一排标签胶囊（自动去重） | 数组，或空格 / 逗号分隔的字符串 |
+
+```js
+{ id: "shelter", title: "Shelter", artist: "Porter Robinson & Madeon",
+  album: "Shelter", genre: "Electronic", source: "原创",
+  description: "动画短片《Shelter》的配乐。",
+  tags: ["electronic", "animation"] }
+```
+
+`note`（写在 `music-museum-data.js` 的陈列条目上）优先于曲目的 `description`。
 
 ### 加一个项目
 

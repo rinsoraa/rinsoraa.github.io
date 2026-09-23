@@ -26,6 +26,8 @@
   <link rel="stylesheet" href="v3.css">
   <!-- 文章排版：真实文章页用它，首页点进文章时的 #spaPost 浮层也复用它 -->
   <link rel="stylesheet" href="posts/post.css">
+  <!-- 音乐博物馆场景层（加载层 + 展厅 + HUD）。排最后，同名选择器由它接管 -->
+  <link rel="stylesheet" href="music-museum.css">
   <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色。
        ⚠️ 这一段必须保持「无依赖 + 不抛错」：它在 head 里同步执行，
        一旦报错整个 body 都不会渲染。所以全部包在 try 里。
@@ -158,11 +160,21 @@
       </button>
       <nav class="radial-nav no-js" id="radialNav" aria-label="主导航">
         <!-- 位置由 script.js 按极坐标算好写进 --nx/--ny/--nr，节点数量随便加。
-             .no-js 里那份是「脚本没跑起来」时的兜底扇形。 -->
-        <button class="radial-item active" data-target="about" type="button"><span>♡</span><b>主页</b><small>ABOUT</small></button>
-        <button class="radial-item" data-target="blog" type="button"><span>✎</span><b>博客</b><small>BLOG</small></button>
-        <button class="radial-item" data-target="projects" type="button"><span>✦</span><b>项目</b><small>PROJECTS</small></button>
-        <button class="radial-item" data-target="moments" type="button"><span>☁</span><b>碎碎念</b><small>MOMENTS</small></button>
+             .no-js 里那份是「脚本没跑起来」时的兜底扇形。
+             ⚠️ 第 5 个节点（音乐博物馆）把单圈挤满了，NAV_CFG 是重解过的，
+                改节点数 / 改卡片尺寸都要重跑 _navfit.py，别只调数字试。
+
+             data-label 是给 861~1150px 紧凑档的 tooltip 用的：
+             那一档圆点里只显示 <span> 图标，<b>/<small> 被 CSS 收起，
+             tooltip 用 ::after + attr(data-label) 取名字（纯 CSS，零 JS）。
+             改中文名要连这里的 data-label 一起改，否则 tooltip 会显示旧名字。 -->
+        <button class="radial-item active" data-target="about" data-label="主页" type="button"><span>♡</span><b>主页</b><small>ABOUT</small></button>
+        <button class="radial-item" data-target="blog" data-label="博客" type="button"><span>✎</span><b>博客</b><small>BLOG</small></button>
+        <button class="radial-item" data-target="projects" data-label="项目" type="button"><span>✦</span><b>项目</b><small>PROJECTS</small></button>
+        <button class="radial-item" data-target="moments" data-label="碎碎念" type="button"><span>☁</span><b>碎碎念</b><small>MOMENTS</small></button>
+        <!-- data-museum 而不是 data-target：它进的是 overlay 场景，不是分栏，
+             不能被 navigateTo 那套（TITLES / WIDTHS / 转场）当成第 5 个分栏。 -->
+        <button class="radial-item" data-museum="1" data-label="音乐博物馆" type="button"><span>◎</span><b>音乐博物馆</b><small>MUSEUM</small></button>
       </nav>
     </div>
 
@@ -478,6 +490,7 @@
     <button data-target="blog" type="button"><span>✎</span>博客</button>
     <button data-target="projects" type="button"><span>✦</span>项目</button>
     <button data-target="moments" type="button"><span>☁</span>碎碎念</button>
+    <button data-museum="1" type="button"><span>◎</span>博物馆</button>
   </nav>
 
   <!-- 站内打开文章：内容换掉、文档不换 —— <audio> 才不会被销毁，音乐一直播下去。
@@ -494,14 +507,147 @@
 </div>
 
 <audio id="audio" preload="metadata"></audio>
+
+<!-- ============================================================
+     音乐博物馆 / MUSIC MUSEUM —— 站内浮层
+     ------------------------------------------------------------
+     挂在 .app 之外（body 直接子元素），跟 #roomReveal 一个待遇：
+     绝不进入 .app 的层叠 / 包含块，就不可能有「把 fixed 后代推飞」的事故。
+     两块 DOM：
+       #mmLoad  进入加载层（圆环 / 声波 / 加载线 / 微粒子）
+       #mmScene 展厅本体（纵深 + 地面网格 + 唱片陈列 + HUD）
+     行为全在 music-museum.js 里，这里只是挂载点。
+     ============================================================ -->
+<div class="mm-load" id="mmLoad" aria-hidden="true">
+  <div class="mm-load-bg"></div>
+  <div class="mm-load-dust" aria-hidden="true">
+    <span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span>
+  </div>
+  <div class="mm-load-card" role="status" aria-live="polite">
+    <div class="mm-load-orbit" aria-hidden="true">
+      <i></i><i></i>
+      <div class="mm-load-wave"><b></b><b></b><b></b><b></b><b></b></div>
+    </div>
+    <p class="mm-load-kicker">Entering Music Archive</p>
+    <h1 class="mm-load-title">音乐<em>博物馆</em></h1>
+    <p class="mm-load-sub" id="mmLoadStatus">正在检索档案</p>
+    <p class="mm-load-en">MUSIC MUSEUM · RINSORA ARCHIVE</p>
+    <div class="mm-load-bar"><i id="mmLoadBar"></i></div>
+    <div class="mm-load-meta"><span>LOADING ARCHIVE</span><b id="mmLoadPct">0%</b></div>
+  </div>
+</div>
+
+<div class="mm-scene" id="mmScene" aria-hidden="true" aria-label="音乐博物馆">
+  <div class="mm-depth" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="mm-floor" aria-hidden="true"></div>
+
+  <!-- 唱片陈列区：内容由 music-museum.js 按 music-museum-data.js 的坐标渲染 -->
+  <div class="mm-stage" id="mmStage"></div>
+
+  <!-- 没有可渲染唱片时的说明（无条件入口：站长自己也见得着） -->
+  <div class="mm-empty" id="mmEmpty" hidden>
+    <strong>展厅还空着 ✦</strong>
+    <p>在 <code>music-museum-data.js</code> 的 <code>records[]</code> 里加一条，
+       写上 <code>musicId</code>（对应 <code>music-data.js</code> 里曲目的 <code>id</code>）
+       和 <code>x / y / scale / rotation / depth</code>，这里就会摆上那张唱片。</p>
+  </div>
+
+  <header class="mm-hud">
+    <div class="mm-hud-brand">
+      <span class="mm-hud-ring" aria-hidden="true"><i></i></span>
+      <span>
+        <b>音乐博物馆</b>
+        <small>MUSIC MUSEUM</small>
+      </span>
+    </div>
+    <div class="mm-hud-stat"><span></span>ARCHIVE <b id="mmSceneCount">0</b> RECORDS</div>
+    <button class="mm-exit" id="mmExit" type="button" aria-label="退出音乐博物馆">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6"/>
+      </svg>
+      <span class="mm-exit-txt">退出展厅</span>
+    </button>
+  </header>
+
+  <footer class="mm-foot">
+    <span>点击唱片即可<b>查看档案</b> ♡</span>
+    <span>音乐不会因为进入展厅而中断</span>
+    <span>按 <kbd>Esc</kbd> 回到小窝</span>
+  </footer>
+
+  <!-- ============================================================
+       Music Archive Detail —— 唱片档案详情（第二阶段）
+       ------------------------------------------------------------
+       结构刻意保持「左封面 / 右档案」两栏，且**不含任何表单**：
+       播放走现有播放引擎（RinsoraMusic.playIndex），
+       这里只是「对外的一扇窗」，不是第二套播放器。
+
+       ⚠️ 面板里没有 <audio>，一个都没有。全站音频元素永远只有
+          index.html 顶部那一个 #audio（music.js 独占管理）。
+       ⚠️ 关闭有三种：右上 X、点空白遮罩、Esc（Esc 由 music-museum.js
+          在捕获阶段处理，只关详情不退展厅）。
+       ============================================================ -->
+  <div class="mm-detail" id="mmDetail" aria-hidden="true" role="dialog" aria-modal="false"
+       aria-label="唱片档案">
+    <div class="mm-detail-scrim" id="mmDetailScrim"></div>
+
+    <div class="mm-detail-card" role="document">
+      <button class="mm-detail-x" id="mmDetailClose" type="button" aria-label="关闭档案">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+
+      <div class="mm-detail-art-wrap">
+        <span class="mm-detail-glow" aria-hidden="true"></span>
+        <img class="mm-detail-art" id="mmDetailArt" alt="" decoding="async">
+        <span class="mm-detail-hole" aria-hidden="true"></span>
+      </div>
+
+      <div class="mm-detail-body">
+        <p class="mm-detail-kicker" id="mmDetailKicker">MUSIC ARCHIVE</p>
+        <p class="mm-detail-idx" id="mmDetailIndex">01 / 01</p>
+        <h2 class="mm-detail-title" id="mmDetailTitle">—</h2>
+        <p class="mm-detail-artist" id="mmDetailArtist">—</p>
+
+        <!-- 固定资料：档案编号 / 收录日期（两行永远在 —— 档案馆的编号是骨架） -->
+        <dl class="mm-detail-meta" id="mmDetailMeta"></dl>
+        <!-- 可选资料：album / genre / source / note —— 有才渲染，没有则空 -->
+        <div class="mm-detail-extra" id="mmDetailExtra"></div>
+        <!-- 描述段：整段文字（长文可换行），没有就整块收掉 -->
+        <p class="mm-detail-desc" id="mmDetailDesc" hidden></p>
+        <!-- 标签胶囊：resources 里没有 tags 就整块不出现 -->
+        <div class="mm-detail-tags" id="mmDetailTags" hidden></div>
+
+        <div class="mm-detail-acts">
+          <button class="mm-detail-play" id="mmDetailPlay" type="button" aria-label="播放">
+            <span class="mm-detail-play-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <path class="mm-ic-play" d="M8 5.5v13l11-6.5z"/>
+                <path class="mm-ic-pause" d="M8 5h3v14H8zM13 5h3v14h-3z"/>
+              </svg>
+            </span>
+            <span id="mmDetailPlayTxt">播放这首</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="gh-api.js"></script>
 <script src="music-data.js"></script>
+<script src="music-museum-data.js"></script>
 <script src="music.js"></script>
 <script src="music-upload.js"></script>
 <script src="projects-data.js"></script>
 <script src="projects.js"></script>
 <script src="moments-data.js"></script>
 <script src="blog-admin.js"></script>
+<script src="music-museum.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
