@@ -64,6 +64,15 @@ window.RINSORA_MUSIC = {
       "src": "assets/music/sacred-play-secret-place.mp3",
       "lrc": "[00:00.00]Sacred Play Secret Place - matryoshka\n[00:30.70]Gracefully sneaking up on me\n[00:36.65]They just want to tear my feathers\n[00:45.61]The golden light of the setting sun\n[00:51.17]Let me be a hypocrite again\n[00:58.46]I will be gone before long\n[01:02.06]I know I'm wrong\n[01:05.65]No matter how far I go they find me out\n[01:14.76]I wish the gusts took away my gloom\n[01:20.83]I can't help this vague feeling\n[01:27.56]I feel so good but I'm worn out\n[01:35.09]We'll be all right don't look so sad\n[01:42.33]Confess my sin conceal them all\n[01:49.74]Night will come soon and swallow everything\n[02:14.20]Quietly hiding in the grass\n[02:19.92]Hearing the leaves rustling\n[02:28.91]They're singing with a burning piano\n[02:34.96]It gives me cheap relief\n[02:41.88]I will be gone before long\n[02:45.44]I know I'm wrong\n[02:49.37]No matter how far I go they find me out\n[02:58.26]I wish the gusts took away my gloom\n[03:04.59]I can't help this vague feeling\n[03:11.21]I feel so good but I'm worn out\n[03:18.36]We'll be all right don't look so sad\n[03:26.01]Confess my sin conceal them all\n[03:33.21]Night will come soon and swallow everything\n[04:39.93]I feel so good\n[04:47.09]We'll be all right\n[04:54.33]Then I give all up",
       "date": "2026-09-23"
+    },
+    {
+      "id": "lemon",
+      "title": "Lemon",
+      "artist": "米津玄師",
+      "cover": "assets/music/lemon-cover.png",
+      "src": "assets/music/lemon.mp3",
+      "lrc": "[00:00.00]Lemon - 米津玄師 (よねづ けんし)\n[00:00.53]词：米津玄師\n[00:01.06]曲：米津玄師\n[00:01.54]夢ならば\n[00:02.88]どれほどよかったでしょう\n[00:06.88]未だにあなたのことを夢にみる\n[00:12.41]忘れた物を取りに帰るように\n[00:17.91]古びた思い出の埃を払う\n[00:26.27]戻らない幸せがあることを\n[00:31.73]最後にあなたが教えてくれた\n[00:37.25]言えずに隠してた昏い過去も\n[00:42.80]あなたがいなきゃ\n[00:44.92]永遠に昏いまま\n[00:48.57]きっともうこれ以上\n[00:51.36]傷つくことなど\n[00:54.18]ありはしないとわかっている\n[00:58.98]あの日の悲しみさえ\n[01:01.74]あの日の苦しみさえ\n[01:04.52]そのすべてを愛してた\n[01:07.28]あなたとともに\n[01:09.98]胸に残り離れない\n[01:13.07]苦いレモンの匂い\n[01:15.84]雨が降り止むまでは帰れない\n[01:21.39]今でもあなたはわたしの光\n[01:37.98]暗闇であなたの背をなぞった\n[01:43.43]その輪郭を鮮明に覚えている\n[01:48.97]受け止めきれないものと\n[01:52.20]出会うたび\n[01:54.50]溢れてやまないのは涙だけ\n[02:00.32]何をしていたの\n[02:03.16]何を見ていたの\n[02:05.92]わたしの知らない横顔で\n[02:10.69]どこかであなたが今\n[02:13.43]わたしと同じ様な\n[02:16.31]涙にくれ\n[02:17.64]淋しさの中にいるなら\n[02:21.71]わたしのことなどどうか\n[02:24.85]忘れてください\n[02:27.60]そんなことを心から願うほどに\n[02:33.13]今でもあなたはわたしの光\n[02:41.64]自分が思うより\n[02:47.19]恋をしていたあなたに\n[02:52.72]あれから思うように\n[02:58.24]息ができない\n[03:03.33]あんなに側にいたのに\n[03:09.27]まるで嘘みたい\n[03:14.40]とても忘れられない\n[03:20.21]それだけが確か\n[03:30.81]あの日の悲しみさえ\n[03:33.41]あの日の苦しみさえ\n[03:36.22]そのすべてを愛してた\n[03:38.97]あなたとともに\n[03:41.67]胸に残り離れない\n[03:44.77]苦いレモンの匂い\n[03:47.61]雨が降り止むまでは帰れない\n[03:53.09]切り分けた果実の片方の様に\n[03:58.60]今でもあなたはわたしの光",
+      "date": "2026-09-23"
     }
   ]
 };
