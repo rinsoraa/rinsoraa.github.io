@@ -75,15 +75,6 @@ window.RINSORA_MUSIC = {
       "date": "2026-09-23"
     },
     {
-      "id": "m-mue6rkup",
-      "title": "使一颗心免于哀伤",
-      "artist": "知更鸟&HOYO-MiX-Chevy",
-      "cover": "assets/music/m-mue6rkup-cover.png",
-      "src": "assets/music/m-mue6rkup.mp3",
-      "lrc": "[00:00.00]使一颗心免于哀伤 - 知更鸟/HOYO-MiX/Chevy\n[00:01.46]作曲 Composer：王可鑫 Eli.W (HOYO-MiX)\n[00:02.12]作词 Lyricist：黑金雨\n[00:02.51]编曲 Arranger：王可鑫 Eli.W (HOYO-MiX)\n[00:03.90]制作人 Producer：王可鑫 Eli.W (HOYO-MiX)\n[00:13.25]Birds are born with no shackles\n[00:18.74]Then what fetters my fate\n[00:25.19]Blown away the white petals\n[00:30.39]Leave me trapped in the cage\n[00:36.78]The endless isolation\n[00:39.78]Can't wear down my illusion\n[00:42.69]Someday I'll make a dream unchained\n[00:49.46]Let my heart bravely spread the wings\n[00:53.62]Soaring past the night\n[00:56.34]To trace the bright moonlight\n[01:01.48]Let the clouds heal me of the stings\n[01:05.57]Gently wipe the sorrow off my life\n[01:10.00]I dream\n[01:19.21]What is meant",
-      "date": "2026-09-23"
-    },
-    {
       "id": "m-mue6z0q6",
       "title": "奇妙能力歌",
       "artist": "陈粒",
