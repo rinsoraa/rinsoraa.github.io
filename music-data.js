@@ -82,6 +82,15 @@ window.RINSORA_MUSIC = {
       "src": "assets/music/m-mue6z0q6.mp3",
       "lrc": "[00:00.00]奇妙能力歌 - 陈粒\n[00:06.72]词：陈粒\n[00:13.44]曲：陈粒\n[00:20.16]我看过沙漠下暴雨\n[00:24.48]看过大海亲吻鲨鱼\n[00:29.00]看过黄昏追逐黎明\n[00:32.31]没看过你\n[00:37.51]我知道美丽会老去\n[00:42.05]生命之外还有生命\n[00:46.21]我知道风里有诗句\n[00:49.72]不知道你\n[00:54.95]我听过荒芜变成热闹\n[00:59.44]听过尘埃掩埋城堡\n[01:03.88]听过天空拒绝飞鸟\n[01:07.16]没听过你\n[01:12.43]我明白眼前都是气泡\n[01:16.73]安静的才是苦口良药\n[01:21.22]明白什么才让我骄傲\n[01:24.36]不明白你\n[01:30.11]我拒绝更好更圆的月亮\n[01:34.59]拒绝未知的疯狂\n[01:38.76]拒绝声色的张扬\n[01:42.10]不拒绝你\n[01:47.42]我变成荒凉的景象\n[01:51.70]变成无所谓的模样\n[01:56.15]变成透明的高墙\n[01:59.54]没能变成你\n[02:39.90]我听过空境的回音\n[02:44.30]雨水浇绿孤山岭\n[02:48.57]听过被诅咒的秘密\n[02:52.24]没听过你\n[02:57.22]我抓住散落的欲望\n[03:01.53]缱绻的馥郁让我紧张\n[03:05.93]我抓住世间的假象\n[03:09.29]没抓住你\n[03:14.63]我包容六月清泉结冰\n[03:19.10]包容不老的生命\n[03:23.41]包容世界的迟疑\n[03:26.80]没包容你\n[03:32.06]我忘了置身濒绝孤岛\n[03:36.64]忘了眼泪不过失效药\n[03:40.90]忘了百年无声口号\n[03:44.37]没能忘记你\n[03:49.63]我想要更好更圆的月亮\n[03:54.02]想要未知的疯狂\n[03:58.45]想要声色的张扬\n[04:02.09]我想要你",
       "date": "2026-09-23"
+    },
+    {
+      "id": "m-muefw707",
+      "title": "使一颗心免于哀伤",
+      "artist": "知更鸟&HOYO-MiX_Chevy",
+      "cover": "assets/music/m-muefw707-cover.png",
+      "src": "assets/music/m-muefw707.mp3",
+      "lrc": "[00:00.00]使一颗心免于哀伤 - 知更鸟/HOYO-MiX/Chevy\n[00:01.46]作曲 Composer：王可鑫 Eli.W (HOYO-MiX)\n[00:02.12]作词 Lyricist：黑金雨\n[00:02.51]编曲 Arranger：王可鑫 Eli.W (HOYO-MiX)\n[00:03.90]制作人 Producer：王可鑫 Eli.W (HOYO-MiX)\n[00:13.25]Birds are born with no shackles\n[00:18.74]Then what fetters my fate\n[00:25.19]Blown away the white petals\n[00:30.39]Leave me trapped in the cage\n[00:36.78]The endless isolation\n[00:39.78]Can't wear down my illusion\n[00:42.69]Someday I'll make a dream unchained\n[00:49.46]Let my heart bravely spread the wings\n[00:53.62]Soaring past the night\n[00:56.34]To trace the bright moonlight\n[01:01.48]Let the clouds heal me of the stings\n[01:05.57]Gently wipe the sorrow off my life\n[01:10.00]I dream\n[01:19.21]What is meant",
+      "date": "2026-09-23"
     }
   ]
 };
