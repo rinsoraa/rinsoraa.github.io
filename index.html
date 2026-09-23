@@ -542,15 +542,15 @@
   <div class="mm-depth" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="mm-floor" aria-hidden="true"></div>
 
-  <!-- 唱片陈列区：内容由 music-museum.js 按 music-museum-data.js 的坐标渲染 -->
+  <!-- 唱片扇形陈列区：内容由 music-museum.js 按曲库 + 焦点现算（不再读坐标） -->
   <div class="mm-stage" id="mmStage"></div>
 
   <!-- 没有可渲染唱片时的说明（无条件入口：站长自己也见得着） -->
   <div class="mm-empty" id="mmEmpty" hidden>
     <strong>展厅还空着 ✦</strong>
-    <p>在 <code>music-museum-data.js</code> 的 <code>records[]</code> 里加一条，
-       写上 <code>musicId</code>（对应 <code>music-data.js</code> 里曲目的 <code>id</code>）
-       和 <code>x / y / scale / rotation / depth</code>，这里就会摆上那张唱片。</p>
+    <p>博物馆的唱片<b>完全由曲库生成</b>：往 <code>music-data.js</code> 的
+       <code>tracks[]</code> 里加一首歌（或用播放器的「＋ 添加音乐」），
+       这里就会多出一张唱片，位置由扇形自动排。</p>
   </div>
 
   <header class="mm-hud">
@@ -562,14 +562,12 @@
       </span>
     </div>
     <div class="mm-hud-mid">
-      <div class="mm-hud-stat"><span></span>ARCHIVE <b id="mmSceneCount">0</b> RECORDS</div>
-      <!-- 展区分页：一首歌 = 一张唱片；只有一页时 JS 会把整块收掉（hidden）。
-           数字是「第几展区 / 共几展区」，不是「第几张唱片」。 -->
-      <div class="mm-pager" id="mmPager" hidden>
-        <button class="mm-page-btn" id="mmPrev" type="button" aria-label="上一个展区">&#8249;</button>
-        <b id="mmPage">1 / 1</b>
-        <button class="mm-page-btn" id="mmNext" type="button" aria-label="下一个展区">&#8250;</button>
+      <div class="mm-hud-stat">
+        <span></span>ARCHIVE <b id="mmSceneCount">0</b> RECORDS
       </div>
+      <!-- ⚠️ 这里原来有一个 ‹ 1 / 2 › 分页器，第六轮**删除**了：
+           唱片改成左侧无限循环扇形之后不存在「第几展区」这个概念，
+           全部唱片连成一条连续弧线（首尾相接）。别再把分页加回来。 -->
     </div>
     <button class="mm-exit" id="mmExit" type="button" aria-label="退出音乐博物馆">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
@@ -581,29 +579,28 @@
   </header>
 
   <footer class="mm-foot">
-    <span>点击唱片即可<b>查看档案</b> ♡</span>
-    <span>音乐不会因为进入展厅而中断</span>
+    <span>滚动滚轮（或 <kbd>↑</kbd><kbd>↓</kbd>）<b>浏览馆藏</b></span>
+    <span>浏览不会出声 —— 点当前这张或右侧「播放」才放</span>
     <span>按 <kbd>Esc</kbd> 回到小窝</span>
   </footer>
 
   <!-- ============================================================
-       Music Archive Detail —— 唱片档案详情（第二阶段）
+       Music Archive Rail —— 右侧档案轨（第六轮重构）
        ------------------------------------------------------------
-       结构刻意保持「左封面 / 右档案」两栏，且**不含任何表单**：
-       播放走现有播放引擎（RinsoraMusic.playIndex），
-       这里只是「对外的一扇窗」，不是第二套播放器。
+       原来是「居中 modal + 全屏遮罩」，现在是**页面右侧常驻的一列**：
+         上：MUSIC ARCHIVE（这一张唱片的档案，跟着焦点走）
+         下：LYRICS（歌词面板的预留位，第一阶段只留位不实现）
 
+       ⚠️ 为什么不再有遮罩：档案不是「盖住场景」的东西，而是场景的
+          另一半。遮罩一旦留下就会挡住左侧扇形 —— 而左侧恰恰是唯一
+          的浏览入口（点击 / 滚轮都发生在那儿）。
        ⚠️ 面板里没有 <audio>，一个都没有。全站音频元素永远只有
           index.html 顶部那一个 #audio（music.js 独占管理）。
-       ⚠️ 关闭有三种：右上 X、点空白遮罩、Esc（Esc 由 music-museum.js
-          在捕获阶段处理，只关详情不退展厅）。
+       ⚠️ 收起面板有两种：右上 X、Esc 的第一级（都只收面板，不退展厅）。
        ============================================================ -->
-  <div class="mm-detail" id="mmDetail" aria-hidden="true" role="dialog" aria-modal="false"
-       aria-label="唱片档案">
-    <div class="mm-detail-scrim" id="mmDetailScrim"></div>
-
-    <div class="mm-detail-card" role="document">
-      <button class="mm-detail-x" id="mmDetailClose" type="button" aria-label="关闭档案">
+  <div class="mm-detail" id="mmDetail" aria-hidden="true" aria-label="唱片档案与歌词">
+    <div class="mm-detail-card mm-archive" role="document">
+      <button class="mm-detail-x" id="mmDetailClose" type="button" aria-label="收起档案">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
              stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18"/>
@@ -644,6 +641,17 @@
         </div>
       </div>
     </div>
+
+    <!-- 歌词面板：这一阶段**只留位置**（用户明确要求先不做歌词）。
+         里面不放任何假数据，就说清楚它下一阶段才接进来。 -->
+    <section class="mm-lyrics" id="mmLyrics" aria-label="歌词">
+      <p class="mm-lyrics-kicker">LYRICS</p>
+      <div class="mm-lyrics-slot">
+        <span class="mm-lyrics-dash" aria-hidden="true"></span>
+        <p>歌词面板将在下一阶段接入</p>
+        <small>这一阶段先把位置留出来 —— 扇区浏览与档案联动先稳定下来。</small>
+      </div>
+    </section>
   </div>
 </div>
 

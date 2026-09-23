@@ -43,14 +43,14 @@ rinsora-home/                  ← 就是仓库根
 │   ── 数据层（三个纯数据文件，站点里唯一需要手改的内容源）──
 ├── music-data.js              window.RINSORA_MUSIC  = { version, tracks[] }
 ├── music-museum-data.js       window.RINSORA_MUSIC_MUSEUM = { version, spots{} }
-│                              （只是**摆位覆写**：键 = 曲目 id，值 = x/y/scale/rotation/depth。
-│                                没有它就按曲库自动摆 —— 一个字的歌曲信息都不复制）
+│                              （只是**文案覆写**：键 = 曲目 id，值 = note / label。
+│                                位置不写在这里 —— 由扇形几何按「离焦点的距离」算）
 ├── projects-data.js           window.RINSORA_PROJECTS = { version, categories[], items[] }
 │
 │   ── 渲染 / 逻辑层 ──
 ├── music.js                   播放器引擎 + 列表 + 歌词栏（两个播放器实例共用）
 ├── music-upload.js            「＋ 添加音乐」弹窗（写 assets/music/ + music-data.js）
-├── music-museum.js            音乐博物馆场景（进馆 / 唱片阵列 / 视差 / 选中 / 档案详情）
+├── music-museum.js            音乐博物馆场景（进馆 / 左侧扇形唱片导航 / 滚轮选择 / 右侧档案轨）
 ├── projects.js                项目树渲染 + 管理 UI；暴露 window.RinsoraProjects
 ├── blog-admin.js              首页卡片上的编辑 / 删除按钮，以及写作台入口
 ├── gh-api.js                  GitHub Contents API 封装（读 / 写 / 删 / 传二进制）
@@ -192,7 +192,7 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | --- | --- |
 | `music.js` | `.mp-shell .mp-disc .mp-cover .mp-meta .mp-body .mp-progress .mp-btn .mp-eq .mp-track .lb-scroll .lb-line .lb-wrap .lb-base .lb-fill` |
 | `music-upload.js` | `.mm-mask .mm-card .mm-field .mm-btn` |
-| `music-museum.js` | `.mm-load*`（含 `.leaving` 退场帘）`.mm-scene(.on .open .has-sel) .mm-stage .mm-disc(.sel .dim .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-gloss .mm-disc-art .mm-disc-label .mm-hud .mm-hud-mid .mm-pager(.has-playing) .mm-page-btn .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-tag` |
+| `music-museum.js` | `.mm-load*`（含 `.leaving` 退场帘）`.mm-scene(.on .open .closing) .mm-depth .mm-floor .mm-stage .mm-disc(.sel .playing .is-current .is-paused) .mm-disc-plate(.playing) .mm-disc-gloss .mm-disc-art(.is-empty) .mm-hud .mm-hud-mid .mm-foot .mm-empty .mm-detail(.on) .mm-detail-* .mm-archive .mm-lyrics .mm-lyrics-kicker .mm-lyrics-slot .mm-lyrics-dash .mm-tag` |
 | `projects.js` | `.pt-group(.open) .pt-head .pt-body .pt-item .pt-foot .pt-status .pt-go .pt-cat-0..3` |
 | `blog-admin.js` / `projects.js` | `.card-tools .card-tool .tool-edit .tool-del` |
 
@@ -205,6 +205,9 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 - **博物馆的缩放分两层**：JS 只写 inline 的 `--mm-scale-data`（基础值），样式表里的
   `.mm-disc{--mm-scale:var(--mm-scale-data,1)}` 兜底，hover / `:active` / 选中态只覆盖 `--mm-scale`。
   **别把基础值写回 `--mm-scale`** —— inline 会压死状态规则，症状是「hover 和选中都不放大」。
+  **层高（`z-index`）是同一套道理**：JS 写 inline 的 `--mm-z-data`（深度底值，焦点 100 / 最外 64），
+  CSS 合成 `z-index:calc(var(--mm-z-data,1) + var(--mm-z-boost,0))`，状态只加 `--mm-z-boost`。
+  **别改成 `style.zIndex = …`** —— 内联会把 hover 与焦点的抬层永久压死。
 - **博物馆的自转用 `animation-play-state` 开关**，不是增删 `animation`：
   `.mm-disc-plate` 永远声明着 `mmSpin`，只是默认 `paused`；`.playing` 把它改成 `running`。
   **别改成「只在 `.playing` 里声明 animation」** —— 那样暂停时属性被移除、角度立刻回 0，
@@ -223,8 +226,29 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
   博物馆的 `exit()` 只负责自己的场景层，收不掉宿主的三个状态 → 症状是
   **「点了退出，页面糊着一层，要再按一次 Esc 才正常」**。
 - **曲库是唯一真相，`music-museum-data.js` 只是覆写表**：唱片由 `RINSORA_MUSIC.tracks[]`
-  生成（一首歌 = 一张唱片），`spots{ id → {x,y,scale,rotation,depth} }` 只是可选覆盖。
-  上传一首新歌就多一张，**不需要动数据文件**；改完曲库靠 `syncData()` 的指纹自动重排。
+  生成（一首歌 = 一张唱片），`spots{ id → {note?, label?} }` 只补这两个字段。
+  上传一首新歌就多一张，**不需要动数据文件**；改完曲库靠 `syncData()` 的指纹自动重建。
+- **位置不写在数据里，全部由「离焦点的距离」算出来**（`fanLayout`）：JS 每帧只内联写 6 个变量
+  （`--mm-fx / --mm-fy / --mm-scale-data / --mm-op / --mm-blur / --mm-z-data`），
+  `.mm-disc` 用 `translate / rotate / scale` 三个独立属性，其中**只有 `translate` 不进 transition**
+  （它每帧都在变，进了过渡就会被二次平滑成一坨）。
+  **别回到「每首歌手写 x/y」**：曲库一变大就一定会有人漏写，而漏写的症状是「唱片叠在一处」。
+- **扇形几何是视口的连续函数，不是一组写死的数**：`size / rx / ry` 都由视口宽高算出再 `clamp`，
+  窗口跨度固定 ±90°（`step = 90° / half`，随曲库规模自适应），并且有三条**构造性**约束：
+  焦点盘不侵入右侧轨道、纵向极值不越出上下 band、最外圈不出左边界。
+  改参数要跑 `_mmfan.js`（5 档视口 × 3 种曲库规模 = 1005 条），别只对着自己那块屏目测。
+- **`selectedIndex` 是「陈列里的位置」，不是曲目表下标**：`rec.index → playIndex()`、
+  `rec.order → 位置`；DOM 上是 `dataset.index`（下标）与 `dataset.at`（位置）。
+  两者只在「曲目表里没有缺 id 的条目」时才恰好相等。**混用不会报错**，
+  症状是「点 A 却选中了 B」，看起来完全像 `music-data.js` 的数据写错了。
+- **滚轮只浏览，不出声**：`onWheel` 里**不许**出现 `play / playIndex` ——
+  浏览与聆听是两个明确动作，出声只留给「点当前选中的那张」和右侧「播放」。
+  事件处理是「累加器（42px）+ 冷却（180ms，冷却期内的增量直接丢）」，一次惯性滑动只切一格。
+- **`.mm-stage` 必须带 `z-index:1`**（建层叠上下文）：唱片的 `z-index` 是 64~100，
+  不隔离的话会盖住 HUD(5) 和右侧档案轨(20)。
+- **唱片元素懒建 + 按 `musicId` 复用**（`state.pool`）：只建扇形窗口（±3 张 + 一圈淡出环）里的那几张，
+  滚轮浏览**不重建 `<img>`**（分页时代一翻页就重建，现在每滚一格都重建会闪会卡）。
+  所以「DOM 里的唱片数 ≤ 曲库数」是**正常的**，别再用「DOM 张数 == 曲库数」当判据。
 
 ---
 
@@ -246,20 +270,24 @@ box-shadow: inset 0 1px 0 var(--hi);          /* 顶部内高光 ← 关键 */
 | 悬停博客卡片 | 右上角浮出编辑 / 删除按钮（仅管理员） |
 | 点项目分类标题 | 折叠 / 展开该分类 |
 | 点侧栏「音乐博物馆」 | 进音乐博物馆（加载层 → 唱片阵列场景） |
-| 在博物馆里移动鼠标 | 整个阵列按景深做视差（远层动得少、近层动得多）；视口尺寸走缓存，滑动过程中不读布局 |
-| 悬停唱片 | 放大、抬升、边缘发光，并高亮歌名 / 歌手 |
-| 点唱片 | 打开该唱片的**档案详情**，并**自动播放**（被浏览器拦下时详情照常打开，点详情里的按钮即可） |
+| 滚轮 / 触控板 | 沿扇形上下浏览（**无限循环**：最后一首再往下回到第一首，首尾相接）；**只浏览，不出声** |
+| `↑` / `↓` | 与滚轮同义（上一位 / 下一位） |
+| 点一张**不是焦点**的唱片 | 把它转到扇形中央，右侧档案跟着换 —— **不出声** |
+| 点**已经是焦点**的那张唱片 | 播放 / 暂停（浏览与聆听是两个动作，别把它们合成一个手势） |
+| 在右侧档案里滚动 | 档案自己滚，扇形不抢事件；档案滚到顶 / 底之后再滚，才交回扇形 |
+| 悬停唱片 | 微微放大、抬一层（几何位置不变 —— 焦点不会因为 hover 而跑） |
+| 移动鼠标 | **不驱动画面**：扇形是导航器，几何只由「当前焦点」决定（视差已在第六轮整条删除） |
 | 正在播放的唱片 | 缓慢匀速自转 + 外圈转环 + 边缘极淡呼吸光晕 |
 | 暂停 | 自转与转环当场停住（停在哪就是哪），唱片留一圈静态柔光；再播接着转 |
 | 右下角播放器切歌 | 博物馆里高亮的那张立刻跟着换（同一个音乐状态，双向同步） |
 | 点唱片 / 切歌 | **新歌从 0:00 开始**（不从上一首接着放）；「恢复上次进度」只在**刚打开站点**时发生一次 |
-| 已在别处播放时进入博物馆 | 认得出是哪一首，把它标成 `PLAYING`；**不会**打断或换歌 |
+| 已在别处播放时进入博物馆 | 认得出是哪一首，把它标成 `PLAYING`**并转到扇形中央**；**不会**打断或换歌 |
 | 点详情里的「播放这首」 | 走现有播放器播放（右下角播放器 / 歌词栏同步）；已是当前曲目时变成暂停 / 继续 |
 | `Esc`（详情打开时） | 先关详情，**仍在**博物馆里（只退一层，不会一次退出整个展厅） |
 | 点详情外的场景空白 | 只关详情，**不退**展厅 |
 | `Esc`（未开详情） | 退出博物馆，回到小窝（带一层「正在离开展厅」的退场帷幕） |
 | 点右上角「退出展厅」 | 与 `Esc` **同一条路径**（都走 `exitMuseum()`）：场景、小窝淡出、URL 一起收拾干净 |
-| 点 HUD 上的 `‹ 1 / 2 ›` | 翻展区（只有一页时整块收起，不占地方） |
+| 点场景空白 | 只收起右侧档案，**不退**展厅（会误关的 bug 踩过一次） |
 
 ⚠️ **退出展厅只有一条路径**：`music-museum.js` 的退出按钮**不自己收尾**，
 它通过 `onExitRequest` 请 `script.js` 的 `exitMuseum()` 来关。
@@ -306,39 +334,51 @@ python new-post.py                 # Windows 也可以直接双击 new-post.cmd
 **「一首歌 = 一张唱片」，这是引擎按 `tracks[]` 自己生成的**：
 加一首就多一张、删一首就少一张，不需要在任何地方补条目。
 
-只想给某几首**指定摆位**时，才写进 `music-museum-data.js` 的 `spots`：
+只想给某几首**补一句自己的话**时，才写进 `music-museum-data.js` 的 `spots`：
 
 ```js
 spots: {
-  "shelter": { x: 50, y: 33, scale: 0.98, rotation: 6, depth: 0.28 }
+  "shelter": { note: "进门第一首", label: "空凛" }
 }
 ```
 
 - 键（`shelter`）必须对得上 `music-data.js` 里的 `id`；**对不上的键会被忽略**。
-- 没写进 `spots` 的歌由引擎**自动摆位**（`autoSpot`）：不重复、不漏、不塌在一起，
-  角度按曲目 id 做 hash，所以**刷新多少次都是同一个姿势**。
-- 想覆写一首歌的全部字段不必写全：缺哪个字段就用自动摆位算出来的那个值。
-- `x` / `y` 是 %（相对可视区），`depth` 0~1 越大越远（越淡、越糊、移动越少）。
-- 可选 `note`：**这一处陈列**的附注（写进详情的 `NOTE` 一行）。
-- ⚠️ **同一首歌只会有一张唱片**。想摆两处陈列？那是旧版行为，已经取消 ——
-  写重了也不会多出一张（用户反馈过「3 首歌却看到 5 张唱片」）。
-- 点唱片 = 打开档案详情 **+ 尝试播放**；被浏览器自动播放策略拦下时详情照常打开，
-  点详情里的按钮即可。全程复用右下角那个播放器，博物馆**不新建** `<audio>`。
+- 只有两个字段可用：`note`（**这一处陈列**的附注，写进档案的 `NOTE` 一行）
+  与 `label`（覆写档案里的署名，默认取 `artist`）。
+- ⚠️ **第六轮起 `x` / `y` / `scale` / `rotation` / `depth` 全部作废**：
+  位置不再写在数据里，而是由「离焦点的距离」算出来（见下）。
+  旧字段写在 `spots` 里**不会被读**（引擎照样原样收下，不吃掉你的数据）。
+- ⚠️ **同一首歌只会有一张唱片**。写重了也不会多出一张
+  （用户反馈过「3 首歌却看到 5 张唱片」）。
+- 点唱片**不会播放**：点「不是焦点」的那张 = 只看；点「已经是焦点」的那张 = 播放 / 暂停；
+  右侧档案里的按钮也能播。全程复用右下角那个播放器，博物馆**不新建** `<audio>`。
+
+### 扇形是怎么排的（几何模型）
+
+唱片按**椭圆弧**排布。`offset` = 这张离焦点的距离，屏内是 `-3 … +3` 那 7 张：
+
+```
+theta = offset × step        step = 90° / half      half = min(3, ⌊(曲库数-1)/2⌋)
+x = cx + rx·cos(theta)       y = cy + ry·sin(theta)
+```
+
+- 视觉中心**明显偏左**：扇形包络（含最外那一圈）的右边界在 1440×900 与 1152×720 下
+  都落在 **45% 左右**，右边 55% 留给常驻的档案轨。
+- 近大远小：`offset 0 → 1.14`、`±1 → 0.86`、`±2 → 0.70`、`±3 → 0.55`，越远越淡、越糊、层越低。
+- `size / rx / ry` **不是写死的数**：由视口宽高算出来再 `clamp`，并且满足三条**构造性**约束
+  （焦点盘不侵入右侧轨道 / 纵向极值不越出上下 band / 最外圈不出左边界）。
+  所以 1920×1080 与 1152×720 走的是同一套代码，不是两组参数。
 
 ### 唱片多了会怎样（可拓展性）
 
-一页（一个「展区」）最多 **6 张**（窄屏 4 张，判据是 560px），
-超过就自动分展区，HUD 上出现 `‹ 1 / 2 ›`：
-
 | 曲库规模 | 博物馆的行为 |
 | --- | --- |
-| 1~6 首 | 一页摆完，分页器收起 |
-| 7 首以上 | 自动分页，每页重新排版（每页都是「进门第一眼」的构图） |
-| 换曲目 / 换封面 | 进厅或 1s 内自动重建唱片墙（指纹比对，不做无谓重建） |
-| 当前在播的歌不在本页 | 分页器角上点一颗强调色圆点提示；进厅时会自动翻到它那一页 |
-
-`spots` 里的手写坐标是**按页**生效的：覆写的坐标写的是「那一页里的位置」，
-所以给第 7 首写死坐标时，它落在第 2 页的那个位置上。
+| 任何规模 | **不分页**。扇形窗口固定显示焦点 ± 3 张（+ 一圈淡出环），再多也只是「弧上更密」 |
+| 2 首 | 窗口自动缩到 `half = 1`，两张之间 90° —— 仍然是扇形，不是一条竖排列表 |
+| 7 首以上 | 屏上可见张数不变（最多 7 张清晰 + 2 张渐隐），**不换展区** |
+| 滚到第一首再往下滚 | 回到最后一首；最后一首往上滚回到第一首（首尾逻辑相接） |
+| 换曲目 / 换封面 / 上传新歌 | 进厅时或 1s 内自动重建（指纹比对，不做无谓重建），新歌自己上墙 |
+| 当前在播的歌不在窗口里 | 进厅时自动把扇形转到它，并展开它的档案 |
 
 ### 档案详情里能显示哪些字段
 

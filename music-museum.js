@@ -30,25 +30,30 @@
      records()     → 渲染后的唱片列表（调试 / 回归装置用）
      state         → 内部状态（只读用途）
 
-   第二阶段新增（唱片阵列 —— 视差 / hover / 选中 / 详情）：
-     select(rec)       → 选中一张唱片（打开详情），不播放
-     deselect()        → 收起详情，恢复场景（幂等）
-     selectedMusicId() → 当前选中的 musicId（无选中返回 null）
-     setParallax(x, y) → 手动喂视差（回归装置用；-1~1 归一化）
-     stepParallax()    → 同步推进一帧视差（回归装置用；rAF 在无头下不派发）
-     settleParallax(n) → 循环 step 直到收敛，返回步数（回归装置用）
+   第六轮重构（用户要求：取消分页式唱片墙，改成「左侧无限循环扇形 + 右侧档案轨」）：
+     selectedIndex()      → 扇形焦点：**state.records 里的位置**（0 ~ n-1）
+     selectIndex(i)       → 把焦点移到第 i **个位置**（走最短路径，无限循环）
+     select(rec)          → 按 record 选（内部自动取 rec.order）
+     stepBy(dir)          → 焦点前进 / 后退一张（滚轮与 ↑↓ 都落在这里）
+     detailOpen()         → 右侧档案面板是否展开（Esc 第一级的落点）
+     geometry()           → 当前视口的扇形参数（cx/cy/rx/ry/size/railX）
+     layout(focus,n,w,h)  → **纯函数**：任意视口下的完整扇形布局（回归装置 / 几何求解用）
+     fanHalf(n)           → 可见窗口半宽（±几 张）
+     wrapOffset(d, n)     → 把差值归一到 [-n/2, n/2) —— 无限循环的数学落点
+     stepFan()/settleFan(n) → 同步推进扇形动画一帧 / 一次推到位（rAF 在无头下不派发）
+     wheel(dy, mode)      → 喂一次滚轮增量（回归装置用，不依赖真实 WheelEvent）
+     syncFromPlayer()     → 按播放器真实状态刷新 .playing
+     isPlayingIndex(i)    → 该曲目是否正在响（含暂停判定）
+     onExitRequest(fn)    → 「退出展厅」交给宿主关（见 requestExit）
 
-   第三阶段新增（「它真的是一间博物馆」）：
-     openRecord(rec|id) → 打开档案**并**尝试播放（点唱片的正式入口）
-     syncFromPlayer()   → 按播放器真实状态刷新 .playing（回归装置 / 外部可用）
-     isPlayingIndex(i)  → 该曲目是否正在响（含暂停判定）
-     playingRecord()    → 当前「正在播放」的 record（无则 null）
-
-   第三阶段补丁（用户反馈修复 —— 只动本文件 + 宿主接线）：
-     page()/pageCount()/gotoPage(p) → 展区分页（一首歌 = 一张唱片，多了分页）
-     autoSpot(i, n, id)             → 自动摆位（没写进 spots 的歌用它算坐标）
-     syncData()                     → 曲库指纹变了就重建唱片墙（新歌立刻上墙）
-     onExitRequest(fn)              → 「退出展厅」交给宿主关（见 requestExit）
+   ⚠️ 这一轮**删掉**的东西（别再写回来）：
+     · page / pageCount / computePerPage / gotoPage / renderPager / 分页器 DOM
+     · 自由摆位（x / y / scale / rotation / depth）—— 位置改由扇形几何按
+       「焦点距离」解算；music-museum-data 的 spots 只剩 label / note 覆写
+     · 鼠标视差（--mm-px-pos / --mm-depth-x/y / setParallax / stepParallax）
+     · 唱片下方的 .mm-disc-label 胶囊（标题归右侧档案面板，扇形上不放字）
+     ⚠️ 但「删掉」是指不再有**读取方**，不是把数据抹掉：
+        spots 里的 note / label 照旧读（见 collectSpots）。
    ============================================================ */
 (() => {
   'use strict';
@@ -100,12 +105,12 @@
   const sceneCount = $('#mmSceneCount');
   const exitBtn = $('#mmExit');
   const emptyEl = $('#mmEmpty');
-  /* 展区分页（第三阶段补丁）：一页放不下时才显示 */
-  const pagerEl = $('#mmPager');
-  const pagerPrev = $('#mmPrev');
-  const pagerNext = $('#mmNext');
-  const pagerLabel = $('#mmPage');
-  /* 详情面板（第二阶段） */
+  /* 右侧档案轨（第六轮）：详情不再是居中 modal，而是页面右侧常驻的一列。
+     ⚠️ 面板**内部**的字段节点 id 全部保留（下面的 detailArt…detailTags）——
+        卡片本身没被拆散，只是换了定位方式（.mm-detail 从「全屏居中网格」
+        变成「右侧那一列」），fillDetail 一个字都不用改。
+     ⚠️ 删掉的是分页器那四个（mmPager/mmPrev/mmNext/mmPage）与遮罩
+        detailScrim：分页没有了，modal 遮罩也没有了。 */
   const detailEl = $('#mmDetail');
   const detailArt = $('#mmDetailArt');
   const detailKicker = $('#mmDetailKicker');
@@ -119,69 +124,139 @@
   const detailPlay = $('#mmDetailPlay');
   const detailPlayTxt = $('#mmDetailPlayTxt');
   const detailClose = $('#mmDetailClose');
-  const detailScrim = $('#mmDetailScrim');
 
   /* ---------------------------------------------------- 状态 ---- */
   const state = {
     open: false,          /* 场景是否已进入（含动画中） */
     entering: false,      /* 是否正在预加载 */
     token: 0,             /* 自增令牌：旧一轮的异步收尾不再动 DOM */
-    rendered: false,      /* 场景是否已渲染过（只渲一次，重进直接复用） */
-    records: [],          /* 渲染后的唱片 [{musicId, track, index, ...}] */
+    rendered: false,      /* 场景是否已渲染过 */
+    records: [],          /* 唱片（一首歌一张）[{musicId, track, index, label, note, order}] */
     loaded: {},           /* 资源缓存标记，避免重复网络请求 */
-    /* —— 第二阶段：阵列交互 —— */
-    selected: null,       /* 当前选中的 record（原对象引用），null = 未选中 */
+
+    /* —— 扇形导航（第六轮）—— */
+    selectedIndex: 0,     /* **扇形焦点**：在 state.records 里的**位置**（0 ~ n-1）。这是唯一的选择状态。
+                             ⚠️ 是「第几张唱片」而不是「曲目表下标」—— 两者在正常情况下相同，
+                                但如果曲库里有条目缺 id 被跳过，位置和下标就会错开。
+                                对外播放一律用 rec.index（曲目表下标），别混。 */
+    detailOpen: false,    /* 右侧档案面板是否展开（Esc 第一级只关它） */
+    selected: null,       /* 派生值：detailOpen ? records[selectedIndex] : null */
     hovered: null,        /* 当前 hover 的 record */
-    parallax: { x: 0, y: 0 },   /* 平滑后的视差（-1~1，已 lerp） */
-    parallaxTarget: { x: 0, y: 0 }, /* 鼠标原始目标（-1~1） */
-    rafId: 0,             /* 视差循环句柄，0 = 未跑 */
-    /* —— 第三阶段 —— */
+    fanPos: 0,            /* 扇形当前位置（**连续浮点**，单位 = 一个 offset 步） */
+    fanTo: 0,             /* 扇形目标位置（同样是连续浮点） */
+    pool: {},             /* musicId → 唱片元素（按 id 复用，切歌不重建 DOM） */
+    rafId: 0,             /* 扇形动画的 rAF 句柄，0 = 未跑 */
+    wheelAcc: 0,          /* 滚轮累加器（px） */
+    wheelAt: 0,           /* 滚轮冷却到期时刻（ms） */
+
+    /* —— 播放联动 —— */
     isPlaying: false,     /* 播放器当前是否在响（body.mp-playing 的真实读数） */
     playBlocked: false,   /* 上一次播放被浏览器自动播放策略拦下了（UI 降级用） */
-    /* —— 第三阶段补丁 —— */
-    page: 0,              /* 当前展区（第几页，0 起） */
-    dataSig: '',          /* 曲库指纹：变了就重建唱片墙（上传新歌后能立刻看到） */
+    dataSig: '',          /* 曲库指纹：变了就重建唱片池（上传新歌后能立刻看到） */
     hostExit: null        /* 宿主（script.js）的退出函数；见 requestExit() */
   };
+
+  /* ⚠️⚠️ 为什么扇形位置要两个字段（fanPos / fanTo）而且**都不取模**：
+     无限循环要的是「首尾逻辑相连」，也就是 7 首时从第 0 首向上滚要回到第 6 首。
+     如果两个数都归一化到 [0, n)，那么从 0 去 n-1 会被插值成「往下穿过整圈」——
+     视觉上就是「滚一下倒着转一整圈」。
+     所以这里保留**无界连续坐标**：取模只发生在算差值的时候（wrapOffset）。
+     两个字段都是浮点，fanPos 由 rAF 逐帧逼近 fanTo。 */
+
 
   /* 当前正在响的曲目 index（用来给那张唱片加 .playing）。
      ⚠️ 这不是「本地记的意图」，而是**从播放器读回来的事实** ——
      见 followPlayer() / syncFromPlayer()。 */
   let playingIndex = -1;
 
-  /* 视差系数：不同 depth 的唱片位移不同。
-     远层动得少、近层动得多 —— 这是「同一空间里有远近」的关键，
-     如果所有唱片位移一样，看起来就是整块画布在平移（廉价感）。 */
-  const PARALLAX_SPAN = 34;   /* 近层最大位移（px）；实际位移 = span * (1 - depth*0.78) */
-  const PARALLAX_EASE = 0.12; /* lerp 系数：小 = 更黏，大 = 更跟手 */
-
-  /* 自转速度：越近的唱片刻意转得稍快，强化纵深。
-     用 CSS 变量 --mm-spin 给动画定时，避免为每张唱片写一条 keyframes。 */
-  const SPIN_BASE = 34;       /* 最远那张转一圈的秒数 */
-  const SPIN_NEAR = 20;       /* 最近那张转一圈的秒数 */
-
   /* ============================================================
-     数据装配 —— 把「布局」和「曲目」两张表拼起来
+     扇形参数（第六轮：取消分页，改成「左侧无限循环扇形」）
      ------------------------------------------------------------
-     这里只做 join，任何字段都不复制：track 对象直接引用
-     RinsoraMusic.tracks() 里的那一份，所以改了 music-data.js,
-     场景里的歌名 / 封面立刻就是新的。
-     ⚠️ musicId 对不上的条目直接跳过（而不是抛错）——
-     删掉一首歌不应该让整个博物馆打不开。
+     ⚠️ 这里**没有一组只适合 1440px 的硬编码**：下面是「比例 + 钳制的公式」，
+        真正的数值由 fanGeometry(w, h) 按视口算出来。需求第十六条明确要求
+        viewport-based 参数，理由很实在 —— 1280×800 和 1440×900 的
+        可用高度差了 100px，写死一组数字必然在某一档越界。
+     ⚠️ 参数**不在这里拍脑袋定**：由 _mmfancheck.py 在
+        1440×900 / 1280×800 / 1152×720 三档上解算并断言（见那边的组 F）。
+     ⚠️ 两条不变量是**构造保证**的，不是调参碰出来的运气：
+        ① apexX = railX - gap - 选中半径  →  选中那张永远进不了右侧面板
+        ② ry    受「可用高度 - 最外那张半径」钳制  →  最外那张永远不被 HUD/页脚裁到
      ============================================================ */
-  /* ============================================================
-     摆位：自动 + 覆写（第三阶段补丁）
-     ------------------------------------------------------------
-     ⚠️⚠️ 为什么要有「自动摆位」（用户反馈 1 / 2）：
-       原来唱片墙上有什么**完全**由 music-museum-data.js 的 records[] 决定。
-       于是有两个必然的毛病：
-         · 手动表里写重了 → 同一首歌在墙上出现两张（用户报的「3 首歌 5 张唱片」）
-         · 站长加了一首新歌、没手动补一条 → 新歌**永远**上不了墙
-       改成「**以曲库为准**，手动表只做覆写」之后：
-         · 一首歌 = 一张唱片（不会重复、不会漏）
-         · 加歌 / 删歌 / 换封面，墙自己跟着变（配合 syncData() 的重建）
-       手动覆写写在 data 的 spots 里（老的 records[] 仍然认，见 collectSpots）。
-     ============================================================ */
+  const FAN_SPAN = Math.PI / 2;          /* 可见窗口恒定跨越 ±90°（一个明显的四分之一弧） */
+  const FAN_VIS  = 3;                    /* 最多显示到 ±3（合计 7 张） */
+  const FAN_RING = 1.0;                  /* 窗口外再留 1 格做淡出环（透明度恰好走到 0） */
+
+  /* 步角：**可见窗口恒定跨 ±90°**，所以每格的角间隔 = 90° / 半宽。
+       half=3（曲库 ≥7）→ 30°（一屏 7 张，和上一版一致）
+       half=2（曲库 5~6）→ 45°
+       half=1（曲库 2~4）→ 90°
+     ⚠️ 为什么不做成「固定 30°」：
+        曲库只有 4 首时 half=1，固定 30° 的话三张唱片只跨 ±30° ——
+        横向位移 0.134·rx（≈30px），看上去就是**一列竖排**，
+        而需求第五条明确要求「垂直扇形 / 椭圆弧，不是竖排列表」。
+        把窗口固定成 ±90° 之后，无论曲库多大，轮廓都是同一把扇子，
+        而且曲库越小时相邻两张离得越开（不会挤）。
+     ⚠️ 步角只和**曲库规模**有关，和视口无关 —— 所以 resize 不会让
+        唱片的相对角度变化（只有半径 / 位置变），观感是连续的。 */
+  function fanStep(half) {
+    const h = Math.max(1, Math.min(FAN_VIS, half || 0));
+    return FAN_SPAN / h;
+  }
+
+  /* 窗口外淡出环：|offset| 从 half 走到 half + FAN_RING 的这段里，
+     缩放继续往最小档收、透明度线性走到 0、模糊走到最深。
+     返回 [0,1] 的 f（0 = 还在窗口内，1 = 已经彻底看不见）。 */
+  function fanFade(a, half) {
+    const over = Math.abs(a) - half;
+    if (!(over > 0)) return 0;
+    return clamp(over / FAN_RING, 0, 1);
+  }
+  /* 一张唱片在 |offset| = a 时的「三层观感」（缩放 / 透明度 / 模糊）。
+     ⚠️ 唯一的落点：applyFan 与 fanLayout 都调它，几何断言量的也是它。
+        别在任何一处另写一遍曲线。 */
+  function fanLook(a, half) {
+    const vis = clamp(Math.abs(a), 0, half);          /* 窗口内按 |offset| 取档 */
+    const f = fanFade(a, half);
+    const last = FAN_SCALE.length - 1;
+    return {
+      scale: sampleLerp(FAN_SCALE, vis) * (1 - f) + FAN_SCALE[last] * f,
+      opacity: sampleLerp(FAN_OP, vis) * (1 - f),
+      blur: sampleLerp(FAN_BLUR, vis) * (1 - f) + FAN_BLUR[FAN_BLUR.length - 1] * f,
+      f: f
+    };
+  }
+
+  /* 远近层级：|offset| = 0 / 1 / 2 / 3 四档
+     （需求第七条给的区间是 1.10~1.20 / 0.82~0.92 / 0.66~0.78 / 0.50~0.62）
+     ⚠️ 这三个数组都按**窗口内的 |offset|** 取档（0~3）；窗口外的淡出
+         由 fanLook() 用 FAN_RING 那一段补。FAN_BLUR 多一个 14.0 是留给
+         淡出环的**最深处**（窗口内取不到它，别删）。 */
+  const FAN_SCALE = [1.14, 0.86, 0.70, 0.55];
+  const FAN_OP   = [1, 0.92, 0.74, 0.50];
+  const FAN_BLUR = [0, 2.6, 6.0, 10.0, 14.0];
+
+  const FAN_EASE = 0.16;                 /* 扇形位移的 lerp 系数（小 = 更黏） */
+  const FAN_EPS  = 0.0008;               /* 收敛阈值：到这个精度就停 rAF，静止时零开销 */
+
+  /* 滚轮（需求第八条：累加器 + 阈值 + 冷却）
+     ⚠️ 为什么不能「一个 wheel event = 切一张」：
+        Windows 精密触控板 / 鼠标惯性一次滑动会吐出**几十个** wheel 事件，
+        那样会一口气跳过七八张唱片，浏览根本没法用。
+     这里的策略：
+        · 累加 deltaY（跨事件），达到 WHEEL_STEP 才算「一格」
+        · 切完一张后进入 WHEEL_LOCK 冷却，冷却期内的增量**直接丢弃**
+          （丢的是惯性尾巴，不是用户的第二格 —— 180ms 比人手两格的最短间隔还短） */
+  const WHEEL_STEP = 42;                 /* 累积到这么多 px 才算一格 */
+  const WHEEL_LOCK = 180;                /* 切完一张后的冷却（ms） */
+
+  /* 自转速度：每张唱片按**曲目 id 的 hash** 定一个稳定周期。
+     ⚠️ 不要按「当前 offset」定 —— offset 每帧都在变，改 animation-duration
+        会让旋转角度当场跳一下（踩过：一暂停就跳回起点那类问题同源）。
+        按 id 定则「这张唱片转到哪儿」永远是同一个姿势。 */
+  const SPIN_BASE = 34;                  /* 最慢一张转一圈的秒数 */
+  const SPIN_NEAR = 20;                  /* 最快一张转一圈的秒数 */
+
+
   function trackList() {
     return (window.RinsoraMusic && window.RinsoraMusic.tracks)
       ? (window.RinsoraMusic.tracks() || []) : [];
@@ -198,8 +273,11 @@
   }
 
   /* 手动覆写的两种写法都认：
-       spots   : { "曲目 id": {x,y,scale,rotation,depth,note,label} }   ← 推荐
-       records : [ { musicId, ... }, ... ]                              ← 老写法
+       spots   : { "曲目 id": {note, label} }        ← 推荐
+       records : [ { musicId, note, label }, ... ]   ← 老写法
+     ⚠️ 第六轮把 x/y/scale/rotation/depth 五个摆位字段**全部作废**了：
+        位置由扇形几何按「焦点距离」算，不再是每首歌自己的属性。
+        这里仍然会原样收进来（不吃掉别人的数据），但引擎只读 note / label。
      ⚠️ 同一 id 有多条时**只取第一条**：用户反馈 1 就是「表里写重了，
         墙上出现两张」—— 去重这一步放在这里，别放到渲染里去。 */
   function collectSpots(raw) {
@@ -224,115 +302,288 @@
   }
   function tilt(id, k) { return (hash(id) % (k * 2 + 1)) - k; }
 
-  /* 自动摆位 —— 按「**这一页里的第几张**」算。
-     为什么用页内序号而不是全局序号：一页最多 6 张，坐标是相对「一屏」定的；
-     用全局序号的话，第 7 张（第二页第 1 张）会算到屏幕外面去。
-     版式沿用原手工表那套语言：越靠下 = 越远（更小更淡、视差更小），
-     两行时上一行满排、下一行居中收窄，奇偶行左右错开半格避免排成表格。 */
-  function autoSpot(i, n, id) {
-    const make = (x, y, scale, depth) =>
-      ({ x: x, y: y, scale: scale, rotation: tilt(id, 9), depth: depth });
-    if (n <= 1) return make(50, 46, 1.16, 0.14);      /* 独一张：正中、放大 */
+  /* ============================================================
+     扇形几何 —— **纯函数**，不碰 DOM、不看时间
+     ------------------------------------------------------------
+     模型：椭圆弧
+        theta = offset * step        （step = 90° / 可见半宽，见 fanStep）
+        x     = cx + rx * cos(theta)
+        y     = cy + ry * sin(theta)
 
-    const cols = Math.min(3, n);
-    const rows = Math.ceil(n / cols);
-    const r = Math.floor(i / cols);
-    const c = i % cols;
-    const inRow = Math.min(cols, n - r * cols);       /* 这一行实际几张 */
-    const t = inRow > 1 ? c / (inRow - 1) : 0.5;      /* 行内比例 0~1 */
-    const rowT = rows > 1 ? r / (rows - 1) : 0;       /* 行比例 0~1（0 = 最近） */
-    const span = n <= 2 ? 40 : 56;                    /* 两张时别拉太开 */
-    const stagger = (rows > 1 && inRow === cols) ? (r % 2 ? 5 : -5) : 0;
+     offset = 0 是弧的**顶点**（最右、最大、最亮），两侧沿弧向上下展开
+     的同时向左收 —— 这就是「垂直扇形」的轮廓，不是一列竖排的唱片。
 
-    return make(
-      50 + (t - 0.5) * span * (inRow / cols) + stagger,
-      36 + rowT * 36,
-      1.02 - rowT * 0.34,
-      0.10 + rowT * 0.56
-    );
+     ⚠️ 纯函数是有意的：几何对不对**不该靠肉眼看截图**。
+        _mmfan.js 直接调 fanLayout() 拿坐标，再做三件事：
+          · 边界（不压 HUD / 不被页脚裁 / 不进右侧面板 / 不越出视口左边）
+          · 相邻唱片的圆心距（不能被挡到认不出来）
+          · 首尾连通（无限循环真的接上了）
+        这条流程是上一阶段解扇形导航几何时建立起来的，继续沿用。
+     ⚠️ 本机无头 Edge 被沙箱静默拦下（rc=0 且零输出），**真实截图不可用** ——
+        所以几何断言 + _fan_preview.html（真 iframe）就是这一轮的验收手段。
+
+     参数来源（比例 + 钳制，不是硬编码）：
+        size   168 / 132 / 104    ← 沿用原有三档断点（900 / 560）
+        railX  w * .47            ← 右侧档案轨的左边界
+        rx     clamp(w * .19, 96, 260)，再被「淡出环最左那张不越出视口」钳一次
+        ry     clamp(avail * .40, 60, 244) 再被「可用高度 - 边缘半径」钳一次
+        cy     扇区可用段 [bandTop, bandBot] 的**竖直中点**
+        step   90° / half —— 可见窗口恒定跨 ±90°，见 fanStep
+        band*  由「竖向分区表」一次算清 —— 窄屏要同时让开档案轨与提示条
+     ============================================================ */
+  function discSize(w) {
+    return w <= 560 ? 104 : w <= 900 ? 132 : 168;
   }
 
-  /* 一页放几张：窄屏 4 张（需求九：手机别硬塞桌面那套阵列），其余 6 张。
-     ⚠️ 这个值直接决定分页，所以 onResize 里会跟着重算。 */
-  function computePerPage() {
-    return (vp.w && vp.w <= 560) ? 4 : 6;
+  /* ------------------------------------------------------------
+     竖向分区表 —— 扇区能用的「上下边界」在这里一次算清
+     ------------------------------------------------------------
+     ⚠️⚠️ 这张表是**版式契约**：它算出来的 railY / railB / footX / footB
+        由 layoutRail() 写成 CSS 变量（--mm-rail-y/-b、--mm-foot-x/-b），
+        CSS 只读不猜。所以：
+          · 「窄屏档案轨占下方 42%」这件事只在**这一处**定义；
+          · CSS 里不再出现 46vh / 96px 这类会和 JS 漂移的数字。
+        上一版窄屏是「扇形按 h-126 排、轨道按 46vh 钉底」，两边各算各的，
+        结果最下面那张唱片会滑到档案卡底下 —— 修法就是合成一张表。
+     ============================================================ */
+  const HUD_DESK   = 84;    /* 桌面 HUD 下沿（padding 22 + 内容约 40） */
+  const HUD_NARROW = 62;    /* 窄屏 HUD 下沿（padding 16 + 内容约 30） */
+  const FOOT_H     = 44;    /* 底部提示条自身高度（含描边余量） */
+  const FOOT_GAP   = 12;    /* 提示条与上方扇区 / 下方档案轨之间的呼吸缝 */
+  const FOOT_B     = 22;    /* 桌面：提示条离底 */
+  const RAIL_TOP   = 96;    /* 桌面：档案轨顶边 */
+  const RAIL_BOT   = 78;    /* 桌面：档案轨底边 */
+  const RAIL_PAD   = 10;    /* 窄屏：档案轨离底 */
+  const RAIL_RATIO = 0.42;  /* 窄屏：档案轨高度占视口比例 */
+  const RAIL_MIN = 190, RAIL_MAX = 340;   /* 窄屏轨道高度的钳制区间 */
+
+  /* 扇形几何 —— 纯函数：返回一组 px 数值 + 版式契约（不碰 DOM）。
+     ⚠️ 半径、间距全部是**比例 + 钳制的公式**，不是某一档屏的解；
+        三档桌面尺寸的验收由 _mmfan.js 断言。
+
+     half = fanHalf(曲库条数)：可见窗口半宽。它参与几何，因为
+       · 步角 = 90°/half（见 fanStep）；
+       · 最外那张的半径 = size·FAN_SCALE[half]/2 —— 「上边界钳制」要按它算。
+     ⚠️ 不传 half 时按 FAN_VIS 保守算（用在还没确定曲库的场合）。 */
+  function fanGeometry(w, h, half) {
+    const narrow = w <= 900;                 /* 窄屏：档案轨改到底部，扇形独占上半屏 */
+    const hf = Math.max(0, Math.min(FAN_VIS, typeof half === 'number' ? half : FAN_VIS));
+    const step = fanStep(hf);
+
+    /* ---- 竖向分区：先定「谁占哪一段」，再让扇形待在自己的那一段里 ---- */
+    let hudB, railX, railY, railB, footX, footB, bandTop, bandBot;
+    if (narrow) {
+      const railH = clamp(Math.round(h * RAIL_RATIO), RAIL_MIN, RAIL_MAX);
+      railY   = h - RAIL_PAD - railH;                  /* 轨道顶边 */
+      railB   = RAIL_PAD;
+      footB   = RAIL_PAD + railH + FOOT_GAP;           /* 提示条夹在轨道与扇区之间 */
+      footX   = Math.round(w / 2);                     /* 窄屏没有左右分栏 → 居中 */
+      railX   = 0;
+      hudB    = HUD_NARROW;
+      bandTop = hudB;
+      bandBot = railY - FOOT_GAP - FOOT_H;             /* 扇区下沿 = 提示条上沿 */
+    } else {
+      hudB    = HUD_DESK;
+      railY   = RAIL_TOP;
+      railB   = RAIL_BOT;
+      footB   = FOOT_B;
+      railX   = Math.round(w * 0.47);
+      footX   = Math.round(railX / 2);                 /* 提示条对准左半屏 */
+      bandTop = hudB;
+      bandBot = h - FOOT_B - FOOT_H - FOOT_GAP;        /* 扇区下沿 = 提示条上沿 */
+    }
+    const avail = Math.max(150, bandBot - bandTop);
+
+    /* ---- 尺寸：断点给的基准尺寸，再被「密度」钳一次 ----
+       ⚠️⚠️ 这一条是本轮实测才发现的真问题，不是过度设计：
+          390×640 的手机上曲库涨到 7 首时，half=3、步角 30°，
+          104px 的唱片在 243px 高的扇区里相邻圆心距只有 0.44 倍半径和 ——
+          七张糊成一坨，「用滚轮浏览」直接失效（实测数据见 _mmfan.js 快照）。
+       判据（只算竖直分量，所以是**保守**上限，x 方向的收进是白送的富余）：
+          相邻两格的竖直差 = ry · sin(step)，而 ry 最大 = avail/2 - edgeR - 6
+          （edgeR = size · FAN_SCALE[half] / 2，见下面的 ryCap）。
+          要求   ry · sin(step) ≥ 0.62 · size        （0.62 = 可辨识下限）
+          ⇒      size ≤ sin(step)·(avail/2 - 6) / (0.62 + sin(step)·FAN_SCALE[half]/2)
+       ⚠️ 桌面三档算下来上限都 > 168，所以**这条只在小屏起效**，
+          不会把桌面唱片改小（改小请改 discSize 的断点）。
+       ⚠️ 下限 72 是兜底：再小就没有「唱片」的样子了，宁可挤也不做成一堆点。 */
+    const edgeK = sampleLerp(FAN_SCALE, Math.max(1, hf)) / 2;
+    const vy = Math.abs(Math.sin(step));
+    const need = 0.62 * (FAN_SCALE[0] + FAN_SCALE[1]) / 2;
+    const sizeCap = Math.floor(vy * (avail / 2 - 6) / (need + vy * edgeK));
+    const size = Math.max(72, Math.min(discSize(w), sizeCap));
+    const selR = size * FAN_SCALE[0] / 2;             /* 选中那张的半径 */
+    const edgeR = size * edgeK;                       /* 窗口边缘那张的半径 */
+
+    /* 竖直：先按比例给 ry，再钳一次保证最外那张不越界。
+       ⚠️ 第二条钳制（ryCap）是**构造性保证**：竖直方向的最远点是
+          theta = ±90° 那张，其圆心 y = cy ± ry、半径 = edgeR，
+          于是 cy ± (ry + edgeR) 必定落在 [bandTop, bandBot] 内 ——
+          「7 张唱片被 HUD / 页脚裁掉」不可能发生（不是调参碰出来的）。 */
+    const ryCap = Math.max(40, Math.round(avail / 2 - edgeR - 6));
+    const ry = Math.min(clamp(Math.round(avail * 0.40), 60, 244), ryCap);
+    const cy = Math.round(bandTop + avail / 2);
+
+    /* 水平 */
+    let rx = clamp(Math.round(w * 0.19), 96, 260);
+    let apexX;
+    if (narrow) {
+      /* 窄屏没有右侧面板 → 整簇在视口里水平居中：
+         横向跨度 = [cx - edgeR, apexX + selR]，令其中心对齐 w/2。 */
+      apexX = w / 2 + (rx + edgeR - selR) / 2;
+    } else {
+      const gap = clamp(Math.round(w * 0.02), 16, 34);
+      /* ⚠️ 这条式子就是「选中唱片进不了右侧面板」的**构造性保证**：
+         顶点是整个扇形最靠右的一点，把它压到 railX 左边 gap+selR 处，
+         扇形的任何一张都不可能越过 railX。改这个式子前先想清楚。 */
+      apexX = railX - gap - selR;
+    }
+    /* ⚠️ 第二条水平钳制：最靠左的那张是窗口外淡出环（|offset| = half+1），
+       它的角度 = (half+1)·step（封顶 180°），半径 ≤ edgeR。
+       要它整张留在视口内 → apexX - rx·(1 - cos(θmax)) - edgeR ≥ 0。
+       ⚠️ 不加这一条的话，曲库只有 4 首时（half=1、步角 90°）淡出环正好落在
+          180°，唱片会**半张挂在屏幕左边缘**——而且它在静止时是常驻的，
+          不是一闪而过（实测 1440 下左边缘会露出 27px）。 */
+    const thMax = Math.min(Math.PI, (hf + 1) * step);
+    const rxCap = Math.round((apexX - edgeR - 4) / Math.max(0.35, 1 - Math.cos(thMax)));
+    rx = Math.max(60, Math.min(rx, rxCap));
+    const cx = apexX - rx;                   /* theta=0 时 x = cx + rx = apexX */
+
+    return {
+      narrow: narrow,
+      size: size,
+      half: hf,
+      step: step,
+      edgeR: edgeR,
+      cx: cx,
+      cy: cy,
+      rx: rx,
+      ry: ry,
+      apexX: Math.round(apexX),
+      /* ---- 版式契约：由 layoutRail() 写成 CSS 变量，CSS 只读 ---- */
+      railX: railX,
+      railY: railY,
+      railB: railB,
+      footX: footX,
+      footB: footB,
+      /* ---- 分区（只给断言用，不参与渲染）---- */
+      hudB: hudB,
+      bandTop: bandTop,
+      bandBot: bandBot,
+      avail: avail
+    };
   }
-  function pageCount() {
-    return Math.max(1, Math.ceil(trackList().length / computePerPage()));
+
+  /* 可见窗口半宽：最多 ±3（7 张），但**小曲库不许让两张唱片落到同一个位置**。
+     n=5 时 (n-1)/2 = 2 → 正好 5 张全显示；
+     n=3 时 → 1（3 张全显示）；n=4 时 → 1（显示 3 张，第 4 张在扇区外）。
+     ⚠️ 为什么必须是 (n-1)/2 而不是 n/2：偶数时 n/2 会让「折返点」
+        正好落在可见窗口边缘上，那一张会在 ±3.5 处**跳变**（左右互换）。
+        取 (n-1)/2 保证折返点始终在窗口外。 */
+  function fanHalf(n) {
+    if (n <= 1) return 0;
+    return Math.max(1, Math.min(FAN_VIS, Math.floor((n - 1) / 2)));
   }
-  /* 曲目表下标 → 展区号（-1 = 不在曲库里） */
-  function pageOfTrack(i) {
-    const n = trackList().length;
-    if (i < 0 || i >= n) return -1;
-    return Math.floor(i / computePerPage());
+
+  /* 把任意实数差归一化到 [-n/2, n/2) —— **无限循环就是这一个函数**。
+     n = 7、焦点 0 时：
+        i=0..3  → 0, +1, +2, +3
+        i=4..6  → -3, -2, -1        （首尾真的接上了）
+     n = 7、焦点 6（最后一首）向下滚一格 → 焦点 0，差值 0-6 = -6 → 归一成 +1，
+     于是「第 0 首从下面进来」，方向是对的（不是把它从屏幕另一头拉过来）。 */
+  function wrapOffset(d, n) {
+    if (!(n > 0)) return 0;
+    let x = ((d % n) + n) % n;               /* → [0, n) */
+    if (x >= n / 2) x -= n;                  /* → [-n/2, n/2) */
+    return x;
   }
-  /* 要不要翻页去「正在播的那张」：只改 state.page，渲染交给调用方 */
-  function revealCurrent() {
-    const p = pageOfTrack(playerIndexNow());
-    if (p < 0 || p === state.page) return false;
-    state.page = p;
-    return true;
+
+  /* 采样曲线的线性插值：把连续 |offset| 落到 FAN_OP / FAN_BLUR / FAN_SCALE 上 */
+  function sampleLerp(arr, a) {
+    const k = clamp(Math.abs(a), 0, arr.length - 1);
+    const i = Math.min(arr.length - 2, Math.floor(k));
+    return arr[i] + (arr[i + 1] - arr[i]) * (k - i);
   }
+
+  /* ------------------------------------------------------------
+     fanLayout —— 纯函数：任意「焦点 + 曲库规模 + 视口」下的完整扇形布局
+     ------------------------------------------------------------
+     返回**全部 n 张**（哪怕远到看不见），因为回归装置要拿它算
+     「谁和谁同时可见、有没有互相挡死、首尾接没接上」。
+     生产路径只渲染 |offset| ≤ fanHalf+1 的那几张。
+     ------------------------------------------------------------ */
+  function fanLayout(focus, n, w, h) {
+    const half = fanHalf(n);
+    const geo = fanGeometry(w, h, half);
+    const discs = [];
+    if (!(n > 0)) return { geo: geo, half: 0, discs: discs };
+    for (let i = 0; i < n; i++) {
+      const off = wrapOffset(i - focus, n);
+      const th = off * geo.step;
+      const look = fanLook(off, half);
+      discs.push({
+        index: i,
+        offset: off,
+        x: geo.cx + geo.rx * Math.cos(th),
+        y: geo.cy + geo.ry * Math.sin(th),
+        scale: look.scale,
+        opacity: look.opacity,
+        blur: look.blur,
+        fade: look.f,
+        r: geo.size * look.scale / 2              /* 这一张在屏幕上的半径 */
+      });
+    }
+    return { geo: geo, half: half, discs: discs };
+  }
+
 
   /* ============================================================
-     数据装配 —— 把「曲库」和「摆位覆写」拼起来
+     数据装配 —— 把「曲库」和「博物馆专属元数据」拼起来
      ------------------------------------------------------------
      ⚠️ 只做 join，任何字段都不复制：track 对象直接引用
         RinsoraMusic.tracks() 里的那一份，所以改了 music-data.js，
-        场景里的歌名 / 封面立刻就是新的（单一真相）。
+        标题 / 封面 / 歌词立刻就是新的（单一真相）。
+     ⚠️ 一首歌 = 一张唱片（第五轮确立，第六轮继续）。
      ⚠️ 没有 id 的条目跳过（而不是抛错）—— 坏一条不该让整个博物馆打不开。
+
+     第六轮起 records 上**不再有** x / y / scale / rotation / depth：
+     位置全部由 fanLayout() 按「焦点 + offset」现算，数据文件里写坐标
+     也无效了（这是刻意的 —— 手写坐标和无限循环天生冲突）。
+     仍然认的只有两个**博物馆专属**字段：label（覆写标签）与 note（这一处的附注）。
      ============================================================ */
   function records() {
     const spots = collectSpots(window.RINSORA_MUSIC_MUSEUM || {});
     const tracks = trackList();
-    if (!tracks.length) { state.page = 0; return []; }
-
-    const per = computePerPage();
-    const pages = Math.max(1, Math.ceil(tracks.length / per));
-    state.page = clamp(Math.round(num(state.page, 0)), 0, pages - 1);
-
     const out = [];
     tracks.forEach((t, i) => {
       if (!t || !t.id) return;
-      const page = Math.floor(i / per);
-      const slot = i - page * per;                     /* 这一页里的第几张 */
-      const n = Math.min(per, tracks.length - page * per);  /* 这一页几张 */
-      const auto = autoSpot(slot, n, t.id);
       const ov = spots[t.id] || {};
       out.push({
         musicId: t.id,
         track: t,
-        index: i,                                      /* → RinsoraMusic.playIndex() */
-        /* ⚠️ 摆位覆写里两个「不是曲目字段」的东西保留在 record 上：
-             label 覆写标签文字；note 是**这一处陈列**的附注。
-           其余可展示字段（album/genre/description/source/tags 等）一律
-           从 track 上**读**，绝不复制 —— 单一真相在 music-data.js。 */
+        index: i,                                  /* → RinsoraMusic.playIndex() */
         note: ov.note || '',
-        x: clamp(num(ov.x, auto.x), -20, 120),
-        y: clamp(num(ov.y, auto.y), -20, 120),
-        scale: num(ov.scale, auto.scale),
-        rotation: num(ov.rotation, auto.rotation),
-        depth: clamp(num(ov.depth, auto.depth), 0, 1),
         label: ov.label || t.artist || '',
-        page: page,
-        slot: slot,
-        order: out.length                              /* 陈列里的唯一身份（含跨页） */
+        order: out.length                          /* 陈列里的唯一身份（DOM 的 dataset.layoutId） */
       });
     });
     return out;
   }
+
 
   /* ============================================================
      曲库指纹 —— 「数据变了没有」
      ------------------------------------------------------------
      用户反馈 2：「又上传了一首，博物馆没有同步显示」。
      根因有两条，缺一不可：
-       ① 摆位表是手写清单（新歌没有条目 → 上不了墙）→ 已由 autoSpot 解决
+       ① 当年的摆位表是手写清单（新歌没有条目 → 上不了墙）
+          → 第五轮改成「以曲库为准」；第六轮连坐标也不再需要手写
+            （扇形位置由 fanLayout 按 offset 现算），所以新歌必然上墙。
        ② render() 只跑一次（state.rendered 把关）→ 数据变了也不重建
      这一条就是 ② 的解药：把「曲子是什么」压成一个字符串指纹，
      每次进厅 / 每次低频轮询比一下，不等就打回去重建。
      ⚠️ 指纹里带上 title/artist/cover/date：改封面、改歌名也要重建，
-        否则墙上的旧封面会一直留着。
+        否则扇面上的旧封面会一直留着。
      ============================================================ */
   function syncData() {
     const sig = trackList().map((t) =>
@@ -343,28 +594,6 @@
     return true;
   }
 
-  /* 展区翻页 */
-  function gotoPage(p) {
-    const np = clamp(Math.round(num(p, state.page)), 0, pageCount() - 1);
-    if (np === state.page && state.rendered) return false;
-    state.page = np;
-    render();
-    return true;
-  }
-
-  /* 分页器 UI：只有一页就整个收掉（别让人对着「1 / 1」发呆） */
-  function renderPager() {
-    const pc = pageCount();
-    if (pagerEl) {
-      pagerEl.hidden = pc <= 1;
-      /* 「正在播的那张不在这一页」时给个小圆点，别让人以为歌没了 */
-      const cur = state.records.filter((r) => r.index === playingIndex)[0];
-      pagerEl.classList.toggle('has-playing', !!cur && cur.page !== state.page);
-    }
-    if (pagerLabel) pagerLabel.textContent = (state.page + 1) + ' / ' + pc;
-    if (pagerPrev) pagerPrev.disabled = state.page <= 0;
-    if (pagerNext) pagerNext.disabled = state.page >= pc - 1;
-  }
 
   /* ============================================================
      资源预加载 —— 真正的预加载，不是 setTimeout 假等
@@ -413,178 +642,245 @@
   }
 
   /* ============================================================
-     render —— 把唱片摆进场景
+     render —— 建池 + 摆位
      ------------------------------------------------------------
-     只做一次（state.rendered 把关）。重进博物馆直接复用 DOM，
-     省掉一次重建 —— 也避免把正在播的那张唱片的 .playing 状态搞丢。
+     ⚠️⚠️ 第六轮的核心改动：**元素按 musicId 复用**（state.pool）。
+       为什么不能再「每次重建」：分页时代一页 6 张、翻页重建一次可以接受；
+       现在滚轮每转一格焦点就动一张，重建就意味着每格都重新创建 <img>、
+       重新 decode 封面 —— 会闪、会卡，滚动完全谈不上顺。
+       所以：曲库条数不变时只**搬动**已有元素；条数变了（上传/删除）才丢池重建。
      ============================================================ */
-  function render() {
+  function render(opts) {
+    const o = opts || {};
     if (!stageEl) return;
     const list = records();
     state.records = list;
+    const n = list.length;
+    if (sceneCount) sceneCount.textContent = String(n);
 
-    /* 清场（重建时用；首次是空的，无副作用） */
-    $$('.mm-disc', stageEl).forEach((n) => n.remove());
-
-    if (!list.length) {
+    if (!n) {
       /* 空场景也要给个说法，不能让人对着一片底发呆。
          ⚠️ 这个提示卡是无条件出现的 —— 只要没有可渲染的唱片就显示，
          站长自己也能看到（不需要任何特殊身份 / hash）。 */
       if (emptyEl) emptyEl.hidden = false;
-      if (sceneCount) sceneCount.textContent = '0';
-      renderPager();
+      stageEl.textContent = '';
+      state.pool = {};
+      deselect();
       state.rendered = true;
       return;
     }
     if (emptyEl) emptyEl.hidden = true;
 
-    /* ⚠️ 只把**当前展区**这一页摆进 DOM。其余页不在 DOM 里，
-       所以任何「按 musicId / layoutId 找元素」的操作都要先确认它在当前页
-       （select() 里会先翻页，见那边的注释）。 */
-    const show = list.filter((r) => r.page === state.page);
-    const frag = d.createDocumentFragment();
-    show.forEach((rec) => {
-      const btn = d.createElement('button');
-      btn.type = 'button';
-      btn.className = 'mm-disc';
-      btn.dataset.musicId = rec.musicId;
-      btn.dataset.index = String(rec.index);
-      /* ⚠️⚠️ layoutId 是「这张唱片在陈列里的唯一身份」，必须有，别删。
-         为什么不能只用 musicId + index 找元素：
-           · musicId 可以重复陈列（data 里 shelter 就摆了两处）
-           · index 是**曲目表下标**，同一首歌的两处陈列 index 完全相同
-         所以「musicId + index」不唯一，只按它匹配会出现「一次选中两张」
-         （症状：sel=2、dim 少一张，而类名/数据看着都对，踩过）。
-         order 来自 records() 里的布局数组下标，天然唯一且稳定。 */
-      btn.dataset.layoutId = String(rec.order);
-      btn.dataset.depth = rec.depth.toFixed(3);
-      btn.dataset.page = String(rec.page);
-      /* 用 index（曲目下标）比对，不要用循环变量 —— 渲染的是「页内切片」，
-         而 playingIndex 是曲目下标，两者不是一回事。 */
-      if (rec.index === playingIndex) btn.classList.add('playing');
-
-      /* 布局参数 → CSS 变量（music-museum-data.js 是唯一来源） */
-      btn.style.setProperty('--mm-x', rec.x + '%');
-      btn.style.setProperty('--mm-y', rec.y + '%');
-      /* ⚠️⚠️ 写的是 --mm-scale-**data**，不是 --mm-scale —— 这条别改回去。
-         inline style 的优先级高于样式表，而 hover / :active / 选中态
-         都要按「基础缩放 × 状态系数」改缩放。如果这里写 --mm-scale，
-         那三条状态规则全部会被这条 inline 声明盖掉 ——
-         症状是「hover 不放大的、选中也不放大」，而 DOM / 类名全对，
-         computed 里 --mm-scale 恒等于基础值，非常难查（踩过）。
-         CSS 侧：.mm-disc{--mm-scale:var(--mm-scale-data,1)} 兜底为 data 值。 */
-      btn.style.setProperty('--mm-scale-data', String(rec.scale));
-      btn.style.setProperty('--mm-rot', rec.rotation + 'deg');
-      btn.style.setProperty('--mm-i', String(rec.slot));
-      /* 纵深：越远越淡越糊。系数和 music-museum-data.js 里的建议区间对齐：
-         depth 0 → opacity 1 / blur 0；depth 1 → opacity .45 / blur 3.4px。
-         （data 注释里写的是「远处 0.25~0.45 透明度」，那是最深一层的极端值，
-          这里刻意留亮一点 —— 展厅整体太暗会看不清唱片。） */
-      btn.style.setProperty('--mm-op', (1 - rec.depth * 0.55).toFixed(3));
-      btn.style.setProperty('--mm-blur', (rec.depth * 3.4).toFixed(2) + 'px');
-      /* 自转：每张的周期不同（近的快、远的慢）+ 用 order 错开起始相位，
-         避免 5 张唱片像一块刚性板一样同框旋转。
-         ⚠️ 用负数 delay 让动画一开场就处在不同相位，而不是「一起开始」。 */
-      const spin = (SPIN_NEAR + (SPIN_BASE - SPIN_NEAR) * rec.depth).toFixed(1);
-      btn.style.setProperty('--mm-spin', spin + 's');
-      /* 相位错开用 order（跨页唯一）而不是页内序号 ——
-         否则翻页后每页的第一张都是同一个相位，观感像「重新开始」。 */
-      btn.style.setProperty('--mm-spin-delay', (-(rec.order * 3.7)).toFixed(1) + 's');
-      /* 视差系数：近层 = 1，远层 ≈ 0.22。JS 每帧只写这一对变量，
-         具体的 translate3d 由 CSS 算 —— 不给每个元素写 inline transform，
-         省掉大量样式重算。 */
-      const px = (1 - rec.depth * 0.78).toFixed(3);
-      btn.style.setProperty('--mm-px', px);
-      btn.style.setProperty('--mm-py', (px * 0.62).toFixed(3));  /* 纵向位移小一些，更像空间 */
-
-      const plate = d.createElement('span');
-      plate.className = 'mm-disc-plate';
-
-      const cover = res(rec.track.cover);
-      if (cover) {
-        const art = d.createElement('img');
-        art.className = 'mm-disc-art';
-        art.src = cover;
-        art.alt = '';
-        art.loading = 'lazy';
-        art.decoding = 'async';
-        /* 封面挂了退回渐变占位，而不是留一个破图图标 */
-        art.addEventListener('error', () => {
-          const ph = d.createElement('span');
-          ph.className = 'mm-disc-art is-empty';
-          art.replaceWith(ph);
-        });
-        plate.appendChild(art);
-      } else {
-        const ph = d.createElement('span');
-        ph.className = 'mm-disc-art is-empty';
-        plate.appendChild(ph);
-      }
-      const gloss = d.createElement('span');
-      gloss.className = 'mm-disc-gloss';
-      plate.appendChild(gloss);
-      btn.appendChild(plate);
-
-      const label = d.createElement('span');
-      label.className = 'mm-disc-label';
-      const b = d.createElement('b');
-      b.textContent = rec.track.title || rec.musicId;
-      const sm = d.createElement('small');
-      sm.textContent = rec.label || '';
-      label.appendChild(b);
-      label.appendChild(sm);
-      btn.appendChild(label);
-
-      /* 无障碍：读屏要说清「这是哪首歌、点了会怎样」。
-         第二阶段语义变了 —— 点击不再直接播放，而是「打开档案详情」，
-         所以 aria-label 跟着改成「查看档案」，播放按钮在详情里。 */
-      btn.setAttribute('aria-label',
-        '打开《' + (rec.track.title || rec.musicId) + '》的档案详情' +
-        (rec.label ? ' — ' + rec.label : ''));
-      /* 整张唱片是一个可点对象：点一下 = 打开档案 + 播放（openRecord）。
-         ⚠️⚠️ stopPropagation 是必须的（需求第七条）：
-            场景外层有「点空白关闭」的逻辑，唱片点击若不拦住，一次点击
-            会同时被当成「点空白」，刚打开的档案会被立刻关掉
-            （症状：点唱片闪一下就没了，看着像点击失灵）。
-         ⚠️ 唱片内部没有其它可点元素（封面 / 标签都是 span / img，
-            纯展示），所以这里不需要再判 closest。 */
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openRecord(rec);
-      });
-      /* hover 只改状态类，不改几何 —— 几何交给 CSS 的 :hover。
-         这里额外做的事：把 hover 对象记进 state（回归装置可观察），
-         并且给「其他唱片」一个 .dim 类（详情打开时统一处理）。 */
-      btn.addEventListener('pointerenter', () => { state.hovered = rec; });
-      btn.addEventListener('pointerleave', () => {
-        if (state.hovered === rec) state.hovered = null;
-      });
-
-      frag.appendChild(btn);
-    });
-    stageEl.appendChild(frag);
-
-    if (sceneCount) sceneCount.textContent = String(list.length);
-    renderPager();
-    state.rendered = true;
-    /* ⚠️⚠️ 重建之后必须把「选中」重新贴回去。
-       为什么：唱片墙现在**会重建**（上传新歌 / 翻页 / 转屏），
-       而 state.selected 指着的是**上一次构建**出来的那个 record 对象。
-       不重贴的话，新的那张 DOM 没有 .sel / .dim，详情面板却还开着 ——
-       症状是「档案摊在桌上，但墙上一张唱片都没高亮」，看着像选中丢了。 */
-    const prev = state.selected;
-    state.selected = null;
-    if (prev) {
-      const again = list.filter((r) => r.musicId === prev.musicId)[0];
-      if (again) select(again); else deselect();
+    /* 首次渲染 / 曲库真的变了（o.rebuild）→ 丢掉元素池重建。
+       ⚠️ 为什么「条数没变」也要重建：改了封面 / 歌名同样是数据变化，
+          池里的 <img> 还指着旧封面 —— 只按条数判会留下旧图（踩过同类问题）。 */
+    if (!state.rendered || o.rebuild) {
+      stageEl.textContent = '';
+      state.pool = {};
     }
+    /* 焦点归位：曲库变了之后旧的位置可能越界 */
+    state.selectedIndex = ((Math.round(state.selectedIndex) % n) + n) % n;
+    /* ⚠️ 重建时把 fanPos 直接**吸附**到焦点，不要从旧位置滑过来 ——
+       曲库换了以后滑动没有意义，还会让新唱片从屏幕外飞进来。 */
+    state.fanPos = state.fanTo = state.selectedIndex;
+
+    layoutRail();
+    applyFan();
+    state.rendered = true;
     /* ⚠️ 这里用 syncFromPlayer 而不是裸 syncPlaying：
        需求第三条要求「进入博物馆时识别正在播放的那首歌」。播放器的
-       真相可能在渲染这段时间里变过（比如上一首播完自动接下一首），
-       所以进场景前一定要**重读一次**，不能沿用旧值。 */
+       真相可能在渲染这段时间里变过（比如上一首播完自动接下一首）。 */
     syncFromPlayer();
-    startParallax();
+    syncSelected();
+    startFan();
   }
+
+  /* ------------------------------------------------------------
+     唱片元素 —— 建一个 / 复用池里的
+     ------------------------------------------------------------ */
+  function buildDisc(rec, at) {
+    const btn = d.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mm-disc';
+    btn.dataset.musicId = rec.musicId;
+    btn.dataset.index = String(rec.index);      /* 曲目表下标 → playIndex() */
+    btn.dataset.at = String(at);                /* 在 state.records 里的位置 → 扇形算 offset 用 */
+    /* ⚠️ layoutId 是「这张唱片在陈列里的唯一身份」，必须有。
+       它来自 records() 里的布局序号，天生唯一且稳定。 */
+    btn.dataset.layoutId = String(rec.order);
+
+    /* —— 静态参数（只在建的时候写一次）——
+       ⚠️ 自转周期按 **id 的 hash** 定，不按当前位置定：
+          位置每帧都在变，改 animation-duration 会让角度当场跳一下。
+          按 id 定则「这张唱片转到哪儿」永远一致（也和刷新无关）。 */
+    const h = hash(rec.musicId) % 1000 / 1000;
+    btn.style.setProperty('--mm-spin', (SPIN_NEAR + (SPIN_BASE - SPIN_NEAR) * h).toFixed(1) + 's');
+    btn.style.setProperty('--mm-spin-delay', (-(rec.order * 3.7)).toFixed(1) + 's');
+    /* 角度：按 id 做的稳定 tilt（FNV-1a），刷新多少次都是同一个姿势 */
+    btn.style.setProperty('--mm-rot', tilt(rec.musicId, 7) + 'deg');
+    /* 入场错峰：用**位置**，让左右两侧错开（不是一列同时亮起） */
+    btn.style.setProperty('--mm-i', String(at % 7));
+
+    const plate = d.createElement('span');
+    plate.className = 'mm-disc-plate';
+
+    const cover = res(rec.track.cover);
+    if (cover) {
+      const art = d.createElement('img');
+      art.className = 'mm-disc-art';
+      art.src = cover;
+      art.alt = '';
+      art.decoding = 'async';
+      /* 封面挂了退回渐变占位，而不是留一个破图图标 */
+      art.addEventListener('error', () => {
+        const ph = d.createElement('span');
+        ph.className = 'mm-disc-art is-empty';
+        art.replaceWith(ph);
+      });
+      plate.appendChild(art);
+    } else {
+      const ph = d.createElement('span');
+      ph.className = 'mm-disc-art is-empty';
+      plate.appendChild(ph);
+    }
+    const gloss = d.createElement('span');
+    gloss.className = 'mm-disc-gloss';
+    plate.appendChild(gloss);
+    btn.appendChild(plate);
+
+    /* 无障碍：读屏要说清「这是哪首歌、点了会怎样」。
+       第六轮语义又变了一次 —— 点击不再直接播放，而是「把它转到扇形中央、
+       右侧档案跟着它变」；已经选中的那一张再点一次才播放。 */
+    btn.setAttribute('aria-label', '查看《' + (rec.track.title || rec.musicId) + '》的档案');
+
+    /* 整张唱片是一个可点对象。
+       ⚠️ stopPropagation 是必须的：场景外层有「点空白收起档案」的逻辑，
+          唱片点击若不拦住，一次点击会同时被当成「点空白」，
+          刚选上的档案会被立刻收起（症状：点唱片闪一下就没了）。 */
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRecord(rec);
+    });
+    /* hover 只记状态（几何交给 CSS 的 :hover），不改位置 */
+    btn.addEventListener('pointerenter', () => { state.hovered = rec; });
+    btn.addEventListener('pointerleave', () => {
+      if (state.hovered === rec) state.hovered = null;
+    });
+    return btn;
+  }
+
+  /* 取元素：池里有就复用，没有就建（**懒建**：没滚到的唱片一个元素都不建） */
+  function discEl(rec, at) {
+    let el = state.pool[rec.musicId];
+    if (el) return el;
+    el = buildDisc(rec, at);
+    state.pool[rec.musicId] = el;
+    stageEl.appendChild(el);
+    return el;
+  }
+
+  /* 写一个值到内联变量，**值没变就不写**。
+     为什么要在意：applyFan 每帧对每张唱片写 5 个变量，7 张就是 35 次
+     setProperty。加一层缓存之后，静止时一次都不写（收敛后 rAF 本来也停了，
+     但 resize / 单帧补算时这层缓存能省掉整轮样式失效）。 */
+  function setVar(el, name, val) {
+    const key = '_v' + name;
+    if (el[key] === val) return;
+    el[key] = val;
+    el.style.setProperty(name, val);
+  }
+
+  /* ------------------------------------------------------------
+     applyFan —— 按当前 fanPos 把每张唱片摆到弧上
+     ------------------------------------------------------------
+     这是唯一写位置的地方（生产路径由 rAF 每帧调；重建 / resize 时手动调一次）。
+     ⚠️ 只写 5 个变量：--mm-fx / --mm-fy（位置）、--mm-scale-data（缩放）、
+        --mm-op（透明度）、--mm-blur（模糊）。
+        其余（--mm-rot / --mm-spin* / --mm-i）在建元素时写死一次。
+     ⚠️ --mm-size 写在 #mmScene 上（一次），让它继承 —— 全站只有一个来源。
+     ------------------------------------------------------------ */
+  function applyFan() {
+    const n = state.records.length;
+    if (!stageEl || !n) return;
+    const half = fanHalf(n);
+    const geo = fanGeometry(vp.w, vp.h, half);
+    /* ⚠️ 只渲染 |offset| ≤ half + FAN_RING 的那几张（窗口 + 一圈淡出环）：
+       多留的那一圈是为了「进出扇区是渐隐渐显」而不是啪地出现 ——
+       但**不超过 half + 1**，因为 fanLook 在 |offset| = half + 1 处
+       透明度正好走到 0（再外面渲染就是白建节点）。 */
+    const keep = half + FAN_RING;
+    const step = geo.step;
+
+    /* ① 先把「该在场」的建出来（懒建；只建窗口内的） */
+    for (let i = 0; i < n; i++) {
+      const off = wrapOffset(i - state.fanPos, n);
+      if (Math.abs(off) > keep) continue;
+      discEl(state.records[i], i);
+    }
+
+    /* ② 再统一摆位（对象 key 遍历，池子里最多 9 个元素） */
+    Object.keys(state.pool).forEach((id) => {
+      const el = state.pool[id];
+      const at = Number(el.dataset.at);
+      const rec = state.records[at];
+      if (!rec) return;
+      const off = wrapOffset(at - state.fanPos, n);
+      const a = Math.abs(off);
+      if (a > keep) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const th = off * step;
+      const x = geo.cx + geo.rx * Math.cos(th);
+      const y = geo.cy + geo.ry * Math.sin(th);
+      const look = fanLook(off, half);
+      const sc = look.scale;
+      const op = (at === state.selectedIndex && state.detailOpen)
+        ? Math.max(look.opacity, 0.9)              /* 焦点那张不因位移而变淡 */
+        : look.opacity;
+      setVar(el, '--mm-fx', x.toFixed(1) + 'px');
+      setVar(el, '--mm-fy', y.toFixed(1) + 'px');
+      setVar(el, '--mm-scale-data', sc.toFixed(3));
+      setVar(el, '--mm-op', op.toFixed(3));
+      setVar(el, '--mm-blur', look.blur.toFixed(2) + 'px');
+      /* z-index：越靠中心越上层（焦点最高）。
+         ⚠️⚠️ 写的是 --mm-z-data（内联的自定义属性），**不是 style.zIndex**。
+            两个原因：
+              ① 内联样式压得过样式表，一旦直接写 style.zIndex，
+                 CSS 的 `.mm-disc:hover{z-index}` / `.mm-disc.sel{z-index}`
+                 就永远失效（而且没有任何报错，只是「悬停不抬起来」）；
+              ② 深度要跟着连续插值变，而「抬一层」是离散状态 ——
+                 两者用不同的落点：内联给底值，样式表只加增量。
+            最终 z-index 在 CSS 里合成：calc(var(--mm-z-data) + keep 变量)。 */
+      setVar(el, '--mm-z-data', String(100 - Math.round(a * 12)));
+    });
+  }
+
+  /* ------------------------------------------------------------
+     layoutRail —— 把「版式契约」写给 CSS（左侧扇形 / 右侧轨道 / 底部提示）
+     ------------------------------------------------------------
+     ⚠️ 为什么由 JS 算而不是 CSS 写死：
+        扇形几何在 JS 里（rx / apexX / band 全是 px），面板边界与提示条位置
+        必须和它用**同一份**数字，否则「扇形占 44vw、面板从 47% 起、页脚钉
+        46vh」就是三份会漂移的真相，改一个忘一个 —— 症状是「唱片压到面板上」
+        或「唱片滑到档案卡底下」，而且改一处永远不够。
+     ⚠️ 六个变量一轮写清：
+          --mm-rail-x  档案轨左边界（窄屏写 0，窄屏由媒体查询改成左右 16px）
+          --mm-rail-y  档案轨顶边
+          --mm-rail-b  档案轨底边
+          --mm-foot-x  底部提示条的水平中心
+          --mm-foot-b  底部提示条离底
+          --mm-size    唱片基准尺寸（几何用它算半径，放 CSS 就是第二份真相）
+     ============================================================ */
+  function layoutRail() {
+    if (!sceneEl) return;
+    const g = fanGeometry(vp.w, vp.h, fanHalf(state.records.length));
+    sceneEl.style.setProperty('--mm-rail-x', g.railX + 'px');
+    sceneEl.style.setProperty('--mm-rail-y', g.railY + 'px');
+    sceneEl.style.setProperty('--mm-rail-b', g.railB + 'px');
+    sceneEl.style.setProperty('--mm-foot-x', g.footX + 'px');
+    sceneEl.style.setProperty('--mm-foot-b', g.footB + 'px');
+    sceneEl.style.setProperty('--mm-size', g.size + 'px');
+  }
+
 
   /* ============================================================
      play —— 真正按下「播放」
@@ -644,248 +940,279 @@
   function syncPlaying() {
     if (!stageEl) return;
     const playing = !!state.isPlaying;
-    $$('.mm-disc', stageEl).forEach((el) => {
+    Object.keys(state.pool).forEach((id) => {
+      const el = state.pool[id];
       const isCur = Number(el.dataset.index) === playingIndex && playingIndex >= 0;
       el.classList.toggle('playing', isCur && playing);
       /* 暂停时也保留「这一首是当前曲目」的底标（弱一点），
          否则暂停一下唱片就完全变回路人，看不出「刚才在放它」。 */
       el.classList.toggle('is-current', isCur);
       el.classList.toggle('is-paused', isCur && !playing);
-      const t = el.querySelector('.mm-disc-label b');
-      if (t) el.setAttribute('aria-current', isCur ? 'true' : 'false');
+      /* ⚠️ aria-current 挂在**唱片自己**身上。原来挂在
+         `querySelector('.mm-disc-label b')` 上 —— 那个节点第六轮已经不存在了，
+         于是 `if (t)` 永远为假，这一行等于从来没执行过（亚健康代码）。 */
+      if (isCur) el.setAttribute('aria-current', 'true');
+      else el.removeAttribute('aria-current');
     });
     syncDetailPlayBtn();
   }
 
-  /* ============================================================
-     视差 —— 统一 Scene 坐标，按 depth 分权位移
-     ------------------------------------------------------------
-     需求原文的关键约束：
-       · 「不要让每一张唱片都随机乱动」→ 只有一个 mouseX/mouseY 源
-       · 「远层移动少 / 中层中等 / 近层稍明显」→ 系数来自 depth（--mm-px）
-       · 「加入平滑插值，不要直接跟随鼠标」→ lerp，而不是把 pointer 事件
-         直接写进 style
-       · 「防止高频 DOM 重排」→ 只写两个 CSS 变量在 #mmStage 上，
-         具体 translate3d 由 CSS 算（transform 本来就是合成层，不触发重排），
-         而且整块只用一次 style 写入 / 帧。
-
-     实现：
-       pointermove（passive）只更新 parallaxTarget（纯数字，零 DOM）
-       rAF 里做 lerp，写 --mm-px-pos / --mm-py-pos 到 stage
-       两者相差 < 0.0005 时停 rAF（静止时完全不占 CPU）
-
-     ⚠️ 位移写在 .mm-stage 上而不是每张唱片上：
-        每张唱片已经在用自己的 transform 做定位 + 缩放 + 自转，
-        再叠一层 translate 会把它的 transform 表达式撑成一大串
-        （还要把 --mm-x/--mm-y 从 % 混进去），既难读又容易写错。
-        分两层做的话，合成顺序天然正确：
-          .mm-stage            → translate3d(视差)
-            .mm-disc          → translate(-50%,-50%) rotate scale
-      这个分层的视觉结果与「每张按 depth 各自位移」是等价的吗？
-      不是完全等价 —— 而这里刻意选了另一种更稳的做法：
-      每个 .mm-stage 内部再用 --mm-px 做一层「反向深度补偿」会让
-      空间感更强，但也会让「拖动时唱片相对标签错位」。所以采用
-      **统一整体位移 + 每张按 depth 微调 scale** 的折中（见 CSS 的
-      .mm-scene.on .mm-stage{transform:translate3d(var(--mm-px-pos),var(--mm-py-pos),0)}）。
-     ============================================================ */
-
-  /* 真正实现「不同 depth 不同位移」的地方（见 music-museum.css 的
-     .mm-disc{--mm-depth-x}：CSS 用 calc 把整体位移按 --mm-px 再分权一次）。 */
-
-  function setParallax(x, y) {
-    state.parallaxTarget.x = clamp(x, -1, 1);
-    state.parallaxTarget.y = clamp(y, -1, 1);
-    startParallax();
-  }
 
   /* ============================================================
      视口尺寸缓存
      ------------------------------------------------------------
-     ⚠️⚠️ 为什么要有缓存（需求第八条点名）：
-       clientWidth / clientHeight 是**布局属性**，读它们可能强制一次
-       样式重算 + 布局（layout thrashing）。原来这两个读写在
-       pointermove 里 —— 那是每移动一像素就跑一次，一次拖动就是几百次
-       布局查询。鼠标一动页面就掉帧，而且很难查（功能全对）。
-       视口尺寸只在 resize / 转屏时变，所以：
-         · 进场景时算一次
-         · resize 时重算（监听挂上、退出时摘掉）
-         · pointermove 里只读两个数字
+     ⚠️ 为什么要有缓存：clientWidth / clientHeight 是**布局属性**，
+        读它们可能强制一次样式重算 + 布局。现在读它们的地方只有
+        「进场景 / resize / 每次 applyFan」——都是低频事件，
+        指针移动路径上一个布局读都没有（原来在 pointermove 里读，
+        一次拖动就是几百次布局查询）。
      ⚠️ 用 clientWidth 而不是 innerWidth —— 后者含滚动条宽度，
         而 .mm-scene 是 position:fixed（不占滚动条），混用会让
         「正中」偏半个滚动条（这个坑在站里踩过）。 */
   const vp = { w: 0, h: 0 };
   function measureViewport() {
-    vp.w = d.documentElement.clientWidth || 1;
-    vp.h = d.documentElement.clientHeight || 1;
+    vp.w = d.documentElement.clientWidth || window.innerWidth || 1;
+    vp.h = d.documentElement.clientHeight || window.innerHeight || 1;
   }
   function onResize() {
-    const before = computePerPage();
     measureViewport();
-    /* ⚠️ 窄屏 / 宽屏切换会改「一页放几张」→ 分页跟着变，必须重建。
-       只在真的变了的时候重建 —— 别每次 resize 都把墙推倒重来。 */
-    if (computePerPage() !== before && state.open) {
-      state.page = clamp(state.page, 0, pageCount() - 1);
-      render();
-    }
+    if (!state.open) return;
+    /* ⚠️ 第六轮这里变得非常简单：分页时代要判「跨过 560px 就得重建」，
+       现在没有分页，视口变了只要重算几何 + 重摆一次就行，**不用重建 DOM**。 */
+    layoutRail();
+    applyFan();
+    startFan();
   }
 
-  function onPointerMove(e) {
+  /* ============================================================
+     滚轮 —— 浏览，不播放（需求第八 / 第十条）
+     ------------------------------------------------------------
+     ⚠️⚠️ 「滚轮不要自动播放」是这一轮最重要的行为约束：
+        如果滚一下就 playIndex()，用户快速翻看曲库时会一路切歌、
+        播放器疯狂重载 src。浏览和聆听必须是**两个动作**：
+          滚轮 / ↑↓  → 只移动焦点（右侧档案跟着变）
+          点当前这张 / 右侧 PLAY  → 才出声
+     ⚠️ preventDefault 必须有（需求第八条）：不要让页面本身跟着滚。
+        监听用 { passive: false } 才允许 preventDefault。
+     ⚠️ 例外：指针在右侧档案里、而那块**真的能滚**时，把事件让给它。
+        否则长描述 / 长歌词会滚不动（那是个更烦人的 bug）。 */
+  function wheelDelta(e) {
+    let dy = Number(e.deltaY) || 0;
+    /* deltaMode: 0=像素 1=行 2=页（Firefox / 部分鼠标会给 1） */
+    if (e.deltaMode === 1) dy *= 16;
+    else if (e.deltaMode === 2) dy *= (vp.h || 800);
+    return dy;
+  }
+  function canScrollBox(node, dy) {
+    if (!node || node.scrollHeight <= node.clientHeight + 1) return false;
+    if (dy < 0) return node.scrollTop > 0;
+    if (dy > 0) return node.scrollTop + node.clientHeight < node.scrollHeight - 1;
+    return false;
+  }
+  function onWheel(e) {
     if (!state.open) return;
-    /* 防御：万一 resize 没赶上（比如从隐藏标签页切回来），补算一次 */
-    if (!vp.w || !vp.h) measureViewport();
-    /* 归一化到 -1 ~ 1：中心 0，边缘 ±1 */
-    setParallax((e.clientX / vp.w) * 2 - 1, (e.clientY / vp.h) * 2 - 1);
+    if (e.ctrlKey) return;                    /* 触控板捏合缩放：放行 */
+    const dy = wheelDelta(e);
+    if (!dy) return;
+    /* 面板自己滚得动 → 交给面板（不 preventDefault） */
+    const box = e.target && e.target.closest ? e.target.closest('.mm-archive, .mm-lyrics') : null;
+    if (canScrollBox(box, dy)) return;
+    if (e.preventDefault) e.preventDefault();
+
+    const now = Date.now();
+    /* 冷却期内**直接丢**：丢的是惯性尾巴（一次快滑会吐几十个事件）。
+       180ms 比人手连滚两格的最短间隔还短，所以不会吃掉用户真正的第二格。 */
+    if (now < state.wheelAt) return;
+    state.wheelAcc += dy;
+    if (Math.abs(state.wheelAcc) < WHEEL_STEP) return;
+    const dir = state.wheelAcc > 0 ? 1 : -1;
+    state.wheelAcc = 0;                       /* 一格清一次 → 一次滚动只切一张 */
+    state.wheelAt = now + WHEEL_LOCK;
+    stepBy(dir);
   }
 
   /* ------------------------------------------------------------
-     stepParallax —— 纯计算：把视差往前推一帧，返回「还要不要继续」
+     stepFan —— 纯计算：把扇形往前推一帧，返回「还要不要继续」
      ------------------------------------------------------------
      ⚠️ 为什么要从 tick() 里拆出来（不是洁癖，是回归装置的需要）：
         无头探针跑在 --virtual-time-budget 下时 **requestAnimationFrame 的回调
         根本不会被派发**（实测：裸 rAF 等 200ms 也不触发，句柄却照发）。
-        于是 tick() 永远不执行，「视差对不对」在探针里就完全测不到 ——
-        会被误判成「视差没实现」。
+        于是 tick() 永远不执行，「扇形动没动、第几帧到哪儿」完全测不到 ——
+        会被误判成「扇形没实现」。
         把「推进一帧」拆成纯函数之后：
           · 生产路径照旧由 rAF 驱动（见 tick）
-          · 回归装置可以同步连调 N 次，验证收敛、单调、depth 分权、位移落点
-        行为与原来逐字等价（同一套 lerp、同一个阈值、同一次 CSS 变量写入）。
+          · 回归装置可以同步连调 N 次，验证收敛、单调、无限循环的连续性
      ------------------------------------------------------------ */
-  function stepParallax() {
+  function stepFan() {
     if (!stageEl) return false;
-    const t = state.parallaxTarget, p = state.parallax;
-    /* 惯性：越接近目标插值越慢（乘的是固定比例，所以是几何收敛，不是线性） */
-    p.x += (t.x - p.x) * PARALLAX_EASE;
-    p.y += (t.y - p.y) * PARALLAX_EASE;
-
-    stageEl.style.setProperty('--mm-px-pos', (-p.x * PARALLAX_SPAN).toFixed(2) + 'px');
-    stageEl.style.setProperty('--mm-py-pos', (-p.y * PARALLAX_SPAN * 0.62).toFixed(2) + 'px');
-
-    /* 还没收敛就继续；收敛了就停（静止时零开销） */
-    return Math.abs(t.x - p.x) > 0.0005 || Math.abs(t.y - p.y) > 0.0005;
+    const dlt = state.fanTo - state.fanPos;
+    if (Math.abs(dlt) <= FAN_EPS) {
+      state.fanPos = state.fanTo;
+      applyFan();
+      return false;                            /* 收敛 → 停 rAF（静止时零开销） */
+    }
+    state.fanPos += dlt * FAN_EASE;
+    applyFan();
+    return true;
   }
-
   function tick() {
     state.rafId = 0;
     if (!state.open || !stageEl) return;
-    if (stepParallax()) state.rafId = requestAnimationFrame(tick);
+    if (stepFan()) state.rafId = requestAnimationFrame(tick);
   }
-
-  function startParallax() {
+  function startFan() {
     if (state.rafId) return;
-    if (reduceMotion()) return;            /* 关掉动态效果时不做视差 */
+    /* 「减少动态」时不做补间：直接落到目标（不是不做，是立刻到位） */
+    if (reduceMotion()) { state.fanPos = state.fanTo; applyFan(); return; }
     state.rafId = requestAnimationFrame(tick);
   }
-
-  function stopParallax() {
+  function stopFan() {
     if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = 0; }
-    /* 归零，免得下次进来还停在上一次的位置 */
-    state.parallaxTarget.x = state.parallaxTarget.y = 0;
-    state.parallax.x = state.parallax.y = 0;
-    if (stageEl) {
-      stageEl.style.setProperty('--mm-px-pos', '0px');
-      stageEl.style.setProperty('--mm-py-pos', '0px');
-    }
+    /* 归零：下次进来从干净的位置开始（不要停在上一次的半路上） */
+    state.fanPos = state.fanTo;
   }
 
+
   /* ============================================================
-     select / deselect —— 档案选中状态机
+     selectIndex / select / openRecord / deselect —— 焦点状态机
      ------------------------------------------------------------
-     视觉职责全在 CSS（.mm-scene.has-sel 那组），JS 只做三件事：
-       ① 记状态（state.selected）
-       ② 给场景挂 .has-sel、给被选中的那张挂 .sel、其余挂 .dim
-       ③ 填详情面板
+     第六轮把「打开一个居中 modal」换成了「右侧轨道跟着焦点变」，所以状态机
+     也简化成两个字段：
+        state.selectedIndex  扇形焦点（**永远有效**，0 ~ n-1）
+        state.detailOpen     右侧档案面板要不要展开
+        state.selected       派生值（面板收起时它是 null）
 
-     ⚠️ 「其他唱片变暗 / 变糊」用的是 .dim 类而不是内联 style，
-        因为每张唱片已经有 --mm-op / --mm-blur 两个变量在管纵深，
-        内联改它们会**丢掉纵深信息**（取消选中后无法还原）。
-        CSS 侧的做法是：.mm-disc.dim 走的是 opacity/filter 的
-        **再叠一层**（见 music-museum.css 的 .mm-disc.dim），
-        取消时摘掉类即可，--mm-op 原封不动。
+     ⚠️ 为什么还要保留「收起」这件事（毕竟面板是常驻的）：
+        ① 需求里 Esc 的语义没变（先关一层、再退展厅），
+           如果面板根本关不掉，Esc 就只剩「退出」一级，
+           而「我只是想看看扇形」就没有出口了。
+        ② 收起之后**下一次选择会重新展开** —— 所以它不是「功能消失」，
+           是「让一让」。
      ============================================================ */
-  function select(rec, opts) {
-    if (!rec || !stageEl) return false;
-    const o = opts || {};
-    /* 目标唱片不在当前展区 → 先翻过去。
-       否则 DOM 里根本没有它，.sel 贴不上去，症状是「点了没高亮」。
-       ⚠️ 翻页前先把旧选中摘掉再重建：render() 结尾有一条「重建后重贴
-          选中」，它会拿**旧**的那张去 select 一遍 —— 多跑一轮渲染，而且
-          如果旧那首在另一个展区，还会再翻一次页（来回跳）。
-          目标马上就会被贴上，这里摘掉不会丢状态。 */
-    if (typeof rec.page === 'number' && rec.page !== state.page) {
-      state.page = rec.page;
-      state.selected = null;
-      render();
-    }
-    state.selected = rec;
-    state.hovered = null;
-
-    if (sceneEl) sceneEl.classList.add('has-sel');
-    $$('.mm-disc', stageEl).forEach((el) => {
-      /* 用 layoutId（布局唯一键）匹配，不要用 musicId/index 组合 —— 见 render()
-         里 layoutId 的注释：同一首歌摆两处时那两个字段都不唯一。 */
-      const isSel = el.dataset.layoutId === String(rec.order);
-      el.classList.toggle('sel', isSel);
-      el.classList.toggle('dim', !isSel);
-      el.setAttribute('aria-pressed', isSel ? 'true' : 'false');
-    });
-
-    fillDetail(rec);
-    if (detailEl) {
-      detailEl.classList.add('on');
-      detailEl.setAttribute('aria-hidden', 'false');
-    }
-    /* 焦点给播放按钮（键盘用户下一步大概率就是按它）。
-       preventScroll：详情是 fixed 面板，别让浏览器顺手滚一下页面。 */
-    if (detailPlay && !reduceMotion()) {
-      try { detailPlay.focus({ preventScroll: true }); } catch (e) {}
-    }
+  function focusTo(i) {
+    const n = state.records.length;
+    if (!n) return false;
+    const cur = Math.round(state.fanTo);
+    /* 走**最短路径**：click 第 6 张时从第 0 张过去，应该往回滚一格，
+       而不是正着穿过 1..5（后者会「倒着转一整圈」，很怪） */
+    const d = wrapOffset(((Math.round(i) - cur) % n + n) % n, n);
+    state.fanTo = cur + d;
+    state.selectedIndex = ((Math.round(state.fanTo) % n) + n) % n;
     return true;
   }
+  function stepBy(dir) {
+    const n = state.records.length;
+    if (!n || !dir) return false;
+    /* 需求第八条给的式子就是这一行。⚠️ fanTo 不取模，见 state 上方的注释：
+       取模会让「第 0 首向上滚」变成穿过整圈。 */
+    state.fanTo += dir > 0 ? 1 : -1;
+    state.selectedIndex = ((Math.round(state.fanTo) % n) + n) % n;
+    /* 滚轮浏览**不播放**（需求第十条），但会把面板叫回来 —— 焦点变了，
+       右侧没有理由还停在「已收起」状态。 */
+    state.detailOpen = true;
+    syncSelected();
+    startFan();
+    return true;
+  }
+  function selectIndex(i, opts) {
+    const n = state.records.length;
+    if (!n) return false;
+    const o = opts || {};
+    focusTo(((Math.round(num(i, 0)) % n) + n) % n);
+    state.detailOpen = o.open === false ? false : true;
+    syncSelected();
+    startFan();
+    return true;
+  }
+  /* 兼容旧的按 record 选中（回归装置 / 外部仍在用）
+     ⚠️ 优先用 rec.order（陈列位置）；只有老结构里没这个字段时才退回
+        rec.index —— 那条路在「曲目表缺 id」时是错的，所以别依赖它。 */
+  function select(rec, opts) {
+    if (!rec) return false;
+    const at = typeof rec.order === 'number' ? rec.order : rec.index;
+    return selectIndex(typeof at === 'number' ? at : 0, opts);
+  }
 
-  /* ============================================================
-     openRecord —— 点唱片的正式语义（第三阶段）
+  /* ------------------------------------------------------------
+     syncSelected —— 把焦点状态铺到 UI（唯一的落点）
      ------------------------------------------------------------
-     需求第一条：点击唱片 → 自动选中并播放。
-     但自动播放可能被浏览器拦下（没有用户手势的首次播放、或站点
-     被判定为无交互），所以这里刻意**先选中、再尝试播**：
-       ① select() 打开档案（这一步 100% 成功，UI 永远有反应）
-       ② play() 尝试播放（失败也无所谓，详情里的播放按钮就是
-          「用户手势」入口，再点一次必定能响）
-     这样「autoplay 被拦」的降级结果 = 「档案开着 + 一个播放按钮」，
-     而不是「点了一下什么都没发生」。
+     ⚠️ 「一条状态只有一个落点」：.sel / .dim / aria-pressed / 面板 .on /
+        面板内容 / 播放按钮文案，全部由这一个函数写。别在别处再补一刀。
+     ============================================================ */
+  function syncSelected() {
+    const n = state.records.length;
+    if (!n) {
+      state.selected = null;
+      if (detailEl) { detailEl.classList.remove('on'); detailEl.setAttribute('aria-hidden', 'true'); }
+      return;
+    }
+    /* 焦点跟**目标**走：扇形还在滑的时候，逻辑焦点就已经是新那张了 ——
+       这样右侧面板是「立刻」响应的，而不是等 400ms 补间结束。
+       ⚠️ 唯一的落点就是这一行：fanTo 是整数目标，所以 round 一下即可；
+          别再从 state.selectedIndex 反推一遍（那就是第二份真相）。 */
+    state.selectedIndex = ((Math.round(state.fanTo) % n) + n) % n;
+    state.selected = state.detailOpen ? state.records[state.selectedIndex] : null;
+
+    Object.keys(state.pool).forEach((id) => {
+      const el = state.pool[id];
+      const isFocus = Number(el.dataset.at) === state.selectedIndex;
+      el.classList.toggle('sel', isFocus);
+      el.setAttribute('aria-pressed', isFocus ? 'true' : 'false');
+    });
+
+    if (detailEl) {
+      detailEl.classList.toggle('on', !!state.selected);
+      detailEl.setAttribute('aria-hidden', state.selected ? 'false' : 'true');
+    }
+    if (state.selected) fillDetail(state.selected);
+    syncDetailPlayBtn();
+  }
+
+  /* ------------------------------------------------------------
+     openRecord —— 点唱片的正式语义（第六轮改）
+     ------------------------------------------------------------
+     需求第九条：点击任意唱片 → 把它设为 selectedIndex；**不要**立刻
+     弹出「全屏中央档案 modal」。需求第十条：播放留给
+     「点击当前选中唱片」与「右侧 PLAY 按钮」。
+     合起来就是下面两条分支：
+       · 点的是**已经选中**的那张 → 再点一次 = 播放 / 暂停（明确的手势）
+       · 点的是别的 → 只把它转到中央（浏览动作，不出声）
      ============================================================ */
   function openRecord(rec) {
     if (!rec) return false;
-    const ok = select(rec);
-    if (!ok) return false;
-    /* 已经就是正在响的那一首 → 不重启播放（重启会把进度倒回 0，
-       用户会觉得「点一下怎么从头开始了」）。 */
-    if (rec.index === playingIndex && state.isPlaying) return true;
+    const n = state.records.length;
+    if (!n) return false;
+    /* ⚠️ 比的是 rec.order（**陈列位置**），不是 rec.index（曲目表下标）——
+       这两个数只有「曲目表没缺 id」时才相等，混用会选错唱片。 */
+    const already = (state.selectedIndex === rec.order) && state.detailOpen;
+    if (!already) {
+      selectIndex(rec.order);
+      return true;
+    }
+    /* 已经选中且面板开着 → 这次点击是「播它」 */
+    const isCur = rec.index === playingIndex;
+    if (isCur && state.isPlaying) {
+      /* ⚠️ 直接 pause()，**不要**用 `if (!a.paused)` 当门 ——
+         audio.paused 和 body.mp-playing 是两个来源，一旦有偏差，
+         点击就变成哑巴（按了没反应、也没有任何报错）。pause() 本身幂等。 */
+      const a = d.getElementById('audio');
+      if (a) a.pause();
+      return true;
+    }
+    state.playBlocked = false;
     play(rec);
     return true;
   }
 
   function deselect() {
-    /* ⚠️ 判据不能只看 state.selected：重建 / 外部收尾之后，面板可能还开着而
-       state.selected 已经是 null —— 那时原来那个早退会让它**永远关不掉**
-       （详情一直摊在桌上，按 X 也没反应）。 */
-    const open = !!state.selected ||
-      !!(detailEl && detailEl.classList.contains('on'));
-    state.selected = null;
-    if (!open) return false;
-    if (sceneEl) sceneEl.classList.remove('has-sel');
-    if (stageEl) {
-      $$('.mm-disc', stageEl).forEach((el) => {
-        el.classList.remove('sel', 'dim');
-        el.removeAttribute('aria-pressed');
-      });
-    }
-    if (detailEl) {
-      detailEl.classList.remove('on');
-      detailEl.setAttribute('aria-hidden', 'true');
-    }
-    return true;
+    /* ⚠️ 判据不能只看 state.detailOpen：重建 / 外部收尾之后，面板可能还开着
+       而 detailOpen 已经是 false —— 那时原来那个早退会让它**永远关不掉**。 */
+    const open = !!state.detailOpen || !!(detailEl && detailEl.classList.contains('on'));
+    state.detailOpen = false;
+    if (open) syncSelected();
+    return open;
   }
+
 
   /* ============================================================
      fillDetail —— 把 record 填进详情面板
@@ -1065,24 +1392,6 @@
     });
   }
 
-  /* 关闭按钮：收起详情，但**留在博物馆**（需求里「返回」有两种语义，
-     这里 X 是「关闭档案」，Esc 也是关闭档案；要离开展厅走 HUD 的退出）。
-     ⚠️ 单独用 scrim 点空白也能关 —— 这是浮层的基本礼貌。 */
-  if (detailClose) detailClose.addEventListener('click', (e) => {
-    e.stopPropagation();
-    deselect();
-  });
-  if (detailScrim) detailScrim.addEventListener('click', () => deselect());
-  /* 需求第七条：「点击外部可以关闭详情，但不要误关闭整个 Museum」。
-     落在场景本体的空白处（不是唱片、不是详情、不是 HUD）→ 只关详情。
-     ⚠️ 用「点到了 .mm-scene 自己」这一条判空白，而不是「没点到 .mm-disc」——
-        后者会把 HUD / 底部提示条 / 详情面板的点击也算成空白。 */
-  if (sceneEl) {
-    sceneEl.addEventListener('click', (e) => {
-      if (!state.selected) return;
-      if (e.target === sceneEl) deselect();
-    });
-  }
 
   /* 外部（播放器自己换歌 / 上一首 / 下一首）导致当前曲目变了时，
      博物馆里那张唱片的 .playing 也要跟上 —— 否则会出现「场景里高亮的
@@ -1096,7 +1405,7 @@
     if (!state.open || !window.RinsoraMusic || !window.RinsoraMusic.getState) return;
     /* 站长在展厅里点了「＋ 添加音乐」→ 曲库指纹就变了 → 立刻重建唱片墙。
        低频轮询正好顺手干这件事：最多 1s 后新唱片自己出现在墙上。 */
-    if (syncData()) render();
+    if (syncData()) render({ rebuild: true });
     try {
       const s = window.RinsoraMusic.getState();
       lastSeenIndex = s && typeof s.index === 'number' ? s.index : -1;
@@ -1163,15 +1472,25 @@
        ⚠️ 每次都问一次 syncData()：曲库可能在上次进厅之后变了（站长刚上传了
           一首），变了就必须重建 —— 原来只渲一次（state.rendered 把关），
           新歌永远等不到那张唱片（用户反馈 2）。 */
-    /* ⚠️ 先把视口量出来再算分页：computePerPage() 读 vp.w，而 vp 只在
-       enter / resize 时更新。不先量的话，手机第一次进厅会按「桌面 6 张/页」
-       排一次，等 resize 事件到了再推倒重建（白闪一下）。 */
+    /* ⚠️ 先量视口再算几何：扇形几何全部读 vp.w / vp.h，
+       不先量的话手机第一次进厅会按桌面尺寸摆一次，然后白闪一下。 */
     measureViewport();
     const changed = syncData();
-    /* 需求三：进厅要能认出「当前正在播的那首」—— 它在别的展区就翻过去 */
-    const moved = revealCurrent();
-    if (changed || !state.rendered || moved) render();
-    else syncPlaying();
+    /* 需求三：进厅要能认出「当前正在播的那首」—— 把它放到扇形中央。
+       ⚠️⚠️ playerIndexNow() 给的是**曲目表下标**，而 selectedIndex 是
+          **陈列里的位置** —— 两者只有在「曲目表里没有缺 id 的条目」时
+          才恰好相等。中间隔着 records() 那道 `if (!t.id) return` 过滤，
+          所以必须显式换一次。写错不会报错，症状是「一进厅焦点落在了
+          另一张唱片上」，看起来完全像是 music-data.js 的数据错，极难查。 */
+    const playing = playerIndexNow();
+    const playingAt = playing >= 0
+      ? state.records.findIndex((r) => r.index === playing) : -1;
+    if (playingAt >= 0) state.selectedIndex = playingAt;
+    /* ⚠️ 面板默认**展开**：右侧那一列是这个版式的一部分（不是弹窗），
+       一进来就该有东西；用户按 Esc 才收起来。 */
+    state.detailOpen = true;
+    if (changed || !state.rendered) render({ rebuild: changed });
+    else { layoutRail(); applyFan(); syncPlaying(); syncSelected(); }
 
     const imgs = state.records
       .map((r) => res(r.track.cover))
@@ -1235,13 +1554,18 @@
     }
     if (exitBtn && !reduceMotion()) exitBtn.focus && exitBtn.focus({ preventScroll: true });
     startFollow();
-    /* 视差：只在场景真的可见时才听鼠标，退出立刻摘掉（见 exit） */
     measureViewport();
-    d.addEventListener('pointermove', onPointerMove, { passive: true });
+    layoutRail();
+    applyFan();
+    /* ⚠️ 滚轮只在场景里听（需求第八条）——挂在 #mmScene 上而不是 document，
+       这样离开展厅后（场景 display:none）不会抢页面的滚动。
+       必须 passive:false，否则 preventDefault 无效（浏览器会忽略它）。 */
+    if (sceneEl) sceneEl.addEventListener('wheel', onWheel, { passive: false });
     d.addEventListener('resize', onResize, { passive: true });
-    startParallax();
+    startFan();
     return state.records;
   }
+
 
   /* ============================================================
      exit —— 关掉场景 + 加载层（幂等）
@@ -1259,12 +1583,14 @@
     }
     state.open = false;
     stopFollow();
-    stopParallax();
-    d.removeEventListener('pointermove', onPointerMove);
+    stopFan();
+    if (sceneEl) sceneEl.removeEventListener('wheel', onWheel);
     d.removeEventListener('resize', onResize);
-    /* 详情面板跟着场景一起收 —— 否则下次进来会「一开门就有一张档案摊在桌上」，
-       而且 state.selected 还指着上一次那张唱片，语义是脏的。 */
+    /* 档案面板跟着场景一起收 —— 否则下次进来会「一开门就有东西摊在桌上」，
+       而且 panel 上的内容还指着上一次那张唱片，语义是脏的。 */
     deselect();
+    state.wheelAcc = 0;
+    state.wheelAt = 0;
 
     if (sceneEl) {
       sceneEl.classList.remove('on');
@@ -1307,6 +1633,7 @@
     return true;
   }
 
+
   /* ============================================================
      requestExit —— 「退出展厅」由谁执行
      ------------------------------------------------------------
@@ -1327,34 +1654,58 @@
   }
 
   /* ============================================================
-     接线：退出按钮 + Esc + 详情面板
+     接线：退出按钮 + 键盘 + 面板
      ------------------------------------------------------------
      ⚠️ Esc 的优先级（两层语义，别搞反）：
-        详情打开时 → 先关详情（留在展厅），这是最符合直觉的「返回」
-        详情没开    → 交给 script.js 的总收口去退展厅
-       所以这里只处理「详情开着」那一种，并且是捕获阶段监听 +
+        档案面板展开时 → 先收起面板（留在展厅），这是最符合直觉的「返回」
+        面板已收起    → 交给 script.js 的总收口去退展厅
+       所以这里只处理「面板开着」那一种，并且是捕获阶段监听 +
        stopPropagation，避免同一次按键被 script.js 再吃一遍
        （它一吃就直接退展厅了，用户会觉得「按一下跳了两级」）。
+     ⚠️ ↑ / ↓ 是滚轮的**键盘等价物**（同一条浏览动作，不是新功能）：
+        需求把滚轮定为浏览手段，那键盘用户必须有一条同样的路，
+        否则「滚轮能浏览、键盘不能」就是可访问性缺口。
      ============================================================ */
   function onKeydown(e) {
-    if (e.key !== 'Escape' && e.key !== 'Esc') return;
     if (!state.open) return;
-    if (!state.selected) return;            /* 没开详情 → 不拦，让 script.js 退展厅 */
-    e.stopPropagation();
-    e.preventDefault();
-    /* 需求第七条「一次 Esc 不要把整个网站状态弄乱」的落点：
-       Esc 只退**一层**（先关档案），并且阻止冒泡 ——
-       script.js 的 window 监听收不到这一次按键，自然不会顺手退展厅。
-       想退展厅再按一次 Esc（那次没有详情，我们不拦，交给 script.js）。 */
-    deselect();
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      /* 没开面板 → 不拦，让 script.js 的 exitMuseum 去退展厅 */
+      if (!state.detailOpen) return;
+      e.stopPropagation();
+      e.preventDefault();
+      deselect();                      /* Esc 只退**一层** */
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      /* 带修饰键的（Ctrl+↑ 之类）别抢 —— 那是别的功能的快捷键 */
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!state.records.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      stepBy(e.key === 'ArrowDown' ? 1 : -1);
+    }
   }
-  /* 捕获阶段：抢在 script.js 的 window 监听之前拿到这次 Esc */
+  /* 捕获阶段：抢在 script.js 的 window 监听之前拿到这次按键 */
   d.addEventListener('keydown', onKeydown, true);
 
   /* ⚠️ 走 requestExit（= 请宿主关），不要直接 exit() —— 见 requestExit 的注释 */
   if (exitBtn) exitBtn.addEventListener('click', () => requestExit());
-  if (pagerPrev) pagerPrev.addEventListener('click', () => gotoPage(state.page - 1));
-  if (pagerNext) pagerNext.addEventListener('click', () => gotoPage(state.page + 1));
+  /* 收起档案（面板右上角的 X）：和 Esc 第一级等价，留在展厅 */
+  if (detailClose) detailClose.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deselect();
+  });
+  /* 需求第七条：「点击外部可以收起档案，但不要误关整个 Museum」。
+     落在场景本体的空白处（不是唱片、不是面板、不是 HUD）→ 只收面板。
+     ⚠️ 用「点到了 .mm-scene 自己」这一条判空白，而不是「没点到 .mm-disc」——
+        后者会把 HUD / 页脚 / 面板的点击也算成空白。 */
+  if (sceneEl) {
+    sceneEl.addEventListener('click', (e) => {
+      if (!state.detailOpen) return;
+      if (e.target === sceneEl) deselect();
+    });
+  }
+
 
   /* ============================================================
      bindAudio —— 直接听那唯一的 <audio> 的 play / pause / ended
@@ -1403,60 +1754,62 @@
     isOpen: () => !!state.open,
     isEntering: () => !!state.entering,
     records: () => state.records.slice(),
-    /* 回归装置用：把布局表与曲目表 join 的结果交出来，验证「只引用不复制」 */
     resolve: records,
     render: render,
     state: state,
-    /* 让外部（script.js）能问「渲染后的唱片数是几」而不用碰内部结构 */
     count: () => state.records.length,
-    /* —— 第二阶段：阵列交互 —— */
-    select: select,
-    deselect: deselect,
-    /* 回归装置用：直接喂视差（-1~1），不依赖真实鼠标事件 */
-    setParallax: setParallax,
-    parallax: () => ({ x: state.parallax.x, y: state.parallax.y }),
-    /* 回归装置用：同步推进一步视差（等价于 rAF 跑了一帧）。
-       ⚠️ 无头 --virtual-time-budget 下 rAF 回调不派发，必须靠这个才能验视差。
-       返回 true 表示还没收敛（正式路径会再排一帧）。 */
-    stepParallax: stepParallax,
-    /* 回归装置用：一次推到位（循环 step 直到收敛），返回实际走了几步 */
-    settleParallax: (maxSteps) => {
-      const cap = Math.max(1, maxSteps || 400);
+
+    /* —— 扇形导航（第六轮）—— */
+    /* 焦点：**唯一的选择状态**（曲目表下标） */
+    selectedIndex: () => state.selectedIndex,
+    detailOpen: () => state.detailOpen,
+    selectIndex: selectIndex,
+    select: select,                 /* 兼容旧的按 record 选中 */
+    stepBy: stepBy,
+    fan: () => ({ pos: state.fanPos, to: state.fanTo }),
+    /* 当前视口的几何参数（含 railX，回归装置拿它核对「唱片没压到面板」） */
+    geometry: () => fanGeometry(vp.w, vp.h, fanHalf(state.records.length)),
+    fanHalf: () => fanHalf(state.records.length),
+    /* 当前曲库下的角间隔（回归装置要拿它算唱片之间的横向 / 纵向位移） */
+    fanStep: () => fanStep(fanHalf(state.records.length)),
+    look: fanLook,
+    wrapOffset: wrapOffset,
+    /* ⚠️ 纯函数：任意视口的完整布局。几何对不对靠它断言，不靠肉眼看截图 */
+    layout: fanLayout,
+    discSize: discSize,
+    /* 回归装置用：同步推进一帧 / 一次推到位（rAF 在无头下不派发） */
+    stepFan: stepFan,
+    settleFan: (maxSteps) => {
+      const cap = Math.max(1, maxSteps || 600);
       let n = 0;
-      while (n < cap && stepParallax()) n++;
+      while (n < cap && stepFan()) n++;
       return n;
     },
-    selectedMusicId: () => (state.selected ? state.selected.musicId : null),
-    selected: () => state.selected,
-    /* 点唱片的等价入口：按 musicId + 可选 index 选中。
-       同一首歌摆了两处陈列时，两者会撞车 —— 想精确指定某一张传第三个参数
-       order（布局下标，= .mm-disc 的 dataset.layoutId）。 */
-    selectByMusicId: (id, idx, order) => {
-      const hit = state.records.filter((r) =>
-        r.musicId === id &&
-        (idx == null || r.index === idx) &&
-        (order == null || r.order === order));
-      return hit.length ? select(hit[0]) : false;
-    },
-    play: play,
-    /* —— 第三阶段 —— */
-    /* 点唱片的正规入口（选中 + 尝试播放，含 autoplay 降级） */
+    /* 回归装置用：喂一次滚轮增量（不依赖真实 WheelEvent / 不依赖 passive） */
+    wheel: (dy, mode) => onWheel({
+      deltaY: dy, deltaMode: mode || 0,
+      ctrlKey: false, target: null, preventDefault: () => {}
+    }),
+
+    /* —— 播放 / 选中（第三阶段起的对外契约，保持兼容）—— */
+    deselect: deselect,
     openRecord: openRecord,
-    /* 回归装置 / 外部：按播放器真实状态重算 .playing（返回是否在播） */
+    play: play,
     syncFromPlayer: () => { syncFromPlayer(); return state.isPlaying; },
     isPlayingIndex: (i) => (i === playingIndex && state.isPlaying),
     playingIndex: () => playingIndex,
     isPlaying: () => state.isPlaying,
     allPlaying: () => $$('.mm-disc.playing', stageEl || d).length,
     isPaused: () => $$('.mm-disc.is-paused', stageEl || d).length,
-    /* —— 第三阶段补丁 —— */
-    page: () => state.page,
-    pageCount: pageCount,
-    perPage: computePerPage,
-    gotoPage: gotoPage,
-    /* 回归装置用：直接问自动摆位算出来的坐标（不经过 DOM） */
-    autoSpot: autoSpot,
-    /* 回归装置用：曲库指纹比对（true = 这次发现了变化） */
+    selectedMusicId: () => (state.selected ? state.selected.musicId : null),
+    selected: () => state.selected,
+    /* 点唱片的等价入口：按 musicId 选（可选 index 精确指定**曲目表下标**） */
+    selectByMusicId: (id, idx) => {
+      const hit = state.records.filter((r) =>
+        r.musicId === id && (idx == null || r.index === idx));
+      /* ⚠️ 传进去的是 order（陈列位置）—— selectIndex 收的是位置，不是曲目下标 */
+      return hit.length ? selectIndex(hit[0].order) : false;
+    },
     syncData: syncData,
     /* 把「退出展厅」交给宿主：script.js 才同时管 body.museum-open 与 URL */
     onExitRequest: (fn) => { state.hostExit = (typeof fn === 'function') ? fn : null; },

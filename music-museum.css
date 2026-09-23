@@ -1,10 +1,26 @@
 /* ============================================================
    music-museum.css —— 「音乐博物馆」场景层
    ------------------------------------------------------------
-   三块内容：
+   四块内容：
      A. 进入加载层（.mm-load）—— 圆环 / 声波 / 加载线 / 微粒子
-     B. 场景本体（.mm-scene）—— 纵深走廊 + 唱片陈列
+     B. 场景本体（.mm-scene）—— 左：**扇形唱片导航**（无限循环）
+                                右：档案轨（MUSIC ARCHIVE + LYRICS 预留位）
      C. 顶部状态条 / 底部提示（.mm-hud）
+     D. 右侧档案轨（.mm-detail 那一列）
+
+   ⚠️⚠️ 第六轮（本轮）改的是「馆藏怎么摆、怎么选」：
+       原来是**分页唱片墙**（page / pager / ‹ 1 / 2 ›，一页 6 张），
+       现在是**左侧无限循环扇形**（滚轮 / ↑↓ 浏览，点击选曲，右侧联动）。
+       分页那一整套（.mm-hud-mid 里的 .mm-pager / .mm-page-btn）已删除；
+       唱片位置不再来自 CSS 百分比（--mm-x / --mm-y），而是 JS 每帧把扇形
+       解算结果写成 --mm-fx / --mm-fy（**px**）。见 .mm-disc 那段注释。
+
+   ⚠️ 版式契约（第六轮新增，别在 CSS 里另写一套数字）：
+       --mm-rail-x / --mm-rail-y / --mm-rail-b / --mm-foot-x / --mm-foot-b
+       / --mm-size —— 六个都由 JS 的 layoutRail() 写（源头是 fanGeometry
+       里那张「竖向分区表」）。CSS 只读，默认值只是兜底。
+       好处：「扇形占多宽 / 面板从哪儿起 / 页脚在哪儿 / 唱片多大」
+       永远只有一个真相；窄屏也不需要在媒体查询里重算一遍百分比。
 
    与站点既有约定的三条对齐（很重要，别自己发明一套）：
      ① 亚克力四要素 = 低透底 + 真 backdrop-filter + 1px 亮边 + 顶部内高光
@@ -247,65 +263,72 @@ body.night .mm-depth i:nth-child(3){
 body.night .mm-floor{opacity:.3}
 
 /* —— 陈列区：唱片的定位容器 ——
-   ⚠️ 视差就写在这一层（--mm-px-pos / --mm-py-pos 由 JS 每帧写一次）。
-   为什么不在每张唱片上各写一份：每张唱片自己的 transform 已经在做
-   「居中 + 缩放 + 自转」，再叠 translate 要把它从 % 混进来重算一遍，
-   既难读也容易写错。分两层合成，顺序天然正确。
-   ⚠️ translate3d（不是 translate）—— 强制上合成层，避免每帧重绘。 */
-.mm-stage{position:absolute;inset:0;transform:translate3d(0,0,0);will-change:transform}
-.mm-scene.on .mm-stage{
-  transform:translate3d(var(--mm-px-pos,0px),var(--mm-py-pos,0px),0);
-}
+   ⚠️ 第六轮**删掉了这一层上的视差 transform**（--mm-px-pos / --mm-py-pos）：
+      视差是「鼠标一动，整块画布按景深平移」，那是自由摆位时代的语言；
+      现在左边是一台**导航器**（扇形），鼠标的职责变成了滚轮选曲 ——
+      再让整个扇面跟着指针漂移，就变成「导航器在抖」，而且会让
+      「选中那张不压到右侧面板」这条几何不变量随鼠标位置失效。
+   ⚠️ z-index:1 是**必须的**：它给这一层建一个层叠上下文，把唱片之间的
+      大小上下关系关在自己家里。否则唱片的内联 z-index（100 上下）
+      会跑到场景层去和 HUD(5) / 档案面板(20) 比大小 —— 症状是
+      「唱片盖住了右侧档案卡」「唱片压住了顶栏」，而单看唱片全是对的。
+   ⚠️ 也别把 will-change 加回来：这一层没有逐帧 transform，不需要常驻合成。 */
+.mm-stage{position:absolute;inset:0;z-index:1}
 
-/* 一张唱片 = 一个按钮（点击 → 打开档案详情）。
-   定位百分比直接来自 music-museum-data.js 的 x / y。 */
+/* 一张唱片 = 一个按钮（点它 → 把它转到扇形中央并联动右侧档案；
+   再点**当前这张**才播）。
+   ------------------------------------------------------------
+   ⚠️⚠️ 定位方式第六轮改了，这是本轮最容易被改坏的一处：
+       旧版： left/top 用百分比（--mm-x / --mm-y 来自数据表）
+       新版： 位置完全由 JS 每帧写 px（--mm-fx / --mm-fy），CSS 只负责拼进
+              translate —— 数据表里的 x/y/scale/rotation/depth 不再参与摆位。
+     为什么必须改：扇形位置是**连续插值**出来的（rAF 每帧逼近目标），
+       用 left/top 会每帧触发一次布局（7 张唱片 = 每秒 400+ 次重排）；
+       改成 translate 之后只碰合成层，布局一次都不动。
+   ⚠️ 用的是 **translate / rotate / scale 三个独立属性**，不是一条 transform ——
+      为了能把它们**分开**过渡：
+        · translate 由 JS 每帧写  → **不能有 transition**
+          （否则补间被二次平滑，手感发黏、而且永远追不上目标）
+        · scale / rotate 是状态变化（hover、进出扇区）→ **需要** transition
+      写成一条 transform 的话这两件事就绑死了，只能二选一。 */
 .mm-disc{
-  position:absolute;
-  left:var(--mm-x,50%);top:var(--mm-y,50%);
-  /* 基准尺寸，scale 由 data 给 */
+  position:absolute;left:0;top:0;
+  /* 基准尺寸 --mm-size 由 JS 写在 #mmScene 上（一次，继承下来）——
+     尺寸现在是扇形几何的一部分（fanGeometry 要用它算半径），
+     放 CSS 里就是第二份会漂移的真相；原来写它的三条 @media 已经删掉。 */
   width:var(--mm-size,168px);
-  /* ⚠️ scale 走 --mm-scale-data（**不是** --mm-scale）：
-     data 给的基础缩放由 JS 写成 inline style，而 inline 声明是压不住的 ——
-     选中态那条 `.mm-scene.has-sel .mm-disc.sel{--mm-scale:...}` 如果也用
-     同一个变量名，会被 inline 的同名声明直接盖掉（症状：选中了但唱片不变大，
-     computed 里 --mm-scale 永远等于 base，特别难发现）。
+  /* ⚠️ scale 走 --mm-scale-data（**不是** --mm-scale），这是项目里踩过的铁律：
+     基础缩放由 JS 按 |offset| 写成 **inline style**，而 inline 声明压得住
+     样式表 —— 如果 hover 那条 `.mm-disc:hover{--mm-scale:...}` 用的是同一个
+     变量名，会被 inline 的同名声明直接盖掉（症状：**hover 不放大**，而类名、
+     DOM、数据全对，computed 里 --mm-scale 永远等于 base，特别难查）。
      所以变量分两层：
-       --mm-scale-data  ← data 的基础缩放（inline，JS 写）
-       --mm-scale       ← 最终生效缩放（CSS 算：base * 状态系数），默认取 data
+       --mm-scale-data  ← 基础缩放（inline，JS 的 FAN_SCALE 曲线给）
+       --mm-scale       ← 最终生效缩放 = 状态规则只覆盖它
      状态规则只覆盖 --mm-scale，永远不与 inline 打架。 */
   --mm-scale:var(--mm-scale-data,1);
-  /* ⚠️ translate3d 里那两个 --mm-depth-x / --mm-depth-y 就是「按 depth 分权」
-     的落点 —— 别删，删了整个阵列会变成一块刚性的板子一起平移
-     （需求第六条明确要「远层动得少、近层动得多」）。
-     ⚠️ 三者必须在**同一个 transform** 里，分开写会被后面的覆盖掉（踩过：
-     变量声明了却没进 transform，症状是「视差有、但所有唱片位移完全一致」）。 */
-  transform:translate(-50%,-50%)
-            translate3d(var(--mm-depth-x,0px),var(--mm-depth-y,0px),0)
-            rotate(var(--mm-rot,0deg)) scale(var(--mm-scale,1));
-  /* 纵深：越远越淡越糊（depth 0~1 → opacity 1→0.45、blur 0→3.4px） */
+  /* 位置：--mm-fx / --mm-fy 是**中心点**（px，JS 每帧写），
+     所以再补一个 -50% 把元素自己居中过去。
+     ⚠️ translate 里的百分比解析成「自身尺寸的一半」，和具体尺寸解耦 ——
+        JS 因此完全不需要知道唱片多大（这个耦合越少越好）。 */
+  translate:calc(var(--mm-fx,50vw) - 50%) calc(var(--mm-fy,50vh) - 50%);
+  rotate:var(--mm-rot,0deg);
+  scale:var(--mm-scale,1);
+  /* 纵深：越远越淡越糊（--mm-op / --mm-blur 由 JS 按 |offset| 插值写进来） */
   opacity:var(--mm-op,1);
   filter:blur(var(--mm-blur,0px));
+  /* 上下层：--mm-z-data 是 JS 按 |offset| 写的**内联底值**，
+     --mm-z-boost 是状态增量（hover / 焦点）—— 分两层是因为内联的
+     自定义属性压得过样式表，写成 style.zIndex 的话状态规则就永远失效了。
+     ⚠️ 100 - |offset|*12：焦点 100、最外 64。 */
+  --mm-z-boost:0;
+  z-index:calc(var(--mm-z-data,1) + var(--mm-z-boost,0));
   border:0;padding:0;background:transparent;cursor:pointer;
-  transition:transform .45s var(--ease),opacity .4s,filter .4s;
+  /* ⚠️ 只过渡 scale / rotate / opacity / filter，**绝不过渡 translate**（见上） */
+  transition:scale .34s var(--ease),rotate .34s var(--ease),
+             opacity .34s var(--ease),filter .34s var(--ease);
   display:block;color:inherit;text-align:inherit;
   font:inherit;
-  /* —— 纵深位移：整体视差按 depth 再分权一次（近层跟得多、远层跟得少）
-     --mm-px 由 JS 按 depth 写（近 1 → 远 .22）。
-     ⚠️⚠️ 这里是 **减号**（offset 减去 offset*(1-px)*0.6），不是加号。
-        推导一遍（别凭感觉改符号，改错方向正好反过来）：
-          offset = -p.x * SPAN                    → p.x=1 时 = -34px
-          近层 depth .10 → px .92 → (1-px) = .08
-          远层 depth .72 → px .44 → (1-px) = .56
-          减号：近 = -34 - (-34*.08*.6)  = -32.4px   ← 基准 34 里几乎没被削
-                远 = -34 - (-34*.56*.6)  = -22.5px   ← 被削掉 1/3
-          加号：近 = -35.6 / 远 = -45.5 → **远的比近的动得多**，方向正好反了。
-        ⚠️ 注意 (px-1)*-0.6 与 (1-px)*0.6 是**代数恒等**的，换这两个写法等于没改 ——
-           要让方向反过来必须把「加」改成「减」（踩过：以为改了符号，其实恒等，数值一个不动）。
-        改符号后务必跑 _museumstage.js 的 P2b 确认。
-     ⚠️ --mm-par-k 是「视差总强度系数」，默认 1；窄屏（见 @media）调到 .45，
-        实现需求第九条「手机端减少视差」——**不改 JS**，只在 CSS 收一次乘法。 */
-  --mm-depth-x:calc((var(--mm-px-pos,0px) - var(--mm-px-pos,0px) * (1 - var(--mm-px,1)) * 0.6) * var(--mm-par-k,1));
-  --mm-depth-y:calc((var(--mm-py-pos,0px) - var(--mm-py-pos,0px) * (1 - var(--mm-py,1)) * 0.6) * var(--mm-par-k,1));
 }
 .mm-disc:focus-visible{outline:2px solid var(--accent-primary);outline-offset:10px;border-radius:8px}
 
@@ -418,50 +441,35 @@ body.night .mm-floor{opacity:.3}
 .mm-disc:hover .mm-disc-gloss:after,
 .mm-disc:focus-visible .mm-disc-gloss:after{transform:translateX(130%)}
 
-/* 唱片下方的标签（歌名 + 歌手），亚克力小条
-   ⚠️ 反转 rotate 抵消唱片的自转，让它始终正着 —— 说明牌不该跟着盘子转。 */
-.mm-disc-label{
-  position:absolute;left:50%;top:calc(100% + 12px);
-  transform:translateX(-50%) rotate(calc(var(--mm-rot,0deg) * -1));
-  min-width:120px;max-width:210px;
-  padding:7px 12px;border-radius:14px;
-  background:var(--glass);
-  border:1px solid var(--bd);
-  box-shadow:0 12px 26px rgba(120,70,110,.16),inset 0 1px 0 var(--hi);
-  backdrop-filter:blur(16px) saturate(1.4);
-  -webkit-backdrop-filter:blur(16px) saturate(1.4);
-  text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.mm-disc-label b{display:block;font-size:12.5px;color:var(--ink);
-  overflow:hidden;text-overflow:ellipsis;line-height:1.3}
-.mm-disc-label small{display:block;margin-top:2px;font-size:10px;color:var(--muted);
-  overflow:hidden;text-overflow:ellipsis}
+/* 唱片下方的「歌名 / 歌手」亚克力小条（.mm-disc-label）第六轮**删除**了。
+   为什么删：扇形里同时有 7 张唱片，7 个标签条必然互相压住（相邻两张的
+   中心距在 1440 屏上只有 126px，而标签条 min-width 就是 120px）；
+   而标题现在有一个更合适的去处 —— 右侧档案面板本来就常驻，焦点一变它就更新。
+   想标名的需求由「焦点 + 右侧档案」承担，比在扇面上塞七个会重叠的小字清楚得多。
+   对应的 JS 也一并删了（buildDisc 不再建 label 节点，aria-current 改挂唱片自己）。 */
 
-/* —— hover / 键盘聚焦：抬起来（只动 scale，不改 left/top —— 百分比定位不抖） ——
-   需求第五条要的四件事：scale 增大、微微向前、边缘发光、出现歌名歌手。
-   前三条这里做；「出现歌名歌手」是标签条 —— 默认它就是显示着的（阵列里
-   全是未选中状态，没有标签会让人不知道点了会怎样），hover 时把它提到最清晰。
-   cursor:pointer 在 .mm-disc 上已经有了。 */
-.mm-disc{
-  --mm-hover-lift:0px;
-}
+/* —— hover / 键盘聚焦：边缘发光 + 轻微放大 ——
+   ⚠️ 只放大 1.06，**不是** 1.28：放大是「位移性」的（scale 会改变视觉落点），
+      而扇形位置是几何解算出来的，「选中那张不压到右侧面板」这条不变量
+      是按基础缩放算的。放大太多会让最右那张越界。
+      想要「中心更突出」请改 JS 的 FAN_SCALE 曲线 —— 那条是有几何断言
+      兜着的；别在 CSS 里偷偷再乘一个系数（那会绕开断言）。
+   ⚠️ 抬层走 --mm-z-boost（**不是** z-index:8）：z-index 那边由内联的
+      --mm-z-data 给底值，样式表只加增量（见 .mm-disc 那段注释）。
+      增量给 20 的含义是「只看同层邻居抬一层」，不是「盖过焦点那张」——
+      焦点是导航的锚，hover 一张远处的唱片不该把它踩下去。 */
 .mm-disc:hover,.mm-disc:focus-visible{
-  --mm-scale:calc(var(--mm-scale-data,1) * 1.08);
+  --mm-scale:calc(var(--mm-scale-data,1) * 1.06);
+  --mm-z-boost:20;
   opacity:1;                      /* hover 时无视纵深透明度，先看清这一张 */
-  transition-duration:.32s;
-  z-index:6;                      /* 抬到同层其他唱片之上 */
 }
+.mm-disc:active{--mm-scale:calc(var(--mm-scale-data,1) * 1.02)}
 .mm-disc:hover .mm-disc-plate,.mm-disc:focus-visible .mm-disc-plate{
   box-shadow:0 30px 60px rgba(40,18,40,.42),
              inset 0 1px 0 rgba(255,255,255,.2),
              0 0 0 1.5px var(--accent-primary),
              0 0 34px var(--accent-glow);
 }
-.mm-disc:hover .mm-disc-label,.mm-disc:focus-visible .mm-disc-label{
-  border-color:var(--accent-primary);
-  box-shadow:0 16px 34px var(--accent-glow),inset 0 1px 0 var(--hi);
-}
-.mm-disc:active{--mm-scale:calc(var(--mm-scale-data,1) * 1.02)}
 /* 正在播放的那张：外圈加一道转动的强调色环（::after）
    ⚠️ 这里用 2.6s 快转是刻意的：「转环」是**状态指示器**，
      要一眼看出来它在动；而盘面的自转是「唱片在放」的隐喻，慢而匀速。
@@ -515,61 +523,42 @@ body.night .mm-floor{opacity:.3}
   inset 0 1px 0 rgba(255,255,255,.14),0 0 0 1.5px var(--accent-primary)}
 
 /* ============================================================
-   B2. 阵列的「选中 / 弱化」状态（第二阶段）
+   B2. 焦点状态（第六轮改写）
    ------------------------------------------------------------
-   选中一张之后：
-     被选中的   → 向前、放大、最清晰（.sel）
-     其余       → 降透明度 + 加模糊 + 降饱和（.dim）
-   500~900ms 的平滑聚焦，禁止瞬移 → 全部走 transition（.62s）。
-
-   ⚠️⚠️ 为什么 .dim 不直接写 opacity/filter 的**绝对值**：
-   每张唱片的基础 opacity/filter 来自 --mm-op / --mm-blur（纵深信息），
-   如果 .dim 写死 opacity:.3，取消选中后就没法还原纵深了。
-   所以这里用「二次合成」：
-     opacity: calc(var(--mm-op) * .34)
-     filter : blur(calc(var(--mm-blur) + 2.6px)) saturate(.55)
-   —— 基值原封不动参与运算，摘掉类就完全复原。
-   ⚠️ blur() 里套 calc() 是合法的（blur 吃 <length>），但**加号两侧
-      必须有空格**，而且两个长度单位必须一致（px + px）。
+   ⚠️ 这一节原来是「选中那张放大到 1.28 + 其余 .dim 压到 34% 透明度」。
+      第六轮把**放大和 dim 都删了**，理由是结构性的，不是审美偏好：
+        · 扇形本身就是一台导航器 —— 七张唱片必须都看得清、都能点。
+          焦点一放大、其余一律压到 34%，「用滚轮浏览」就退化成
+          「一次只能看一张」，扇形的意义直接没了。
+        · 放大是位移性的（scale 改变视觉落点），而焦点现在由 translate
+          每帧插值 —— 再加一个 1.28 倍会让「第 3 张滑到中央」的落点
+          和几何解算对不上，也会让最右那张越过 --mm-rail-x。
+      所以焦点的强调改成**不改变几何**的两件事：
+        · 描边 + 光晕（下面这条 .sel 规则）
+        · 亮度 / 缩放 / 模糊曲线 —— 全部由 JS 的 FAN_SCALE / FAN_OP /
+          FAN_BLUR 负责（**一份数值只有一个来源**，CSS 不再插手缩放）
+      ⚠️ .dim 与 .mm-scene.has-sel 这两个类也一并删了（JS 不再写它们）。
+         如果哪天又想「弱化其余」，先想清楚它和滚轮浏览是否冲突再说。
+      ⚠️ 也**不要**给 .sel 加 filter:none 或 opacity:1：
+         偏移量 1→0 的补间过程中，--mm-blur / --mm-op 本来就在往 0 / 1 收敛，
+         硬写绝对值会让它「啪」地跳一下，而且同一件事就有了两个落点。
    ============================================================ */
-.mm-disc{
-  transition:transform .62s var(--ease),opacity .62s var(--ease),
-             filter .62s var(--ease);
+.mm-disc.sel{
+  --mm-z-boost:20;                /* 让焦点压过同层邻居（hover 的增量也是 20） */
 }
-.mm-scene.has-sel .mm-disc.dim{
-  opacity:calc(var(--mm-op,1) * .34);
-  filter:blur(calc(var(--mm-blur,0px) + 2.6px)) saturate(.55);
-  z-index:1;
-}
-.mm-scene.has-sel .mm-disc.dim:hover{
-  /* 弱化状态下仍然可以点别的唱片换档案 —— 给一点回馈，但不要抢焦点 */
-  opacity:calc(var(--mm-op,1) * .68);
-  filter:blur(calc(var(--mm-blur,0px) + 1px)) saturate(.8);
-}
-.mm-scene.has-sel .mm-disc.sel{
-  --mm-scale:calc(var(--mm-scale-data,1) * 1.28);
-  opacity:1;filter:none;
-  z-index:7;
-  transition-duration:.72s;       /* 需求给的 500~900ms 区间里取偏慢的 */
-}
-.mm-scene.has-sel .mm-disc.sel .mm-disc-plate{
+.mm-disc.sel .mm-disc-plate{
   box-shadow:0 40px 80px rgba(40,18,40,.46),
              inset 0 1px 0 rgba(255,255,255,.22),
              0 0 0 1.5px var(--accent-primary),
              0 0 46px var(--accent-glow);
 }
-/* 选中时标签条放大一点，跟唱片一起「前移」 */
-.mm-scene.has-sel .mm-disc.sel .mm-disc-label{
-  border-color:var(--accent-primary);
-  box-shadow:0 16px 34px var(--accent-glow),inset 0 1px 0 var(--hi);
-}
-/* 详情打开时，底部提示条会被详情面板压住，先收掉（少一层干扰） */
-.mm-scene.has-sel .mm-foot{opacity:0;pointer-events:none;transition:opacity .3s var(--ease)}
-.mm-foot{transition:opacity .3s var(--ease)}
 
 /* —— 空场景占位：data 为空或全对不上时给个说明，而不是一片黑 —— */
 .mm-empty{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  /* 居中于**左半屏**（.mm-foot 的 --mm-foot-x 就是左半屏的中心）——
+     否则档案轨空着、提示却飘到右边去了。z-index 要压过 .mm-stage(1)。 */
+  position:absolute;left:var(--mm-foot-x,50%);top:50%;z-index:6;
+  transform:translate(-50%,-50%);
   text-align:center;padding:30px 34px;border-radius:26px;
   background:var(--glass);border:1px solid var(--bd);
   box-shadow:var(--shadow),inset 0 1px 0 var(--hi);
@@ -628,45 +617,15 @@ body.night .mm-floor{opacity:.3}
 .mm-hud-stat b{color:var(--ink);font-variant-numeric:tabular-nums}
 .mm-hud-stat span{width:6px;height:6px;border-radius:50%;background:var(--accent-primary)}
 
-/* HUD 中段：统计条 + 展区分页并排，共用一条基线 */
+/* HUD 中段：只剩统计条了（分页器第六轮已删，见下） */
 .mm-hud-mid{display:flex;align-items:center;gap:10px;min-width:0}
 
-/* —— 展区分页（第三阶段补丁）：一首歌 = 一张唱片，一页放不下才出现 ——
-   颜色全部走主题变量，五套主题 + 夜间自动跟随（不另起一套皮肤）。
-   .hidden 的选择器必须写在后面，否则 display:flex 会压过 [hidden]。 */
-.mm-pager{
-  position:relative;
-  display:flex;align-items:center;gap:2px;padding:3px 5px;
-  border-radius:999px;
-  background:var(--glass);border:1px solid var(--bd);
-  box-shadow:inset 0 1px 0 var(--hi);
-  backdrop-filter:blur(16px) saturate(1.4);
-  -webkit-backdrop-filter:blur(16px) saturate(1.4);
-}
-.mm-pager[hidden]{display:none}
-.mm-page-btn{
-  width:24px;height:24px;padding:0;border-radius:50%;
-  display:grid;place-items:center;cursor:pointer;
-  background:transparent;border:1px solid transparent;
-  color:var(--muted);font:inherit;font-size:14px;line-height:1;font-weight:900;
-  transition:background .2s,color .2s,border-color .2s;
-}
-.mm-page-btn:hover:not(:disabled){background:var(--glass-h);color:var(--accent-primary);border-color:var(--bd-2)}
-.mm-page-btn:focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px}
-.mm-page-btn:disabled{opacity:.32;cursor:default}
-.mm-pager b{
-  min-width:40px;text-align:center;
-  font-size:10.5px;letter-spacing:.1em;color:var(--ink);
-  font-variant-numeric:tabular-nums;
-}
-/* 「正在播的那张不在这一页」→ 分页器角上点一颗强调色小圆点，
-   免得人以为「歌没了」。有它比多一行文案省地方。 */
-.mm-pager.has-playing:after{
-  content:"";position:absolute;right:-2px;top:-2px;
-  width:7px;height:7px;border-radius:50%;
-  background:var(--accent-primary);
-  box-shadow:0 0 8px var(--accent-glow);
-}
+/* ⚠️ 展区分页器（.mm-pager / .mm-page-btn / .mm-pager.has-playing:after）
+   第六轮**整块删除**。为什么不保留成「隐藏」：
+     分页和无限循环是两套互相否定的浏览模型 —— 留着 DOM 就等于留着一份
+     可以被误触发的第二真相（历史上 .mm-pager[hidden] 那条就是为了压
+     display:flex 才补的）。既然「生产 UI 不再分页」，DOM 也一并撤掉。
+   现在 HUD 中段只有「统计条」，右侧是退出按钮。 */
 
 /* 退出按钮：跟顶栏 .dock-btn 一个手感（收起是图标，悬停展开文字） */
 .mm-exit{
@@ -692,8 +651,17 @@ body.night .mm-floor{opacity:.3}
    制造「夜间专属样式」这种需要同步维护的第二真相（需求第六条明确不要）。 */
 
 /* 底部提示条 */
+/* ⚠️ 第六轮：底部提示条要**对准左侧扇形**居中，而不是整页居中 ——
+   右侧那一列（--mm-rail-x 之后）是档案轨，提示条压上去会挡内容。
+   ⚠️ 位置全部由 JS 写（--mm-foot-x / --mm-foot-b）：桌面是 railX/2，
+      窄屏是 w/2（那时没有左右分栏）。这样「提示条在哪儿」和
+      「扇形占多宽」共用同一份数字，媒体查询里不需要再写一遍百分比。
+   ⚠️ 提示条不再随档案面板开合而淡出（原来那条 .mm-scene.has-sel .mm-foot
+      已删）：它现在待在左半屏、档案轨在右半屏，两者根本不会重叠，
+      而「滚轮只浏览不出声」这条最需要被看见的说明恰恰在提示条上。 */
 .mm-foot{
-  position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+  position:absolute;left:var(--mm-foot-x,50%);bottom:var(--mm-foot-b,22px);
+  transform:translateX(-50%);
   z-index:5;display:flex;align-items:center;gap:16px;
   padding:10px 20px;border-radius:999px;
   background:var(--glass);border:1px solid var(--bd);
@@ -780,74 +748,113 @@ body.museum-open{overflow:hidden}
   .mm-hud-brand small{display:none}
   .mm-foot{font-size:10px;padding:9px 15px;gap:11px;
     max-width:calc(100vw - 28px);overflow:hidden}
-  .mm-disc-label{min-width:96px;max-width:150px;padding:6px 10px}
-  .mm-disc-label b{font-size:11.5px}
-  /* 一页 6 张时三列并排，基准尺寸要收一档才不挤
-     （.mm-disc 的 width 走 var(--mm-size,168px)，这里只是换掉那个变量） */
-  .mm-disc{--mm-size:132px}
+  /* ⚠️ 窄屏**不再**在这里换 --mm-size / --mm-par-k：
+     尺寸是几何的一部分（JS 按 discSize() 写 --mm-size），视差整条链路已删。
+     写了就是没人读的死变量 —— 见项目铁律「声明了没进属性就是债」。 */
+
+  /* —— 窄屏版式：改成「上下」——
+     900px 以下右侧一列会把两边都挤扁（扇形只剩 40vw 宽，档案卡连封面列
+     都摆不下），所以：
+       上半屏 = 扇形   中间一道页脚提示   下半屏 = 档案轨
+     ⚠️ 这三段的高度**不是这里定的**：fanGeometry 的「竖向分区表」算出
+        railY / footB 写成 --mm-rail-y / --mm-foot-b，这里只是把轨道
+        从「右侧一列」改成「底部一块」并让出左右边距。
+        改高度请改 JS 那张表，别在 CSS 加数字 —— 两边各写一份必然漂移
+        （上一版就是这样：扇形按 h-126 排、轨道按 46vh 钉底，最下面那张
+         唱片滑到了档案卡底下）。 */
+  .mm-detail{
+    left:16px;right:16px;
+    top:var(--mm-rail-y,58vh);bottom:var(--mm-rail-b,10px);
+    grid-template-rows:auto auto;gap:10px;
+    overflow-y:auto;
+  }
+  .mm-archive,.mm-lyrics{max-width:none}
+  .mm-lyrics{min-height:128px}
 }
 @media (max-width:560px){
   .mm-load-dust{display:none}         /* 小屏别为装饰堆节点 */
   .mm-foot span:nth-child(2){display:none}
   /* —— 窄屏把「纵深走廊」收掉，只留唱片阵列 ——
      需求第九条：不要强行把桌面的复杂 2.5D 场景缩到手机。
-     做法（纯 CSS，不靠 JS 判设备）：
-       · 地面网格收掉（透视网格在窄屏会挤成一片噪点）
-       · 外层柔光收掉（小屏上它只是让字更难读）
-       · 视差幅度减半（--mm-par-k 由 JS 侧读不到，所以这里直接钳变量） */
+     地面网格在窄屏会挤成一片噪点，外层柔光只是让字更难读。 */
   .mm-floor{display:none}
   .mm-depth i:nth-child(1){opacity:.6}
   .mm-depth i:nth-child(3){display:none}
-  /* 视差总强度减半：--mm-par-k 只影响 --mm-depth-x/y 的最终乘法（见 .mm-disc），
-     JS 侧一行不改 —— 这是需求第九条「不要让手机端同样的视差幅度」的落点。
-     顺带把基准尺寸再收一档 + 一页只放 4 张（每页几张在 JS 的
-     computePerPage() 里，判据是同一个 560px）—— 小屏上 6 张会挤成一片。 */
-  .mm-disc{--mm-par-k:.45;--mm-size:104px}
-  /* 详情在窄屏几乎占满：去掉遮罩的模糊，省一次全屏合成 */
-  .mm-detail-scrim{backdrop-filter:none;-webkit-backdrop-filter:none}
   /* reduced-motion 之外，小屏也减一档：呼吸幅度小些，避免边缘来回闪 */
   .mm-disc.playing .mm-disc-plate:before{--mm-breathe:.4}
 }
 
 /* ============================================================
-   G. Music Archive Detail —— 唱片详情面板（第二阶段）
+   G. Music Archive Rail —— **右侧档案轨**（第六轮：从居中 modal 改成一列）
    ------------------------------------------------------------
-   「左封面 / 右档案」两栏，亚克力材质，属于 Rinsora 的视觉语言
-   （渐变小药丸、圆角 28、--glass + backdrop-filter + inset 高光），
-   不复制任何具体产品的 UI。
+   上 = MUSIC ARCHIVE（跟着扇形焦点变）
+   下 = LYRICS（歌词面板的预留位，这一阶段不实现，只把高度占住）
+   亚克力材质、圆角、--glass + backdrop-filter + inset 高光，仍是 Rinsora
+   的视觉语言，不复制任何具体产品的 UI。
 
    时序：.mm-detail 默认 opacity:0 / visibility:hidden / pointer-events:none
-         → 加 .on 才淡入。入场带 fade + translateY + blur（需求第七条）。
-   ⚠️ .mm-detail 是 .mm-scene 的子元素，而 .mm-scene 自己没有 transform
-      （只有 .mm-stage / .mm-floor 有局部 transform），所以这里用
-      absolute 铺满场景即可，不需要 fixed。
+         → 加 .on 才淡入。卡片入场带 fade + translateY + blur。
+
+   ⚠️ 几何全部来自 JS 写的版式契约（--mm-rail-x/-y/-b）：
+      桌面 = 右侧一列；窄屏由 @media 改成底部一块（左右各留 16px）。
+      这里**不写死 47% / 96px**，否则就和扇形几何脱钩了。
+   ⚠️ 遮罩（.mm-detail-scrim）**已删除**，别再写回来：
+      遮罩会挡住左侧扇形，而左侧恰恰是唯一的浏览入口（点击与滚轮都发生在
+      那儿）。它当年是为「modal」服务的 —— 既然不是 modal，正当性就没有了。
+   ⚠️ 面板卡片的入场动画（.mm-detail.on .mm-detail-card 那条）保留：
+      它是「收起 → 再展开」时的落点，不是每次换唱片都重播。
    ============================================================ */
 .mm-detail{
-  position:absolute;inset:0;z-index:20;
-  display:grid;place-items:center;
+  position:absolute;z-index:20;
+  left:var(--mm-rail-x,47%);right:3vw;
+  top:var(--mm-rail-y,96px);bottom:var(--mm-rail-b,78px);
+  display:grid;justify-items:start;
+  grid-template-rows:minmax(0,auto) minmax(132px,1fr);
+  gap:16px;
   opacity:0;visibility:hidden;pointer-events:none;
   transition:opacity .42s var(--ease),visibility .42s;
 }
 .mm-detail.on{opacity:1;visibility:visible;pointer-events:auto}
 
-/* 遮罩：点它 = 关闭档案。刻意做得很淡 —— 展厅本身还要看得见，
-   不然「其他唱片弱化」这件事就白做了。 */
-.mm-detail-scrim{
-  position:absolute;inset:0;
-  background:radial-gradient(circle at 50% 50%,transparent 8%,rgba(30,14,26,.34) 78%);
-  backdrop-filter:blur(2px);
-  -webkit-backdrop-filter:blur(2px);
+/* 档案卡在轨道里占满可用宽（上限 660px，太宽了正文行长会难读） */
+.mm-archive{width:100%;max-width:660px;align-self:start}
+
+/* —— 歌词面板：这一阶段**只留位置**（用户明确要求先不做歌词） ——
+   ⚠️ 为什么留位而不是干脆不渲染：
+      右侧这一列的高度现在就定下来，下一阶段接歌词时版式不用重排一遍
+      （高度一变，扇形几何的可用高度也跟着变，那是一次连锁改动）。
+   虚线边框是刻意的：一眼看出「这块还没长出来」，而不是以为它坏了。 */
+.mm-lyrics{
+  width:100%;max-width:660px;min-height:0;
+  display:flex;flex-direction:column;gap:10px;
+  padding:20px 22px;border-radius:26px;
+  background:var(--glass);border:1px dashed var(--bd);
+  box-shadow:inset 0 1px 0 var(--hi);
+  backdrop-filter:blur(var(--blur)) saturate(1.4);
+  -webkit-backdrop-filter:blur(var(--blur)) saturate(1.4);
+  overflow:hidden;
 }
-body.night .mm-detail-scrim{
-  background:radial-gradient(circle at 50% 50%,transparent 8%,rgba(0,0,0,.5) 78%);
+.mm-lyrics-kicker{margin:0;font-size:10px;letter-spacing:.24em;color:var(--muted)}
+.mm-lyrics-slot{
+  flex:1;min-height:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;text-align:center;
 }
+.mm-lyrics-slot p{margin:0;font-size:13px;color:var(--ink)}
+.mm-lyrics-slot small{font-size:11.5px;color:var(--muted);max-width:34ch;line-height:1.75}
+.mm-lyrics-dash{width:44px;height:2px;border-radius:2px;background:var(--bd-2)}
 
 .mm-detail-card{
   position:relative;z-index:1;
-  display:grid;grid-template-columns:238px 1fr;gap:30px;align-items:center;
-  width:min(720px,calc(100vw - 56px));
-  max-height:calc(100vh - 120px);
-  padding:34px 34px 30px;
+  /* ⚠️ 第六轮：卡片从「居中 modal 里的固定宽度」变成「填满轨道的那一列」。
+     封面列宽改成 clamp —— 轨道宽度只是视口的一半（1152px 屏上约 540px），
+     写死 238px 会把正文挤成两三个字一行。 */
+  display:grid;grid-template-columns:clamp(132px,30%,214px) 1fr;gap:26px;align-items:start;
+  width:100%;
+  max-height:100%;            /* 由轨道那一行的高度决定（.mm-detail 的 grid 行） */
+  min-height:0;
+  overflow-y:auto;
+  padding:26px 26px 24px;
   border-radius:30px;
   /* 亚克力四要素 */
   background:var(--glass);
@@ -1027,19 +1034,20 @@ body.night .mm-detail-play.is-blocked{background:var(--glass);color:var(--ink)}
 /* 详情面板的阴影走的是暖紫调 rgba(90,40,80,.28)，夜间偏暖会有点脏，
    换成 --shadow（夜间是 rgba(6,3,11,.46)）就干净了。 */
 body.night .mm-detail-card{box-shadow:var(--shadow),inset 0 1px 0 var(--hi)}
-body.night .mm-disc-label{box-shadow:0 12px 26px rgba(0,0,0,.4),inset 0 1px 0 var(--hi)}
 body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14)}
 
 /* ============================================================
    H. 响应式（第二阶段新增部分，接在原 D 节后面）
    ============================================================ */
-@media (max-width:900px){
-  /* 详情改成上下结构：左右两栏在窄屏会把封面压得太小 */
+/* ⚠️ 断点从 900px 收到 620px，因为版式变了：
+   900px 以下档案轨已经改成「下半屏一整块」，宽度接近整个视口，
+   这时候把封面列收掉反而浪费地方。真正需要单栏的是「轨道很窄」的场景 ——
+   620px 以下（轨道宽约 588px）两栏会把正文挤到不可读。 */
+@media (max-width:620px){
   .mm-detail-card{
-    grid-template-columns:1fr;gap:18px;
-    width:min(440px,calc(100vw - 32px));
-    padding:26px 22px 24px;
-    border-radius:26px;
+    grid-template-columns:1fr;gap:16px;
+    padding:22px 20px 20px;
+    border-radius:24px;
   }
   .mm-detail-art-wrap{width:min(190px,52vw);margin:0 auto}
   .mm-detail-title{font-size:24px;text-align:center}
@@ -1080,13 +1088,17 @@ body.night .mm-disc-plate{box-shadow:0 22px 44px rgba(0,0,0,.5),inset 0 1px 0 rg
   /* —— 第二阶段：动态效果全关 ——
      唱片不自转、hover 不做摆动、详情不做位移/模糊，只保留 opacity 的
      淡入淡出（「看不见」才是真的有问题，「不动」不是）。
-     视差由 JS 侧直接不启动（见 music-museum.js 的 startParallax）。 */
+     ⚠️ 第六轮已无「视差」这条链路（startParallax 整块删了）——
+        扇形位移是功能性导航，**不能**在这里关掉（关掉就不动了），
+        要减的是它的时长：见下面那条 transition-duration:.01ms。 */
   .mm-disc-plate{animation:none}
   .mm-disc:hover .mm-disc-plate,
   .mm-disc:focus-visible .mm-disc-plate{animation:none}
   .mm-detail-card{transform:none;filter:none}
   .mm-detail-art{animation:none}
-  .mm-disc,.mm-scene.has-sel .mm-disc{transition-duration:.01ms}
+  /* ⚠️ 只收唱片自己的过渡。扇形位移是 rAF 插值（不是 transition），
+     所以这条不会把「滚轮切曲」也冻住 —— 那是功能，不是装饰。 */
+  .mm-disc{transition-duration:.01ms}
   /* —— 第三阶段：播放相关的动效也收掉 ——
      不再有自转、转环、呼吸，只留「静态的强调色描边」表示正在播放。
      需求第十条：禁止高速旋转 / 大幅 zoom；用简单形态代替。
