@@ -93,7 +93,7 @@
           '</div>' +
         '</div>' +
         '<p class="mm-hint" id="mmHint">音频和封面会上传到 assets/music/，歌词直接写进 music-data.js。</p>' +
-        '<div class="mm-foot">' +
+        '<div class="mm-modal-foot">' +
           '<button type="button" class="mm-btn" id="mmCancel">取消</button>' +
           '<button type="button" class="mm-btn mm-primary" id="mmSave">保存并上传</button>' +
         '</div>' +

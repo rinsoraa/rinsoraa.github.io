@@ -32,7 +32,7 @@
 .section-heading small,.now-kicker{font-size:var(--fs-micro)}
 .now-label,.now-live,.recent-sub,.rc-kind,.rc-foot{font-size:12px}
 .rc-desc,.moment-date,.time-date,.time-foot,.time-top{font-size:12.5px}
-.blog-cat,.bm-cat,.bm-min,.bf-chip,.pt-count,.pt-foot,.pt-date{font-size:12px}
+.bm-cat,.bm-min,.bf-chip,.pt-count,.pt-foot,.pt-date{font-size:12px}
 .pt-tags span,.tag-row span,.project-tags span,.post-tags span{font-size:12px}
 .mp-times{font-size:11px}
 .mp-artist,.mp-track-a,.mp-track-no{font-size:11.5px}

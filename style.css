@@ -695,10 +695,7 @@ body.night .bf-chip{background:rgba(255,255,255,.07);color:#c6b2c2}
 body.night .bf-chip.active{color:#3b2531}
 .blog-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .blog-card{min-height:220px;padding:24px 24px 18px}
-.blog-index{position:absolute;right:18px;top:16px;font-size:46px;line-height:1;font-weight:1000;color:rgba(232,148,179,.12)}
 .blog-card .date{font-size:11px;color:#ac96a7;letter-spacing:.12em}
-.blog-cat{display:inline-flex;margin-left:8px;font-size:10px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.42);color:#ad859d}
-body.night .blog-cat{background:rgba(255,255,255,.1);color:#d6bccd}
 .blog-card h4{margin:20px 0 9px;max-width:90%;font-size:19px;line-height:1.45;letter-spacing:-.03em}
 /* ⚠️ 这里不能给 a 加 position:relative —— 下面那条 :after 是靠
    position:absolute;inset:0 把标题链铺满整张卡片的，一旦这个 a 自己
@@ -1091,7 +1088,10 @@ body.night .mm-field.mm-pick{background:rgba(255,255,255,.06);border-color:rgba(
 .mm-hint.err{color:#c9536f}
 .mm-hint.warn{color:#c08a3a}
 body.night .mm-hint.err{color:#f09bb1}
-.mm-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
+/* ⚠️ 这里叫 .mm-modal-foot 而不是 .mm-foot：music-museum.css 里博物馆的
+   底部提示条也叫 .mm-foot（position:absolute 的 pill），同名会互相覆盖，
+   把「取消 / 保存并上传」拉出文档流、盖到弹窗内容上。 */
+.mm-modal-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}
 .mm-btn{padding:10px 18px;border-radius:999px;font-size:13px;font-weight:900;border:1px solid rgba(213,180,199,.6);background:rgba(255,255,255,.8);color:#8c6f80;transition:transform .2s var(--ease),box-shadow .2s,background .2s}
 .mm-btn:hover{transform:translateY(-2px);background:#fff;box-shadow:0 10px 22px rgba(226,140,180,.2)}
 .mm-btn.mm-primary{color:#fff;border-color:transparent;background:linear-gradient(100deg,#ff94bc,#ffc46b);box-shadow:0 12px 26px rgba(245,145,177,.28)}
