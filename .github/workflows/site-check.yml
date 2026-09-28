@@ -1,0 +1,128 @@
+# 站点体检：不构建、不部署（GitHub Pages 自己会发），只在每次推送时
+# 把「手改一下就全站瘫痪」的那几个点自动查一遍。
+#
+# 查什么：
+#   1. 数据文件语法      —— music-data / projects / moments / music-museum-data
+#                           少个逗号就是全站 JS 连环挂，必须挡在 main 之前
+#   2. 所有 JS 语法      —— node --check
+#   3. 所有 HTML 能被解析 —— python html.parser 扫一遍（不校验内容，只求不炸）
+#   4. 文章卡片 ↔ 文件对应 —— index.html 里的每张卡片都有真实文件，
+#                           posts/ 里的每篇文章都在 sitemap 里
+#   5. sitemap/robots 完整 —— XML 合法、URL 不重复、robots 里有 Sitemap 行
+name: site-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: JS 语法检查
+        run: |
+          fail=0
+          for f in *.js; do
+            node --check "$f" || fail=1
+          done
+          exit $fail
+
+      - name: 数据文件形状检查
+        run: |
+          node -e '
+          const fs = require("fs");
+          const vm = require("vm");
+          const need = {
+            "music-data.js":        ["RINSORA_MUSIC",        o => Array.isArray(o.tracks)],
+            "projects-data.js":     ["RINSORA_PROJECTS",     o => Array.isArray(o.categories) && Array.isArray(o.items)],
+            "moments-data.js":      ["RINSORA_MOMENTS",      o => Array.isArray(o.items)],
+            "music-museum-data.js": ["RINSORA_MUSIC_MUSEUM", o => o && typeof o === "object"],
+          };
+          let bad = 0;
+          for (const [file, [key, shape]] of Object.entries(need)) {
+            const sandbox = { window: {} };   // 数据文件是 window.X = {...} 的形状
+            try {
+              vm.createContext(sandbox);
+              vm.runInContext(fs.readFileSync(file, "utf8"), sandbox);
+              const data = sandbox.window[key];
+              if (!data || !shape(data)) throw new Error("缺少 " + key + " 或形状不对");
+              console.log("OK  " + file);
+            } catch (e) {
+              console.log("BAD " + file + " : " + e.message);
+              bad = 1;
+            }
+          }
+          process.exit(bad);
+          '
+
+      - name: HTML 可解析检查
+        run: |
+          python3 - <<'PY'
+          import glob, sys
+          from html.parser import HTMLParser
+
+          bad = 0
+          for f in glob.glob("*.html") + glob.glob("posts/*.html"):
+              class P(HTMLParser):
+                  def error(self, msg):
+                      raise SyntaxError(msg)
+              try:
+                  P().feed(open(f, encoding="utf-8").read())
+                  print("OK ", f)
+              except Exception as e:
+                  print("BAD", f, e)
+                  bad = 1
+          sys.exit(bad)
+          PY
+
+      - name: 卡片 / sitemap 一致性
+        run: |
+          python3 - <<'PY'
+          import io, os, re, sys
+          bad = 0
+
+          index = io.open("index.html", encoding="utf-8").read()
+          cards = set(re.findall(r'href="(posts/[^"]+\.html)"', index))
+          files = {"posts/" + f for f in os.listdir("posts") if f.endswith(".html")}
+
+          missing = cards - files
+          for m in sorted(missing):
+              print("BAD 首页卡片指向不存在的文件:", m); bad = 1
+          print("OK  首页卡片 %d 张全部有对应文件" % len(cards))
+
+          sm = io.open("sitemap.xml", encoding="utf-8").read()
+          locs = re.findall(r"<loc>([^<]+)</loc>", sm)
+          if len(locs) != len(set(locs)):
+              print("BAD sitemap 有重复 URL"); bad = 1
+          posts_in_sm = {l.rsplit("/", 1)[-1] for l in locs if "/posts/" in l}
+          not_in_sm = {f.split("/")[1] for f in files} - posts_in_sm
+          for m in sorted(not_in_sm):
+              print("BAD 文章不在 sitemap 里:", m); bad = 1
+          stale = posts_in_sm - {f.split("/")[1] for f in files}
+          for m in sorted(stale):
+              print("BAD sitemap 收录了不存在的文章:", m); bad = 1
+          print("OK  sitemap %d 条，与 posts/ 双向一致" % len(locs))
+
+          robots = io.open("robots.txt", encoding="utf-8").read()
+          if "sitemap.xml" not in robots.lower():
+              print("BAD robots.txt 里没有 Sitemap 行"); bad = 1
+          else:
+              print("OK  robots.txt 指向 sitemap")
+
+          import xml.dom.minidom
+          xml.dom.minidom.parseString(sm)
+          print("OK  sitemap 是合法 XML")
+          sys.exit(bad)
+          PY

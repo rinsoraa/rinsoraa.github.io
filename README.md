@@ -51,18 +51,25 @@ rinsora-home/                  ← 就是仓库根
 ├── music.js                   播放器引擎 + 列表 + 歌词栏（两个播放器实例共用）
 ├── music-upload.js            「＋ 添加音乐」弹窗（写 assets/music/ + music-data.js）
 ├── music-museum.js            音乐博物馆场景（进馆 / 左侧扇形唱片导航 / 滚轮选择 / 右侧档案轨）
+│                              ⚠️ 与 music-museum.css / music-museum-data.js 一起是
+│                              **按需加载**的：index.html 里没有它们的标签，首次进馆时
+│                              由 script.js 的 loadMuseum() 动态注入（首屏省 ~200KB 源码）
 ├── projects.js                项目树渲染 + 管理 UI；暴露 window.RinsoraProjects
 ├── blog-admin.js              首页卡片上的编辑 / 删除按钮，以及写作台入口
-├── gh-api.js                  GitHub Contents API 封装（读 / 写 / 删 / 传二进制）
+├── gh-api.js                  GitHub Contents API 封装（读 / 写 / 删 / 传二进制；409 自动重试）
 │
 │   ── 后台页面 ──
 ├── editor.html / editor.css / editor.js        写作台：写 Markdown → 生成文章页 + 首页卡片
+│                                              （localStorage 存未保存草稿；链接协议白名单）
 ├── project-editor.html / project-editor.js     项目编辑台：表单式增删改 projects-data.js
-├── new-post.py / new-post.cmd                  本地命令行版写作（Windows 可双击）
+├── new-post.py / new-post.cmd                  本地命令行版写作（Windows 可双击；同步 sitemap）
 │
 ├── posts/                     文章页（*.html）+ post.css（文章页专属样式）
-├── assets/                    avatar.png、blog/（文章配图）、music/（音频与封面）
+├── assets/                    avatar.png（512×512）、site-card.png（og 分享图）、
+│                              blog/（文章配图）、music/（音频与封面）
 ├── music/                     早期示例音频与 LRC
+├── sitemap.xml / robots.txt   搜索引擎收录（写作台 / new-post.py 发布时自动维护）
+├── .github/workflows/site-check.yml   CI：数据文件语法 / JS 语法 / 卡片↔文件↔sitemap 一致性
 ├── favicon.ico / favicon-32.png / apple-touch-icon.png
 └── README.md
 ```
@@ -439,9 +446,16 @@ x = cx + rx·cos(theta)       y = cy + ry·sin(theta)
 
 ### 换头像
 
-替换 `assets/avatar.png`，然后同步重导浏览器图标：
+替换 `assets/avatar.png`（当前为 512×512，欢迎页按 145px 显示， retina 屏也够用），然后同步重导浏览器图标：
 `favicon.ico`（16 / 32 / 48 三帧）、`favicon-32.png`、`apple-touch-icon.png`（180×180，iOS 不支持透明，需合成浅色底）。
 像素风缩放一律用最近邻插值。
+
+### 搜索引擎收录
+
+- `sitemap.xml` + `robots.txt` 在仓库根。**写作台保存 / 删除文章时会自动同步**（追加 / 刷新 / 移除对应条目，失败不阻塞保存本身）；`new-post.py` 同样会写。
+- 手动发文章（直接改文件）的话记得自己在 `sitemap.xml` 里补一行。
+- 文章页和首页都带 `application/ld+json`（BlogPosting / WebSite 结构化数据），og:image 用 `assets/site-card.png`（1200×630 分享卡）。
+- 首次接入：到 Google Search Console 提交 `https://rinsora.dpdns.org/sitemap.xml`。
 
 ---
 
@@ -453,6 +467,9 @@ x = cx + rx·cos(theta)       y = cy + ry·sin(theta)
 - `.nojekyll` 必须保留，否则 Jekyll 会忽略下划线开头的文件
 - 外链分享卡片用到的 `og:url` / `og:image` **必须写绝对地址**，相对路径在 QQ / 微信里抓不到图
 - 建议在仓库 `Settings → Pages` 里勾上 **Enforce HTTPS**
+- 每次推送到 main，`.github/workflows/site-check.yml` 会自动跑一遍体检：
+  四个数据文件的语法与形状、全部 JS 的语法、HTML 可解析性、
+  首页卡片 ↔ posts/ 文件 ↔ sitemap 的三方一致性。红灯别忽略。
 
 ```bash
 git add .
@@ -478,3 +495,13 @@ git push
   `RinsoraMusic.playIndex()`，不新建播放器、不改 `src`）；② 退出展厅只能走宿主注入的
   `exitMuseum()`（别在博物馆里自己收尾）；③ 唱片摆位必须确定性（用 `hash(id)`，**不能用
   `Math.random`**，否则每次刷新角度都变）。
+- **博物馆是懒加载的**：`music-museum.css / -data.js / .js` 不在 `index.html` 里，
+  首次进馆时由 `script.js` 的 `loadMuseum()` 注入（失败自动放行重试）。
+  改文件名 / 加依赖时记得同步改 `loadMuseum()`；`onExitRequest(exitMuseum)` 的
+  注册时机也在它里面。
+- **开屏进度条吃真实加载**（`window.load` 之前最多爬到 90%），并且**同一会话只放一次**：
+  完整看过一次后 `sessionStorage.rinsora-booted` 会记一笔，之后的导航直接落欢迎页
+  （`#about` 等 hash 直达的老逻辑不变）。想再看出屏，清掉 sessionStorage 或开无痕窗口。
+- **写作台草稿**：表单输入 600ms 防抖写进 `localStorage.rinsora-editor-draft`，
+  保存成功 / 「新建」会清掉；下次进来只在同一篇的上下文里提示恢复。
+  里面只存正文与元信息，绝不存 Token。

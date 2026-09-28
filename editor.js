@@ -64,6 +64,16 @@
 
   var CJK = /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]/;
 
+  /* 链接 / 图片地址白名单：带协议的只放行 http(s) 和 mailto，
+     其余一律当站内相对地址放行。堵住 [文字](javascript:…) 这类注入 ——
+     单人写作风险很低，但这一行很便宜。 */
+  function safeUrl(u) {
+    var s = String(u || '').trim();
+    var m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s);
+    if (!m) return s;
+    return /^(https?|mailto)$/i.test(m[1]) ? s : '#';
+  }
+
   function inline(t) {
     t = esc(t);
     var codes = [];
@@ -71,8 +81,12 @@
       codes.push(c);
       return '\u0000' + (codes.length - 1) + '\u0000';
     });
-    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img src="$2" alt="$1">');
-    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (_, alt, src) {
+      return '<img src="' + safeUrl(src) + '" alt="' + alt + '">';
+    });
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, txt, href) {
+      return '<a href="' + safeUrl(href) + '">' + txt + '</a>';
+    });
     t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     t = t.replace(/(?<![*\w])\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
     t = t.replace(/\u0000(\d+)\u0000/g, function (_, i) { return '<code>' + codes[+i] + '</code>'; });
@@ -238,8 +252,16 @@
     '  <meta property="og:title" content="__TITLE__ \u00b7 \u7a7a\u51db \u00b7 Rinsora \u7684\u5c0f\u7a9d">',
     '  <meta property="og:description" content="__SUMMARY__">',
     '  <meta property="og:url" content="__URL__">',
-    '  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">',
+    '  <meta property="og:image" content="' + SITE + '/assets/site-card.png">',
     '  <meta name="twitter:card" content="summary_large_image">',
+    '  <script type="application/ld+json">',
+    '  {"@context":"https://schema.org","@type":"BlogPosting",',
+    '   "headline":"__TITLE__","description":"__SUMMARY__",',
+    '   "datePublished":"__DATE_ISO__","inLanguage":"zh-CN",',
+    '   "mainEntityOfPage":"__URL__",',
+    '   "image":"' + SITE + '/assets/site-card.png",',
+    '   "author":{"@type":"Person","name":"空凛 · Rinsora","url":"' + SITE + '/"}}',
+    '  </' + 'script>',
     '  <link rel="icon" href="../favicon.ico" sizes="any">',
     '  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">',
     '  <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">',
@@ -343,9 +365,16 @@
       .replace('__URL__', SITE + '/posts/' + f.slug + '.html')
       .replace('__KICKER__', esc(f.kicker))
       .replace('__DATE__', esc(f.date))
+      .replace('__DATE_ISO__', esc(isoDate(f.date)))
       .replace('__READING__', readingTime(f.md))
       .replace('__BODY__', mdToHtml(f.md))
       .replace('__TAGS__', tags);
+  }
+
+  /* 站内日期 2026.09.21 → JSON-LD 要的 ISO 形状 2026-09-21（解析不了就原样返回） */
+  function isoDate(d) {
+    var m = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(String(d || '').trim());
+    return m ? m[1] + '-' + m[2] + '-' + m[3] : String(d || '');
   }
 
   /* \u5206\u7c7b = kicker \u659c\u6760\u540e\u9762\u90a3\u4e00\u6bb5(BLOG / \u5de5\u4f5c\u6d41 -> \u5de5\u4f5c\u6d41)
@@ -556,6 +585,7 @@
     el.kicker.value = 'BLOG / \u968f\u7b14';
     el.summary.value = ''; el.tags.value = '';
     el.body.value = '';
+    clearDraft();
     setMode(false);
     say('\u65b0\u6587\u7ae0\u3002\u5199\u5b8c\u70b9\u201c\u4fdd\u5b58\u5e76\u53d1\u5e03\u201d\u3002');
     switchTab('write');
@@ -565,7 +595,7 @@
 
   function openPost(slug) {
     say('\u8bfb\u53d6 posts/' + slug + '.html \u2026', 'busy');
-    GH.getFile('posts/' + slug + '.html').then(function (f) {
+    return GH.getFile('posts/' + slug + '.html').then(function (f) {
       if (!f) throw new Error('\u627e\u4e0d\u5230\u8fd9\u7bc7\u6587\u7ae0');
       var p = parsePost(f.text);
       state.slug = slug; state.existing = f.sha;
@@ -586,6 +616,63 @@
       say('\u6253\u5f00\u5931\u8d25\uff1a' + e.message, 'err');
     });
   }
+
+  /* ====================================================== 草稿 ====
+     localStorage 里留一份未保存的表单（防刷新 / 手滑关页）。
+     规则：输入停 600ms 就写一次；「新建」和保存成功都会清掉；
+     下次进来只在「同一篇」的上下文里还原，且先问一句。 */
+  var DRAFT_KEY = 'rinsora-editor-draft';
+  var draftTimer = null;
+  var draftDirty = false;
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        slug: state.slug,
+        title: el.title.value, file: el.slug.value, date: el.date.value,
+        kicker: el.kicker.value, summary: el.summary.value,
+        tags: el.tags.value, body: el.body.value,
+        savedAt: Date.now()
+      }));
+    } catch (e) {}
+  }
+
+  function scheduleDraft() {
+    draftDirty = true;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 600);
+  }
+
+  function clearDraft() {
+    draftDirty = false;
+    clearTimeout(draftTimer);
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  }
+
+  function tryRestoreDraft(expectSlug) {
+    var raw;
+    try { raw = localStorage.getItem(DRAFT_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var d;
+    try { d = JSON.parse(raw); } catch (e) { clearDraft(); return; }
+    if (!d) return;
+    if (expectSlug ? String(d.slug || '') !== expectSlug : !!d.slug) return;   // 不是这一篇的草稿
+    if (!String(d.body || '').trim() && !String(d.title || '').trim()) return; // 空表单不算草稿
+
+    var min = Math.max(1, Math.round((Date.now() - (d.savedAt || 0)) / 60000));
+    if (!w.confirm('发现 ' + min + ' 分钟前未保存的草稿《' + (d.title || '无标题') + '》，恢复到编辑器吗？')) return;
+    el.title.value = d.title || '';
+    el.slug.value = d.file || '';
+    el.date.value = d.date || today();
+    el.kicker.value = d.kicker || 'BLOG / \u968f\u7b14';
+    el.summary.value = d.summary || '';
+    el.tags.value = d.tags || '';
+    el.body.value = d.body || '';
+    draftDirty = true;
+    say('\u8349\u7a3f\u5df2\u6062\u590d\uff08\u8fd8\u6ca1\u63d0\u4ea4\u5230 GitHub\uff0c\u8bb0\u5f97\u4fdd\u5b58\uff09\u3002');
+  }
+
+  w.addEventListener('pagehide', function () { if (draftDirty) saveDraft(); });
 
   /* ====================================================== 保存 ==== */
 
@@ -622,6 +709,24 @@
     };
   }
 
+  /* sitemap.xml 同步：这篇的 URL 已在就刷新那一行，不在就补一行。
+     只认「整行 <url>…</url>」的形状（我们自己生成的格式）。 */
+  function syncSitemap(f) {
+    return GH.getFile('sitemap.xml').then(function (sm) {
+      if (!sm) return null;
+      var loc = SITE + '/posts/' + f.slug + '.html';
+      var line = '  <url><loc>' + loc + '</loc><lastmod>' + isoDate(f.date) + '</lastmod></url>';
+      var found = false;
+      var text = sm.text.split('\n').map(function (l) {
+        if (l.indexOf('<loc>' + loc + '</loc>') !== -1) { found = true; return line; }
+        return l;
+      }).join('\n');
+      if (!found) text = sm.text.replace('</urlset>', line + '\n</urlset>');
+      if (text === sm.text) return null;
+      return GH.putFile('sitemap.xml', text, '\u66f4\u65b0 sitemap\uff1a' + f.title, sm.sha);
+    });
+  }
+
   function save() {
     var f;
     try { f = collect(); }
@@ -649,9 +754,14 @@
       if (next === idx.text) return null;
       return GH.putFile('index.html', next, '\u66f4\u65b0\u9996\u9875\u5361\u7247\uff1a' + f.title, idx.sha);
     }).then(function () {
+      /* sitemap.xml 跟着补一条 / 刷新 lastmod。它只是补充数据，
+         失败不该把整次保存判成失败 —— 所以这里自己吞掉。 */
+      return syncSitemap(f).catch(function () { return null; });
+    }).then(function () {
       state.slug = f.slug;
       setMode(true);
       el.slug.value = f.slug;
+      clearDraft();
       if (w.history && w.history.replaceState) {
         w.history.replaceState(null, '', 'editor.html?edit=' + encodeURIComponent(f.slug));
       }
@@ -689,6 +799,16 @@
       if (next === idx.text) return null;
       return GH.putFile('index.html', next, '\u79fb\u9664\u9996\u9875\u5361\u7247\uff1a' + title, idx.sha);
     }).then(function () {
+      /* sitemap.xml 里也剔掉这一篇（失败不阻塞删除流程） */
+      return GH.getFile('sitemap.xml').then(function (sm) {
+        if (!sm) return null;
+        var next = sm.text.split('\n').filter(function (l) {
+          return l.indexOf('/posts/' + slug + '.html') === -1;
+        }).join('\n');
+        if (next === sm.text) return null;
+        return GH.putFile('sitemap.xml', next, '\u66f4\u65b0 sitemap\uff1a\u79fb\u9664 ' + slug, sm.sha);
+      }).catch(function () { return null; });
+    }).then(function () {
       toast('\u5df2\u5220\u9664\u3002\u5927\u7ea6 1 \u5206\u949f\u540e\u7ebf\u4e0a\u751f\u6548\u3002', 'ok');
       say('\u5df2\u5220\u9664 ' + slug + '\u3002', 'ok');
       newPost();
@@ -721,6 +841,7 @@
     } else {
       ta.value = ta.value.slice(0, s) + text + ta.value.slice(e);
     }
+    scheduleDraft();               /* setRangeText 不触发 input 事件，手动记账 */
     ta.focus();
   }
 
@@ -782,6 +903,7 @@
     var sel = ta.value.slice(s, e) || ph || '';
     var text = before + sel + after;
     ta.setRangeText(text, s, e, 'end');
+    scheduleDraft();               /* 同上：不触发 input 事件 */
     ta.focus();
     ta.setSelectionRange(s + before.length, s + before.length + sel.length);
   }
@@ -791,6 +913,7 @@
     var s = ta.selectionStart;
     var head = ta.value.lastIndexOf('\n', s - 1) + 1;
     ta.setRangeText(prefix, head, head, 'end');
+    scheduleDraft();
     ta.focus();
   }
 
@@ -878,6 +1001,12 @@
         if (!el.btnSave.disabled) save();
       }
     });
+
+    /* 草稿自动保存：表单里任何一个字段动了就记一笔（600ms 防抖） */
+    [el.title, el.slug, el.date, el.kicker, el.summary, el.tags, el.body]
+      .forEach(function (input) {
+        input.addEventListener('input', scheduleDraft);
+      });
   }
 
   /* ====================================================== 启动 ==== */
@@ -889,10 +1018,15 @@
 
   var m = /[?&]edit=([^&]+)/.exec(w.location.search);
   if (m && GH.hasToken()) {
-    openPost(decodeURIComponent(m[1]));
-  } else if (!GH.hasToken()) {
-    showSetup(true);
-    say('\u5148\u586b\u4e0a Token\uff0c\u7136\u540e\u5c31\u80fd\u5728\u8fd9\u91cc\u5199\u4e1c\u897f\u4e86\u3002');
+    /* 打开这篇文章之后再看草稿：草稿只拦「同一篇」的，别把别的文章的残稿灌进来 */
+    openPost(decodeURIComponent(m[1])).then(function () { tryRestoreDraft(decodeURIComponent(m[1])); })
+      .catch(function () { tryRestoreDraft(decodeURIComponent(m[1])); });
+  } else {
+    tryRestoreDraft('');            /* 新建上下文：只收「无 slug」的新文章草稿 */
+    if (!GH.hasToken()) {
+      showSetup(true);
+      say('\u5148\u586b\u4e0a Token\uff0c\u7136\u540e\u5c31\u80fd\u5728\u8fd9\u91cc\u5199\u4e1c\u897f\u4e86\u3002');
+    }
   }
   /* 暴露出来，方便在控制台调试或做回归测试 */
   w.RinsoraEditor = {

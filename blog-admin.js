@@ -75,6 +75,17 @@
       if (next === idx.text) return null;          // 卡片本来就没写进首页
       return w.GH.putFile('index.html', next, '移除首页卡片：' + title, idx.sha);
     }).then(function () {
+      /* sitemap.xml 里也剔掉这一篇（写作台删除走的是同一套；
+         失败不阻塞删除本身，所以自己吞掉） */
+      return w.GH.getFile('sitemap.xml').then(function (sm) {
+        if (!sm) return null;
+        var next = sm.text.split('\n').filter(function (l) {
+          return l.indexOf('/posts/' + slug + '.html') === -1;
+        }).join('\n');
+        if (next === sm.text) return null;
+        return w.GH.putFile('sitemap.xml', next, '更新 sitemap：移除 ' + slug, sm.sha);
+      }).catch(function () { return null; });
+    }).then(function () {
       card.classList.add('card-removing');
       setTimeout(function () { card.remove(); }, 340);
       toast('已删除。GitHub Pages 大约 1 分钟后更新线上页面。', 'ok');

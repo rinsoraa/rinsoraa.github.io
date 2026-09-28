@@ -121,28 +121,45 @@
   };
 
   /* ---------------------------------------------------- 开屏 ---- */
+  /* 进度条现在吃**真实加载**：资源没就绪（window load 没到）之前最多爬到 90%，
+     load 事件到了才放行到 100%。快网络下这段就是「最短仪式感」（BOOT_MIN_MS），
+     慢网络下它如实反映加载，不再是与加载无关的假进度。
+     回访（本会话里已经看过一次开屏，head 内联脚本在首帧就挂了 .no-boot）
+     和直达分栏的访客整段跳过 —— 见下面的 skipBoot 分支。 */
   let bootPct = 0;
+  const BOOT_MIN_MS = 700;
+  const nowMs = () => (window.performance && performance.now ? performance.now() : Date.now());
+  const bootT0 = nowMs();
+  let bootLoaded = document.readyState === 'complete';
+  if (!bootLoaded) window.addEventListener('load', () => { bootLoaded = true; });
+
   const bootTimer = setInterval(() => {
-    bootPct = Math.min(100, bootPct + (bootPct < 70 ? 9 : 5));
+    let next = bootPct + (bootPct < 70 ? 9 : 5);
+    if (!bootLoaded || nowMs() - bootT0 < BOOT_MIN_MS) next = Math.min(next, 90);
+    bootPct = Math.min(100, next);
     const bar = $('#bootProgress'), pct = $('#bootPercent');
     if (bar) bar.style.width = bootPct + '%';
     if (pct) pct.textContent = bootPct + '%';
     if (bootPct >= 100) {
       clearInterval(bootTimer);
+      try { sessionStorage.setItem('rinsora-booted', '1'); } catch (e) {}
       setTimeout(() => boot && boot.classList.add('done'), 260);
     }
   }, 70);
 
   /* 走直达链接（#about / #blog / #projects / #moments）进来时，开屏整段跳过：
      停掉进度计时器 + 关掉过渡 + 立刻按掉。CSS 的 .no-boot 负责兜住第一帧，
-     这里负责把还在跑的计时器收掉，免得它在后台把进度条推到 100%。 */
+     这里负责把还在跑的计时器收掉，免得它在后台把进度条推到 100%。
+     回访跳过也走这里：head 里已经把 .no-boot 挂上了，这趟只需要收尾。 */
   function skipBoot() {
     clearInterval(bootTimer);
+    try { sessionStorage.setItem('rinsora-booted', '1'); } catch (e) {}
     if (!boot) return;
     boot.style.transition = 'none';
     boot.classList.add('done');
     setTimeout(() => { boot.style.display = 'none'; }, 20);
   }
+  if (document.documentElement.classList.contains('no-boot')) skipBoot();
 
   /* ============================================================
      initTheme —— 主题引擎
@@ -845,11 +862,55 @@
           所以「小窝淡出」走的是**改子元素**（.side-rail / .content），
           不是给 .app 本身加 filter。
        ③ **不换文档**。这是站内浮层，location.href 一换 <audio> 就随旧文档销毁。
+
+     场景层（music-museum.css / music-museum-data.js / music-museum.js，
+     共 ~200KB 源码）是**按需加载**的：index.html 里不再放这三个标签，
+     首次进馆时由 loadMuseum() 注入。它的选择器全部圈在 .mm-* /
+     body.museum-open 里，晚到的 CSS 不影响主页面的任何样式；
+     music-museum.js 自己也兼容「DOMContentLoaded 之后才执行」。
      ============================================================ */
+  let museumLoading = null;
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('加载失败：' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadMuseum() {
+    if (window.RinsoraMuseum) return Promise.resolve(true);
+    if (!museumLoading) {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'music-museum.css';
+      document.head.appendChild(css);          /* CSS 先上场，场景 DOM 出现时样式已经在 */
+      museumLoading = loadScript('music-museum-data.js')
+        .then(() => loadScript('music-museum.js'))
+        .then(() => {
+          /* 「退出展厅」必须由宿主关（见下面 exitMuseum 的注释）。
+             museum 是懒加载的，注册时机跟着搬到加载完成这里。 */
+          if (window.RinsoraMuseum && window.RinsoraMuseum.onExitRequest) {
+            window.RinsoraMuseum.onExitRequest(exitMuseum);
+          }
+          return true;
+        });
+      museumLoading.catch(() => { museumLoading = null; });   /* 失败允许重试 */
+    }
+    return museumLoading;
+  }
+
   function enterMuseum(opts) {
     const o = opts || {};
+    if (!window.RinsoraMuseum) {
+      /* 首次进馆：先把场景层拉下来再开门。失败就安静退场，
+         别把 body.museum-open 留在半路（此时还没挂上，正好）。 */
+      return loadMuseum().then(() => enterMuseum(o)).catch(() => false);
+    }
     const M = window.RinsoraMuseum;
-    if (!M) return Promise.resolve(false);
 
     closeNav(true);                 /* 导航先收，别压在加载层上 */
     hidePost();                     /* 文章浮层让位 */
@@ -904,11 +965,8 @@
        Esc 之所以一直正常，正因为那次按键走的就是 exitMuseum()。
 
        所以让展厅**请宿主来关**（onExitRequest），而不是自己关一半。
-       ⚠️ 注册要在 M 存在的前提下（music-museum.js 在 index.html 里
-          先于本文件加载，所以这里必然已经挂上）。 */
-  if (window.RinsoraMuseum && window.RinsoraMuseum.onExitRequest) {
-    window.RinsoraMuseum.onExitRequest(exitMuseum);
-  }
+       注册时机在 loadMuseum() 里 —— 博客场景层是懒加载的，
+       加载完成的那一刻就把这根线接上。 */
 
   /* ============================================================
      站内打开文章 —— 内容换掉，文档不换

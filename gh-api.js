@@ -126,24 +126,40 @@
     });
   }
 
+  /* --- 409 冲突重试：文件刚刚被别处动过（比如上一次提交还没落定），
+         重读一次拿最新 sha 再试一遍。只重试一次，避免无限循环。 --- */
+  function retryOnConflict(path, e, fn) {
+    if (e.status !== 409 || !path) throw e;
+    return getFile(path).then(function (f) {
+      if (!f) throw e;                       // 文件没了（被删）——原样抛出
+      return fn(f.sha);
+    });
+  }
+
   /* --- 写文本文件：sha 为空表示新建 --- */
   function putFile(path, text, message, sha) {
     var cfg = loadCfg();
-    var body = { message: message, content: b64encode(text), branch: cfg.branch };
-    if (sha) body.sha = sha;
     var url = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/' +
       String(path).split('/').map(encodeURIComponent).join('/');
-    return request(url, { method: 'PUT', body: body });
+    function doPut(useSha) {
+      var body = { message: message, content: b64encode(text), branch: cfg.branch };
+      if (useSha) body.sha = useSha;
+      return request(url, { method: 'PUT', body: body });
+    }
+    return doPut(sha).catch(function (e) { return retryOnConflict(path, e, doPut); });
   }
 
   /* --- 上传二进制（图片） --- */
   function putBinary(path, arrayBuffer, message, sha) {
     var cfg = loadCfg();
-    var body = { message: message, content: bufToB64(arrayBuffer), branch: cfg.branch };
-    if (sha) body.sha = sha;
     var url = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/' +
       String(path).split('/').map(encodeURIComponent).join('/');
-    return request(url, { method: 'PUT', body: body });
+    function doPut(useSha) {
+      var body = { message: message, content: bufToB64(arrayBuffer), branch: cfg.branch };
+      if (useSha) body.sha = useSha;
+      return request(url, { method: 'PUT', body: body });
+    }
+    return doPut(sha).catch(function (e) { return retryOnConflict(path, e, doPut); });
   }
 
   /* --- 删文件 --- */
@@ -151,7 +167,10 @@
     var cfg = loadCfg();
     var url = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/' +
       String(path).split('/').map(encodeURIComponent).join('/');
-    return request(url, { method: 'DELETE', body: { message: message, sha: sha, branch: cfg.branch } });
+    function doDel(useSha) {
+      return request(url, { method: 'DELETE', body: { message: message, sha: useSha, branch: cfg.branch } });
+    }
+    return doDel(sha).catch(function (e) { return retryOnConflict(path, e, doDel); });
   }
 
   /* --- 列目录 --- */

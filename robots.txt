@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# 写作台 / 项目编辑台是作者自用的工具页，不用进索引
+Disallow: /editor.html
+Disallow: /project-editor.html
+
+Sitemap: https://rinsora.dpdns.org/sitemap.xml

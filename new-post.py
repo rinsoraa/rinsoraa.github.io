@@ -330,6 +330,30 @@ def update_index(slug, title, date, summary, cat="随笔", minutes=1, dry=False)
     return True
 
 
+# ------------------------------------------------------------ sitemap ----
+
+SITEMAP = os.path.join(ROOT, "sitemap.xml")
+
+
+def update_sitemap(slug, date, dry=False):
+    """把这篇的 URL 补进 sitemap.xml（已存在就刷新 lastmod）。"""
+    if not os.path.exists(SITEMAP):
+        return False
+    s = io.open(SITEMAP, encoding="utf-8").read()
+    loc = "%s/posts/%s.html" % (SITE, slug)
+    line = "  <url><loc>%s</loc><lastmod>%s</lastmod></url>" % (loc, date.replace(".", "-"))
+    if loc in s:
+        s_new = "\n".join(line if ("<loc>%s</loc>" % loc) in l else l
+                          for l in s.split("\n"))
+    else:
+        s_new = s.replace("</urlset>", line + "\n</urlset>")
+    if s_new == s:
+        return False
+    if not dry:
+        io.open(SITEMAP, "w", encoding="utf-8", newline="\n").write(s_new)
+    return True
+
+
 # ---------------------------------------------------------------- 交互 ----
 
 
@@ -467,6 +491,9 @@ def main():
 
     if update_index(slug, title, date, summary, cat, minutes):
         print("  \u5df2\u66f4\u65b0 index.html \u7684\u535a\u5ba2\u5217\u8868\uff08\u6309\u65e5\u671f\u5012\u5e8f\uff09")
+
+    if update_sitemap(slug, date):
+        print("  \u5df2\u66f4\u65b0 sitemap.xml")
 
     print()
     if not md:

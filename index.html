@@ -14,20 +14,22 @@
   <meta property="og:title" content="空凛 · Rinsora 的小窝">
   <meta property="og:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
   <meta property="og:url" content="https://rinsora.dpdns.org/">
-  <meta property="og:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+  <meta property="og:image" content="https://rinsora.dpdns.org/assets/site-card.png">
   <meta property="og:locale" content="zh_CN">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="空凛 · Rinsora 的小窝">
   <meta name="twitter:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
-  <meta name="twitter:image" content="https://rinsora.dpdns.org/apple-touch-icon.png">
+  <meta name="twitter:image" content="https://rinsora.dpdns.org/assets/site-card.png">
   <title>空凛 · Rinsora 的小窝</title>
   <link rel="stylesheet" href="style.css">
   <!-- V3 组件 / 动画层：必须排在 style.css 之后（同名选择器靠后写者胜） -->
   <link rel="stylesheet" href="v3.css">
   <!-- 文章排版：真实文章页用它，首页点进文章时的 #spaPost 浮层也复用它 -->
   <link rel="stylesheet" href="posts/post.css">
-  <!-- 音乐博物馆场景层（加载层 + 展厅 + HUD）。排最后，同名选择器由它接管 -->
-  <link rel="stylesheet" href="music-museum.css">
+  <!-- 音乐博物馆场景层（music-museum.css / -data.js / .js，约 200KB 源码）
+       改为**按需加载**：首次进馆时由 script.js 的 loadMuseum() 注入，
+       首屏不再拖这三份低频资源。它的选择器全圈在 .mm-* / body.museum-open 里，
+       晚到的 CSS 不影响主页面的任何样式。 -->
   <!-- 主题 / 配色在首帧之前就写到根元素上，避免开屏时闪一下默认色。
        ⚠️ 这一段必须保持「无依赖 + 不抛错」：它在 head 里同步执行，
        一旦报错整个 body 都不会渲染。所以全部包在 try 里。
@@ -62,6 +64,11 @@
     if (/^#(about|blog|projects|moments)$/i.test(hs)) root.setAttribute('data-pre-section', hs.slice(1).toLowerCase());
     else if (/^#\/post\//i.test(hs)) root.setAttribute('data-pre-section', 'blog');
     if (root.hasAttribute('data-pre-section')) root.classList.add('no-boot');
+
+    /* 回访（本会话里已经完整看过一次开屏，script.js 结束时记了标记）
+       就不再放开屏：首帧直接挂 .no-boot 按掉，落地即欢迎页。
+       真正的计时器收尾由 script.js 里的 skipBoot() 做，这里只管首帧不闪。 */
+    try{ if(sessionStorage.getItem('rinsora-booted')) root.classList.add('no-boot'); }catch(e){}
   }catch(e){}
   </script>
 </head>
@@ -704,14 +711,32 @@
 
 <script src="gh-api.js"></script>
 <script src="music-data.js"></script>
-<script src="music-museum-data.js"></script>
 <script src="music.js"></script>
 <script src="music-upload.js"></script>
 <script src="projects-data.js"></script>
 <script src="projects.js"></script>
 <script src="moments-data.js"></script>
 <script src="blog-admin.js"></script>
-<script src="music-museum.js"></script>
+<!-- 音乐博物馆（music-museum-data.js / music-museum.js）与它的 CSS 改为
+     首次进馆时由 script.js 的 loadMuseum() 按需注入，见 enterMuseum 上方。 -->
 <script src="script.js"></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "空凛 · Rinsora 的小窝",
+  "alternateName": "Rinsora's Home",
+  "url": "https://rinsora.dpdns.org/",
+  "inLanguage": "zh-CN",
+  "description": "空凛 / Rinsora 的个人小窝：记录 AI、Minecraft、Web、项目、博客与日常折腾。",
+  "image": "https://rinsora.dpdns.org/assets/site-card.png",
+  "author": {
+    "@type": "Person",
+    "name": "空凛 · Rinsora",
+    "url": "https://rinsora.dpdns.org/",
+    "sameAs": ["https://github.com/rinsoraa"]
+  }
+}
+</script>
 </body>
 </html>
