@@ -16,7 +16,7 @@
                     tags     小标签数组，会显示在预览卡片上
                     icon     卡片左侧的图标（一个字符）
                     date     添加日期
-     status   可选。项目状态，比如 Active / 维护中 / 已归档；留空则不显示徽章
+                    status   可选。项目状态，比如 Active / 维护中 / 已归档；留空则不显示徽章
    ============================================================ */
 window.RINSORA_PROJECTS = {
   "version": 1,
@@ -37,8 +37,7 @@ window.RINSORA_PROJECTS = {
         "JavaScript"
       ],
       "icon": "📦",
-      "date": "2026.09.21",
-      "status": "Active"
+      "date": "2026.09.21"
     },
     {
       "id": "trayhider",
@@ -50,8 +49,7 @@ window.RINSORA_PROJECTS = {
         "C#"
       ],
       "icon": "📦",
-      "date": "2026.09.21",
-      "status": "Active"
+      "date": "2026.09.21"
     },
     {
       "id": "rinsoraa-rinsoraa-github-io",
@@ -65,8 +63,20 @@ window.RINSORA_PROJECTS = {
         "rinsoraa"
       ],
       "icon": "📦",
-      "date": "2026.09.21",
-      "status": "维护中"
+      "date": "2026.09.21"
+    },
+    {
+      "id": "markdown-reader",
+      "name": "Markdown-reader",
+      "category": "Github项目",
+      "url": "https://github.com/rinsoraa/Markdown-reader",
+      "desc": "优雅的 Markdown 阅读器浏览器扩展：自动渲染 .md 文件，支持自定义 CSS · Zen Browser / Edge / Chrome / Chromium (Manifest V3) - rinsoraa/Markdown-reader",
+      "tags": [
+        "GitHub",
+        "rinsoraa"
+      ],
+      "icon": "📦",
+      "date": "2026.09.29"
     }
   ]
 };
