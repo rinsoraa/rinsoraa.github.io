@@ -92,28 +92,42 @@ jobs:
           python3 - <<'PY'
           import io, os, re, sys
           bad = 0
+          warn = 0
 
           index = io.open("index.html", encoding="utf-8").read()
           cards = set(re.findall(r'href="(posts/[^"]+\.html)"', index))
           files = {"posts/" + f for f in os.listdir("posts") if f.endswith(".html")}
 
+          # 硬错误：卡片指向不存在的文件
           missing = cards - files
           for m in sorted(missing):
               print("BAD 首页卡片指向不存在的文件:", m); bad = 1
           print("OK  首页卡片 %d 张全部有对应文件" % len(cards))
+
+          # 警告：有文章没出现在首页卡片里。保存文章的中间态（先写 posts/、
+          # 后写 index.html）也会短暂触发，故只 warn 不 fail —— 但持续存在
+          # 就意味着有文章「在 posts/ 里却没有卡片」，需要人工看。
+          not_in_cards = files - cards
+          for m in sorted(not_in_cards):
+              print("WARN 文章不在首页卡片里:", m); warn += 1
 
           sm = io.open("sitemap.xml", encoding="utf-8").read()
           locs = re.findall(r"<loc>([^<]+)</loc>", sm)
           if len(locs) != len(set(locs)):
               print("BAD sitemap 有重复 URL"); bad = 1
           posts_in_sm = {l.rsplit("/", 1)[-1] for l in locs if "/posts/" in l}
-          not_in_sm = {f.split("/")[1] for f in files} - posts_in_sm
-          for m in sorted(not_in_sm):
-              print("BAD 文章不在 sitemap 里:", m); bad = 1
+
+          # 硬错误：sitemap 收录了不存在的文章
           stale = posts_in_sm - {f.split("/")[1] for f in files}
           for m in sorted(stale):
               print("BAD sitemap 收录了不存在的文章:", m); bad = 1
-          print("OK  sitemap %d 条，与 posts/ 双向一致" % len(locs))
+
+          # 警告：文章没进 sitemap（中间态也会短暂触发，只 warn 不 fail）
+          not_in_sm = {f.split("/")[1] for f in files} - posts_in_sm
+          for m in sorted(not_in_sm):
+              print("WARN 文章不在 sitemap 里:", m); warn += 1
+
+          print("OK  sitemap %d 条；posts/ %d 篇" % (len(locs), len(files)))
 
           robots = io.open("robots.txt", encoding="utf-8").read()
           if "sitemap.xml" not in robots.lower():
@@ -124,5 +138,8 @@ jobs:
           import xml.dom.minidom
           xml.dom.minidom.parseString(sm)
           print("OK  sitemap 是合法 XML")
+
+          if warn:
+              print("NOTE %d 条警告（中间态或需人工确认），不阻塞" % warn)
           sys.exit(bad)
           PY

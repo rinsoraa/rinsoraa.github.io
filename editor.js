@@ -359,10 +359,9 @@
       ? f.tags.map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('')
       : '<span>\u968f\u7b14</span>';
     return PAGE
-      .replace('__TITLE__', esc(f.title))
-      .replace('__TITLE__', esc(f.title))
-      .replace('__SUMMARY__', esc(f.summary))
-      .replace('__URL__', SITE + '/posts/' + f.slug + '.html')
+      .replace(/__TITLE__/g, esc(f.title))
+      .replace(/__SUMMARY__/g, esc(f.summary))
+      .replace(/__URL__/g, SITE + '/posts/' + f.slug + '.html')
       .replace('__KICKER__', esc(f.kicker))
       .replace('__DATE__', esc(f.date))
       .replace('__DATE_ISO__', esc(isoDate(f.date)))
@@ -417,13 +416,18 @@
   function cardLine(slug, title, date, summary, cat, min) {
     cat = cat || '\u968f\u7b14';
     min = min || '1';
-    return '            <article class="blog-card card" data-cat="' + esc(cat) + '" data-min="' + esc(min) + '">' +
-      '<span class="date">' + esc(date) + '</span>' +
-      '<h4><a class="card-title-link" href="posts/' + slug + '.html">' + esc(title) + '</a></h4>' +
-      '<p>' + esc(summary) + '</p>' +
-      '<div class="blog-foot"><span class="bm-cat">' + esc(cat) + '</span>' +
+    /* 卡片必须和 index.html 现有卡片同一种形状：多行 + tilt-card。
+       缩进对齐：article 10 空格、内部元素 12 空格、箭头用 ↗。
+       之前这里是「一行压缩、无 tilt-card」，和新格式不一致。 */
+    var i1 = '          ', i2 = '            ';
+    return i1 + '<article class="blog-card card tilt-card" data-cat="' + esc(cat) + '" data-min="' + esc(min) + '">\n' +
+      i2 + '<span class="date">' + esc(date) + '</span>\n' +
+      i2 + '<h4><a class="card-title-link" href="posts/' + slug + '.html">' + esc(title) + '</a></h4>\n' +
+      i2 + '<p>' + esc(summary) + '</p>\n' +
+      i2 + '<div class="blog-foot"><span class="bm-cat">' + esc(cat) + '</span>' +
       '<span class="bm-min">' + esc(min) + ' min</span>' +
-      '<a class="read-more" href="posts/' + slug + '.html">READ MORE \u2192</a></div></article>';
+      '<a class="read-more" href="posts/' + slug + '.html">READ MORE \u2197</a></div>\n' +
+      i1 + '</article>';
   }
 
   function findGrid(lines) {
@@ -443,14 +447,30 @@
     var g = findGrid(lines);
     if (!g) return null;
 
-    var cards = lines.slice(g.start + 1, g.end).filter(function (l) {
-      return l.indexOf('<article class="blog-card card">') !== -1;
-    }).filter(function (l) {
-      return l.indexOf('posts/' + slug + '.html') === -1;
+    /* 把 grid 里的卡片按「<article>…</article>」切成多行块（卡片不是一行一张，
+       是一块 6 行），再过滤掉同名的那篇。旧代码按「包含 article 的行」匹配，
+       遇到 tilt-card 就整片匹配不上，导致旧卡片全被丢弃。 */
+    var blocks = [];
+    var cur = null;
+    for (var i = g.start + 1; i < g.end; i++) {
+      var line = lines[i];
+      if (line.indexOf('<article class="blog-card') !== -1) {
+        cur = [line]; blocks.push(cur);
+      } else if (cur) {
+        cur.push(line);
+        if (/^\s*<\/article>\s*$/.test(line)) cur = null;
+      }
+    }
+
+    var keep = blocks.filter(function (blk) {
+      return blk.join('\n').indexOf('class="card-title-link" href="posts/' + slug + '.html"') === -1;
     });
 
     var fresh = cardLine(slug, title, date, summary, cat, min);
-    var items = cards.map(function (l) { return { d: cdateOf(l), n: 0, l: l }; });
+    var items = keep.map(function (blk) {
+      var full = blk.join('\n');
+      return { d: cdateOf(full), n: 0, l: full };
+    });
     items.push({ d: cdateOf(fresh), n: 1, l: fresh });
     items.sort(function (a, b) {
       if (a.d !== b.d) return a.d < b.d ? 1 : -1;

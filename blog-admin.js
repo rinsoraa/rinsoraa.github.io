@@ -43,12 +43,27 @@
     return a ? a.textContent.trim() : '';
   }
 
-  /* 卡片在 index.html 里是「一行一张」，所以按行剔除最稳 */
+  /* 卡片是多行一块（<article>…</article>），按块剔除；块内命中 slug 的整块丢掉 */
   function dropCardLine(html, slug) {
-    return html.split('\n').filter(function (line) {
-      if (line.indexOf('<article class="blog-card card"') === -1) return true;
-      return line.indexOf('posts/' + slug + '.html') === -1;
-    }).join('\n');
+    var lines = html.split('\n');
+    var out = [];
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i];
+      if (line.indexOf('<article class="blog-card') !== -1) {
+        var block = [line]; i++;
+        while (i < lines.length && !/^\s*<\/article>\s*$/.test(lines[i])) {
+          block.push(lines[i]); i++;
+        }
+        if (i < lines.length) { block.push(lines[i]); i++; }
+        if (block.join('\n').indexOf('class="card-title-link" href="posts/' + slug + '.html"') === -1) {
+          out = out.concat(block);
+        }
+      } else {
+        out.push(line); i++;
+      }
+    }
+    return out.join('\n');
   }
 
   function removePost(card, slug, title, btn) {

@@ -137,13 +137,14 @@ PAGE = """<!doctype html>
 """
 
 CARD = (
-    '            <article class="blog-card card" data-cat="@@CAT@@" data-min="@@MIN@@">'
-    '<span class="date">@@DATE@@</span>'
-    '<h4><a class="card-title-link" href="posts/@@SLUG@@.html">@@TITLE@@</a></h4>'
-    '<p>@@SUMMARY@@</p>'
-    '<div class="blog-foot"><span class="bm-cat">@@CAT@@</span>'
+    '          <article class="blog-card card tilt-card" data-cat="@@CAT@@" data-min="@@MIN@@">\n'
+    '            <span class="date">@@DATE@@</span>\n'
+    '            <h4><a class="card-title-link" href="posts/@@SLUG@@.html">@@TITLE@@</a></h4>\n'
+    '            <p>@@SUMMARY@@</p>\n'
+    '            <div class="blog-foot"><span class="bm-cat">@@CAT@@</span>'
     '<span class="bm-min">@@MIN@@ min</span>'
-    '<a class="read-more" href="posts/@@SLUG@@.html">READ MORE \u2192</a></div></article>'
+    '<a class="read-more" href="posts/@@SLUG@@.html">READ MORE \u2197</a></div>\n'
+    '          </article>'
 )
 
 PLACEHOLDER_BODY = (
@@ -306,8 +307,20 @@ def update_index(slug, title, date, summary, cat="随笔", minutes=1, dry=False)
         return False
 
     head, inner, tail = m.group(1), m.group(2), m.group(3)
-    keep = [l for l in inner.split("\n")
-            if l.strip() and ('href="posts/%s.html"' % slug) not in l]
+
+    # 卡片是多行一块（<article>…</article>），按块切分，去掉同名的那块
+    blocks = []
+    cur = []
+    for line in inner.split("\n"):
+        if '<article class="blog-card' in line:
+            cur = [line]
+            blocks.append(cur)
+        elif cur:
+            cur.append(line)
+            if re.match(r'^\s*</article>\s*$', line):
+                cur = []
+    keep = [b for b in blocks
+            if 'class="card-title-link" href="posts/%s.html"' % slug not in "\n".join(b)]
 
     card = (CARD.replace("@@DATE@@", date)
                 .replace("@@SLUG@@", slug)
@@ -316,11 +329,11 @@ def update_index(slug, title, date, summary, cat="随笔", minutes=1, dry=False)
                 .replace("@@CAT@@", htmllib.escape(cat))
                 .replace("@@MIN@@", str(minutes)))
 
-    def cdate(line):
-        mm = re.search(r'<span class="date">(\d{4})\.(\d{2})\.(\d{2})</span>', line)
+    def cdate(block):
+        mm = re.search(r'<span class="date">(\d{4})\.(\d{2})\.(\d{2})</span>', block)
         return tuple(int(x) for x in mm.groups()) if mm else (0, 0, 0)
 
-    items = [(cdate(l), 0, l) for l in keep] + [(cdate(card), 1, card)]  # 同一天时新写的排最前
+    items = [(cdate("\n".join(b)), 0, "\n".join(b)) for b in keep] + [(cdate(card), 1, card)]  # 同一天新写的排最前
     items.sort(key=lambda kv: (kv[0], kv[1]), reverse=True)
     inner_new = "\n".join(l for _, _, l in items)
 
