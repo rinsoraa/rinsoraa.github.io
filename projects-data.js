@@ -77,6 +77,18 @@ window.RINSORA_PROJECTS = {
       ],
       "icon": "📦",
       "date": "2026.09.29"
+    },
+    {
+      "id": "catoobot",
+      "name": "CatooBot",
+      "category": "Bot",
+      "url": "https://github.com/rinsoraa/CatooBot",
+      "desc": "罐头，纯自研、100% vibe coding的QQbot，沙盒生活系统+长期记忆存储",
+      "tags": [
+        "Python"
+      ],
+      "icon": "🤖",
+      "date": "2026.10.04"
     }
   ]
 };
