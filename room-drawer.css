@@ -1,17 +1,32 @@
-/* Room drawer v7 */
+/* Room drawer v8 —— 房间固定在主页层级下方；主页整体下滑露出，完全不改动文档滚动 */
 html { background: #0d0b12; }
+body { --p: 0; }
+
 #roomSection {
-  position: relative; width: 100%; height: 100vh;
+  position: fixed; inset: 0; z-index: 1;
   background: #0d0b12; overflow: hidden;
-  opacity: 0; transition: opacity .45s ease;
+  opacity: 0; transition: opacity .5s ease;
+  pointer-events: none;
 }
 #roomSection.room-ready { opacity: 1; }
+body.room-open #roomSection { pointer-events: auto; }
 #roomDrawerMount { position: absolute; inset: 0; }
 #roomDrawerMount canvas { display: block; width: 100% !important; height: 100% !important; }
 
-/* 进入房间时：fixed 覆盖层随页面向下滑出，并且彻底隐藏（只位移会残留边角，
-   例如 300x300 的光晕下移 300px 后仍会露在房间左下角）。
-   注意 .welcome-screen 是【正常流】元素，绝不能 transform，否则主页上方会出现空白。 */
+/* 主页整体下滑：拖动中跟手（无过渡），满格后用过渡平滑滑出 */
+body.room-pulling .app,
+body.room-pulling .side-rail,
+body.room-pulling .scene,
+body.room-pulling #starCanvas,
+body.room-pulling .ambient-glow,
+body.room-pulling .screen-grain,
+body.room-pulling .bg-decor,
+body.room-pulling .mobile-nav,
+body.room-pulling .top-actions {
+  transform: translateY(calc(var(--p) * 100%)) !important;
+  transition: none !important;
+}
+body.room-open .app,
 body.room-open .side-rail,
 body.room-open .scene,
 body.room-open #starCanvas,
@@ -23,23 +38,23 @@ body.room-open .top-actions {
   transform: translateY(100%) !important;
   opacity: 0 !important;
   visibility: hidden !important;
-  transition: transform .58s cubic-bezier(.22,.8,.22,1), opacity .42s ease !important;
+  transition: transform .62s cubic-bezier(.22,.8,.22,1), opacity .5s ease !important;
   pointer-events: none !important;
 }
-body:not(.room-open) .side-rail,
-body:not(.room-open) .scene,
-body:not(.room-open) #starCanvas,
-body:not(.room-open) .ambient-glow,
-body:not(.room-open) .screen-grain,
-body:not(.room-open) .bg-decor,
-body:not(.room-open) .mobile-nav,
-body:not(.room-open) .top-actions {
+body:not(.room-open):not(.room-pulling) .app,
+body:not(.room-open):not(.room-pulling) .side-rail,
+body:not(.room-open):not(.room-pulling) .scene,
+body:not(.room-open):not(.room-pulling) #starCanvas,
+body:not(.room-open):not(.room-pulling) .ambient-glow,
+body:not(.room-open):not(.room-pulling) .screen-grain,
+body:not(.room-open):not(.room-pulling) .bg-decor,
+body:not(.room-open):not(.room-pulling) .mobile-nav,
+body:not(.room-open):not(.room-pulling) .top-actions {
   transform: translateY(0) !important;
   visibility: visible !important;
-  transition: transform .58s cubic-bezier(.22,.8,.22,1), opacity .42s ease !important;
+  transition: transform .62s cubic-bezier(.22,.8,.22,1), opacity .5s ease !important;
 }
 
-/* 顶部提示：边框即进度环 */
 #roomHint {
   --p: 0;
   position: fixed; left: 50%; top: 20px; transform: translateX(-50%) translateY(-14px);
@@ -59,7 +74,6 @@ body:not(.room-open) .top-actions {
   -webkit-mask-composite: xor; mask-composite: exclude; z-index: -1;
 }
 
-/* 房间内的返回箭头：屏幕底端 */
 #roomUp {
   position: fixed; left: 50%; bottom: 26px; top: auto;
   transform: translateX(-50%) translateY(14px) scale(.9);
@@ -67,11 +81,10 @@ body:not(.room-open) .top-actions {
   border: 1px solid rgba(255,255,255,.22); background: rgba(18,14,26,.58);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   color: #fff; cursor: pointer; opacity: 0; pointer-events: none; z-index: 71;
-  transition: opacity .3s ease, transform .3s cubic-bezier(.2,.8,.22,1), bottom .35s cubic-bezier(.22,.8,.22,1);
+  transition: opacity .3s ease, transform .3s cubic-bezier(.22,.8,.22,1), bottom .35s cubic-bezier(.22,.8,.22,1);
 }
 #roomUp.is-on { opacity: .94; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
 #roomUp:hover { opacity: 1; }
 #roomUp svg path { transform: rotate(180deg); transform-origin: center; }
-/* 显示歌词栏时，箭头自动上移，避免压住歌词 */
 body.lyrics-on #roomUp { bottom: calc(var(--bar-h, 76px) + 26px); }
 @media (prefers-reduced-motion: reduce) { #roomHint, #roomUp { transition: opacity .01s linear; } }
