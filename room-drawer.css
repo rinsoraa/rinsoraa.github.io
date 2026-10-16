@@ -1,10 +1,10 @@
 /* Room drawer v9 —— 把 body 的所有子元素（除房间与提示外）整体下滑 100vh，
    背景层 / 左侧导航 / 音乐播放器 / 内容 全部一起走，不隐藏任何东西。 */
 html { background: #0d0b12; }
-body { --p: 0; overflow-x: hidden; }
+body { --p: 0; background: transparent; }
 
 #roomSection {
-  position: fixed; inset: 0; z-index: 0;
+  position: fixed; inset: 0; z-index: -1;
   background: #0d0b12; overflow: hidden;
   opacity: 0; transition: opacity .5s ease;
 }
