@@ -1,0 +1,47 @@
+/* ===== Step 3：房间抽屉 ===== 
+   顶部上滚拉出 → 展开占满视口并推开页面内容；向下滚 / 收起按钮 / Esc 收回。
+   抽屉本身是 fixed 覆盖层；真正「推开内容」靠正常流里的 #roomDrawerSpacer。 */
+
+#roomDrawerSpacer { height: 0; pointer-events: none;
+  transition: height .46s cubic-bezier(.22,.82,.24,1); }
+body.room-open #roomDrawerSpacer { height: 100vh; height: 100dvh; }
+
+#roomDrawer { position: fixed; left: 0; right: 0; top: 0; z-index: 60;
+  height: 0; overflow: hidden; background: #0b0910; pointer-events: none;
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+  transition: height .46s cubic-bezier(.22,.82,.24,1); }
+body.room-open #roomDrawer { height: 100vh; height: 100dvh; pointer-events: auto; }
+body.room-dragging #roomDrawer, body.room-dragging #roomDrawerSpacer { transition: none; }
+
+#roomDrawerMount { position: absolute; inset: 0; overflow: hidden; }
+#roomDrawerMount canvas { display: block; width: 100%; height: 100%; }
+
+/* 顶部提示 */
+#roomPullHint { position: fixed; left: 50%; top: 12px; z-index: 61;
+  transform: translate(-50%, -160%); opacity: 0; pointer-events: none;
+  padding: 9px 16px; border-radius: 999px; white-space: nowrap;
+  background: rgba(20,15,28,.88); border: 1px solid rgba(255,220,180,.28);
+  color: #ffe4c2; font: 700 12px/1 system-ui, "Segoe UI", sans-serif; letter-spacing: .1em;
+  transition: transform .3s ease, opacity .3s ease; }
+body.room-top:not(.room-open) #roomPullHint { transform: translate(-50%, 0); opacity: 1; }
+body.room-pulling #roomPullHint { border-color: rgba(255,220,180,.75); }
+
+/* 收起按钮 */
+#roomCloseBtn { position: fixed; right: 18px; top: 18px; z-index: 62; display: none;
+  padding: 10px 18px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.3); background: rgba(16,12,22,.74);
+  color: #fff; font: 600 13px/1 system-ui, "Segoe UI", sans-serif; backdrop-filter: blur(6px); }
+body.room-open #roomCloseBtn { display: block; }
+#roomCloseBtn:hover { background: rgba(38,28,50,.86); }
+
+/* 竖屏提示 */
+#roomRotateHint { position: fixed; inset: 0; z-index: 63; display: none;
+  align-items: center; justify-content: center; text-align: center;
+  background: rgba(8,6,12,.94); color: #ffe4c2;
+  font: 700 18px/1.7 system-ui, "Segoe UI", sans-serif; padding: 24px; }
+body.room-need-landscape #roomRotateHint { display: flex; }
+#roomRotateHint small { display: block; margin-top: 8px; font-weight: 500; font-size: 13px; opacity: .72; }
+
+@media (prefers-reduced-motion: reduce) {
+  #roomDrawer, #roomDrawerSpacer, #roomPullHint { transition-duration: .01ms; }
+}

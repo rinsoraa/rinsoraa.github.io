@@ -73,6 +73,8 @@
   </script>
 </head>
 <body>
+<!-- Step 3：房间抽屉撑开块（位于正常流，展开时把页面内容真正往下推） -->
+<div id="roomDrawerSpacer" aria-hidden="true"></div>
 <a class="skip-link" href="#mainContent">跳到主内容</a>
 <!-- 跨文档转场遮罩：平时 opacity:0；离场时 .on，新文档首帧由 data-enter 掀开 -->
 <div class="page-cover" id="pageCover" aria-hidden="true"></div>
@@ -726,6 +728,14 @@
 <!-- 音乐博物馆（music-museum-data.js / music-museum.js）与它的 CSS 改为
      首次进馆时由 script.js 的 loadMuseum() 按需注入，见 enterMuseum 上方。 -->
 <script src="script.js"></script>
+
+<!-- Step 3：房间抽屉。room-drawer.js 先设置 __ROOM_OPTIONS__，随后 module 版 room.js 才执行 -->
+<div id="roomDrawer" aria-hidden="true"><div id="roomDrawerMount"></div></div>
+<button id="roomCloseBtn" type="button">收起房间</button>
+<div id="roomPullHint" aria-hidden="true">↑ SCROLL TO ENTER MY ROOM</div>
+<div id="roomRotateHint" aria-hidden="true"><div>请把手机横过来<small>横屏才能进入房间</small></div></div>
+<script src="room-drawer.js"></script>
+<script type="module" src="room/room.js"></script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
