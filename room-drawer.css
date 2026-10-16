@@ -24,7 +24,7 @@ body.room-open > *:not(#roomSection):not(#roomHint):not(#roomUp) {
 }
 /* 静息 */
 body:not(.room-open):not(.room-pulling) > *:not(#roomSection):not(#roomHint):not(#roomUp) {
-  transform: translateY(0) !important;
+  transform: none !important;   /* 必须用 none：translateY(0) 会生成包含块，令站点内 fixed 元素（播放器/设置面板）错位 */
   transition: transform .62s cubic-bezier(.22,.8,.22,1) !important;
 }
 

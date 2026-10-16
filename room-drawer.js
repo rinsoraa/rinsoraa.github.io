@@ -74,14 +74,12 @@
   function enterRoom() {
     clearTimeout(idleTimer);
     open = true; hintSeen = true; progress = 0;
-    document.body.classList.remove('room-pulling');
     document.body.classList.add('room-open');
     render();
   }
   function leaveRoom() {
     open = false;
     document.body.classList.remove('room-open');
-    document.body.classList.remove('room-pulling');
     progress = 0; render();
   }
 
@@ -92,7 +90,6 @@
     if (e.deltaY > 0) { if (progress > 0) { e.preventDefault(); document.body.classList.remove('room-pulling'); bump(-STEP * 0.8); } return; }
     if (window.scrollY > 2) return;
     e.preventDefault();
-    document.body.classList.add('room-pulling');
     bump(STEP);
   }, { passive: false });
 
@@ -105,8 +102,7 @@
     var dy = e.touches[0].clientY - lastY;
     if (dy > 0 && window.scrollY <= 2) {
       e.preventDefault(); lastY = e.touches[0].clientY;
-      document.body.classList.add('room-pulling');
-      bump(dy / 460);
+        bump(dy / 460);
     }
   }, { passive: false });
   window.addEventListener('touchend', function () { lastY = null; }, { passive: true });
