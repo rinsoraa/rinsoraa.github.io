@@ -17811,11 +17811,11 @@ var Hf = {
 	] },
 	sit: {
 		position: [
-			-1.86,
+			-2.05,
 			.52,
 			1
 		],
-		legBend: .18,
+		legBend: .5,
 		faceTarget: [3.2, 1],
 		headFaceCamera: !0
 	}
@@ -17933,10 +17933,17 @@ Uf.rotation.y = hp(gp[0] - Wf.position[0], gp[1] - Wf.position[2]), jd.add(Uf), 
 	if (t.position.set(-i.x, -n.min.y, -i.z), t.traverse((e) => {
 		(e.isMesh || e.isSkinnedMesh) && (e.castShadow = !0, e.receiveShadow = !0);
 	}), Wf.legBend) {
-		let e = /^(Left|Right)_Leg(_\d+)?$/, n = 0;
+		let e = /^(Left|Right)_Leg(_\d+)?$/, n = [];
 		t.traverse((t) => {
-			t.isBone && e.test(t.name) && (t.rotation.x = Wf.legBend, n++);
-		}), console.log("[character] 坐姿：已旋转 " + n + " 根大腿骨 " + (Wf.legBend * 180 / Math.PI).toFixed(0) + "°");
+			t.name && e.test(t.name) && n.push(t);
+		});
+		let r = n.filter((e) => {
+			for (let r = e.parent; r && r !== t; r = r.parent) if (n.indexOf(r) !== -1) return !1;
+			return !0;
+		});
+		r.forEach((e) => {
+			e.rotation.x = Wf.legBend;
+		}), console.log("[character] 坐姿：已旋转 " + r.length + " 根大腿节点（匹配 " + n.length + " 个）" + (r.length ? " → " + r.map((e) => e.name).join(", ") : " ⚠️ 一根都没匹配到！") + " " + (Wf.legBend * 180 / Math.PI).toFixed(0) + "°");
 	}
 	t.traverse((e) => {
 		!ap && /^Head/.test(e.name || "") && (e.isBone || e.children && e.children.length) && (ap = e);

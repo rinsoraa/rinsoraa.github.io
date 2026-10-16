@@ -23,6 +23,22 @@ body:not(.room-open) > *:not(#roomSection):not(#roomHint):not(#roomUp):not(#mmLo
   transition: translate .62s cubic-bezier(.22,.8,.22,1);
 }
 
+/* ⚠️ 必须：把 body 自己从命中链里摘掉。
+   #roomSection 是 z-index:-1（要待在站点背景/内容之下才不挡背景），但 body 自己的
+   盒子在绘制顺序里高于「负 z-index 后代」—— 于是 elementFromPoint() 永远返回 body，
+   房间 canvas 收不到任何 pointermove / click：热区点不动、电脑屏幕 hover 不亮。
+   实测命中栈 [body, canvas, #roomDrawerMount, #roomSection, html] → body 设 none 后
+   栈顶变成 canvas。子元素各自收回 auto，站点与博物馆浮层不受影响。 */
+body.room-open { pointer-events: none; }
+body.room-open > * { pointer-events: auto; }
+
+/* 博物馆的标记挂在 .app 之外（body 直接子元素），所以它被上面的 :not() 排除、
+   不再随整页下滑 —— 但它的样式表是**按需加载**的：房间打开期间若样式还没进来，
+   那堆未设样式的文字（音乐博物馆 / LOADING ARCHIVE / 退出展厅）就会浮在房间上。
+   因此只有在「真的打开了博物馆」时才让它可见。 */
+body.room-open:not(.museum-open) > #mmLoad,
+body.room-open:not(.museum-open) > #mmScene { visibility: hidden; }
+
 #roomHint {
   --p: 0;
   position: fixed; left: 50%; top: 20px; transform: translateX(-50%) translateY(-14px);
