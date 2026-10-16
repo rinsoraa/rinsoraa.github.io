@@ -1,5 +1,5 @@
-/* Room drawer v9 —— 把 body 的所有子元素（除房间与提示外）整体下滑 100vh，
-   背景层 / 左侧导航 / 音乐播放器 / 内容 全部一起走，不隐藏任何东西。 */
+/* Room drawer v10 —— 用 translate 独立属性实现整页下滑：
+   绝不碰 transform，否则会覆盖站点自身用于居中/动画的 transform（如 .lyricbar 的 translateX(-50%)）。 */
 html { background: #0d0b12; }
 body { --p: 0; background: transparent; }
 
@@ -12,20 +12,15 @@ body { --p: 0; background: transparent; }
 #roomDrawerMount { position: absolute; inset: 0; }
 #roomDrawerMount canvas { display: block; width: 100% !important; height: 100% !important; }
 
-/* 拖动跟手 */
-body.room-pulling > *:not(#roomSection):not(#roomHint):not(#roomUp) {
-  transform: translateY(calc(var(--p) * 100vh)) !important;
-  transition: none !important;
-}
-/* 满格后平滑滑出 */
+/* 满格后：主页所有子元素（房间与提示除外）整体下滑一屏 */
 body.room-open > *:not(#roomSection):not(#roomHint):not(#roomUp) {
-  transform: translateY(100vh) !important;
-  transition: transform .62s cubic-bezier(.22,.8,.22,1) !important;
+  translate: 0 100vh;
+  transition: translate .62s cubic-bezier(.22,.8,.22,1);
 }
-/* 静息 */
-body:not(.room-open):not(.room-pulling) > *:not(#roomSection):not(#roomHint):not(#roomUp) {
-  transform: none !important;   /* 必须用 none：translateY(0) 会生成包含块，令站点内 fixed 元素（播放器/设置面板）错位 */
-  transition: transform .62s cubic-bezier(.22,.8,.22,1) !important;
+/* 静息：translate 复位为 none（none 同样不生成包含块） */
+body:not(.room-open) > *:not(#roomSection):not(#roomHint):not(#roomUp) {
+  translate: none;
+  transition: translate .62s cubic-bezier(.22,.8,.22,1);
 }
 
 #roomHint {
@@ -54,7 +49,7 @@ body:not(.room-open):not(.room-pulling) > *:not(#roomSection):not(#roomHint):not
   border: 1px solid rgba(255,255,255,.22); background: rgba(18,14,26,.58);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   color: #fff; cursor: pointer; opacity: 0; pointer-events: none; z-index: 71;
-  transition: opacity .3s ease, transform .3s cubic-bezier(.2,.8,.22,1), bottom .35s cubic-bezier(.22,.8,.22,1);
+  transition: opacity .3s ease, transform .3s cubic-bezier(.22,.8,.22,1), bottom .35s cubic-bezier(.22,.8,.22,1);
 }
 #roomUp.is-on { opacity: .94; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
 #roomUp:hover { opacity: 1; }
