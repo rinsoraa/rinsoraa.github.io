@@ -3,12 +3,12 @@
   var coarse = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   if (coarse || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent)) return;
 
-  // 兼容 v2：移除遗留的抽屉节点，避免同名挂载点冲突
   ['roomDrawer', 'roomDrawerSpacer', 'roomDrawerMount', 'roomHint', 'roomUp'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el && el.parentNode) el.parentNode.removeChild(el);
   });
 
+  // 房间作为正常文档流区域，放在主页内容之后（.app 是正常流，滚动时它自然滑出屏幕）
   var section = document.createElement('section');
   section.id = 'roomSection';
   var mount = document.createElement('div');
@@ -24,7 +24,7 @@
 
   var hint = document.createElement('div');
   hint.id = 'roomHint';
-  hint.innerHTML = '<span>SCROLL TO ENTER MY ROOM</span>';
+  hint.innerHTML = '<span>SCROLL UP TO ENTER MY ROOM</span>';
   document.body.appendChild(hint);
 
   var up = document.createElement('button');
@@ -41,8 +41,10 @@
     hint.style.setProperty('--p', progress.toFixed(4));
     hint.classList.toggle('is-on', progress > 0.002);
     up.classList.toggle('is-on', window.scrollY > 8);
+    document.body.classList.toggle('room-scrolled', window.scrollY > 8);
   }
   function reset() { progress = 0; render(); }
+
   function bump(d) {
     if (entering) return;
     progress = Math.max(0, Math.min(1, progress + d));
@@ -51,16 +53,19 @@
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () { reset(); hintSeen = true; }, IDLE_MS);
   }
+
   function enterRoom() {
-    entering = true; clearTimeout(idleTimer); hintSeen = true;
+    entering = true; hintSeen = true;
+    clearTimeout(idleTimer);
     window.scrollTo({ top: section.offsetTop, behavior: 'smooth' });
-    setTimeout(function () { progress = 0; entering = false; render(); }, 760);
+    setTimeout(function () { progress = 0; entering = false; render(); }, 780);
   }
   function backToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
+  // 手势：只在页面顶端、【向上】滚轮（deltaY<0）时累积进度 → 主页向下滚出屏幕
   window.addEventListener('wheel', function (e) {
     if (window.scrollY > 2) return;
-    if (e.deltaY <= 0) { if (progress > 0) { e.preventDefault(); bump(-STEP * 0.75); } return; }
+    if (e.deltaY > 0) { if (progress > 0) { e.preventDefault(); bump(-STEP * 0.8); } return; }
     e.preventDefault();
     bump(STEP);
   }, { passive: false });
@@ -69,8 +74,8 @@
   window.addEventListener('touchstart', function (e) { lastY = e.touches[0].clientY; }, { passive: true });
   window.addEventListener('touchmove', function (e) {
     if (lastY == null || window.scrollY > 2) return;
-    var dy = lastY - e.touches[0].clientY;
-    if (dy > 0) { e.preventDefault(); lastY = e.touches[0].clientY; bump(dy / 420); }
+    var dy = e.touches[0].clientY - lastY;      // 手指下滑 = 向上滚
+    if (dy > 0) { e.preventDefault(); lastY = e.touches[0].clientY; bump(dy / 460); }
   }, { passive: false });
   window.addEventListener('touchend', function () { lastY = null; }, { passive: true });
 
@@ -80,9 +85,10 @@
   setTimeout(function () {
     if (hintSeen) return;
     progress = 0.002; render();
-    setTimeout(function () { reset(); hintSeen = true; }, 1500);
+    setTimeout(function () { reset(); hintSeen = true; }, 1600);
   }, 1400);
 
+  // 热点：先把页面从下往上拉回主页（滚回顶部），再点站点自身的导航；音乐博物馆直接进浮层
   window.addEventListener('room:hotspot', function (e) {
     var d = e.detail || {};
     if (d.id === 'music') {
