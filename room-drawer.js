@@ -1,152 +1,170 @@
-/* ===== Step 3：房间抽屉控制器 ===== 
-   职责：①以宿主身份挂载房间（room.js / room.css）②顶部上滚拉出、向下滚收回 
-   ③热点跳转（页内平滑滚动 / 唱片机整页跳转）④移动端手势与竖屏提示 ⑤收起时暂停渲染。 */
+/* ===== Step 3：房间抽屉控制器（v2）=====
+   ①只在桌面/平板启用；手机端整块取消，连 845KB 的 room.js 都不下载
+   ②顶部下拉「跟手」：拉多少、房间露多少、主页下滑多少；松手未过阈值弹回，
+     过了阈值自动把主页移出屏幕、房间展开（全走 CSS 过渡，丝滑）
+   ③展开前先 resume()，画布有内容才展开，避免黑屏一下
+   ④点热点：先收起（等撑开块归零）再滚动到目标区块，避免目标错位；
+     唱片机直接触发站点自带的音乐博物馆入口，不再整页跳转先过主页开屏。 */
 (function () {
   'use strict';
   var body = document.body;
   var drawer = document.getElementById('roomDrawer');
+  var spacer = document.getElementById('roomDrawerSpacer');
   var mount = document.getElementById('roomDrawerMount');
-  var hintBox = document.getElementById('roomPullHint');
   var closeBtn = document.getElementById('roomCloseBtn');
   var welcome = document.getElementById('welcomeScreen');
-  if (!drawer || !mount) return;
+  if (!drawer || !mount || !spacer) return;
 
-  // ---- 1) 交给房间脚本的挂载配置（必须在 room.js 执行前设置） ----
+  function isMobile() {
+    var coarse = false;
+    try { coarse = window.matchMedia('(hover: none) and (pointer: coarse)').matches; } catch (e) {}
+    return coarse || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent);
+  }
+  if (isMobile()) {
+    ['roomDrawer', 'roomCloseBtn', 'roomPullHint', 'roomRotateHint'].forEach(function (id) {
+      var el = document.getElementById(id); if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+    return;   // room.js 不会被注入，手机端零开销
+  }
+
   window.__ROOM_OPTIONS__ = Object.assign(
     { embed: true, root: '#roomDrawerMount', embedClass: false },
     window.__ROOM_OPTIONS__ || {}
   );
+  var tag = document.createElement('script');
+  tag.type = 'module'; tag.src = 'room/room.js'; tag.async = true;
+  document.head.appendChild(tag);
 
-  var OPEN_PULL = 240;      // 桌面：滚轮累计上滚量阈值
-  var OPEN_PULL_TOUCH = 130;// 移动：下拉累计阈值
-  var CLOSE_PULL = 160;     // 展开后向下滚多少收回
-  var open = false, pulling = 0, touchStart = null, savedScrollY = 0, everClosed = false;
+  var OPEN_AT = 0.42, WHEEL_FULL = 340, TOUCH_FULL = 230, DURATION = 460;
+  var progress = 0, open = false, savedScrollY = 0;
+  var wheelAcc = 0, wheelIdle = null, touch = null, resumed = false;
 
   function roomApi() { return window.__room || null; }
   function welcomeGone() { return !welcome || welcome.classList.contains('hidden'); }
   function atTop() { return (window.scrollY || document.documentElement.scrollTop || 0) <= 2; }
-  function isPortraitPhone() {
-    return window.matchMedia('(orientation: portrait)').matches && window.innerWidth < 820;
-  }
+  function vh() { return window.innerHeight || 800; }
 
-  // ---- 2) 打开 / 收起 ----
-  function openDrawer() {
-    if (open) return;
-    if (isPortraitPhone()) { body.classList.add('room-need-landscape'); return; }
-    open = true;
-    savedScrollY = window.scrollY || 0;
-    body.classList.add('room-open');
-    body.classList.remove('room-pulling');
-    drawer.setAttribute('aria-hidden', 'false');
+  function paint(p, animate) {
+    p = Math.max(0, Math.min(1, p));
+    progress = p;
+    var px = Math.round(p * vh());
+    var t = animate ? '' : 'none';
+    drawer.style.transition = t;
+    spacer.style.transition = t;
+    drawer.style.height = px + 'px';
+    spacer.style.height = px + 'px';
+  }
+  function warm() {
+    if (resumed) return;
     var api = roomApi();
-    if (api && api.resume) api.resume();
+    if (api && api.resume) { api.resume(); resumed = true; }
+  }
+  function markOpen(v) {
+    open = v;
+    body.classList.toggle('room-open', v);
+    drawer.setAttribute('aria-hidden', v ? 'false' : 'true');
+  }
+  function expand() {
+    if (open) return;
+    warm();
+    savedScrollY = window.scrollY || 0;
+    markOpen(true);
+    paint(1, true);
     window.scrollTo(0, 0);
   }
-  function closeDrawer(restore) {
-    if (!open) return;
-    open = false;
-    body.classList.remove('room-open', 'room-need-landscape');
-    drawer.setAttribute('aria-hidden', 'true');
-    var api = roomApi();
-    if (api && api.pause) api.pause();
-    everClosed = true;
-    if (restore !== false) window.scrollTo(0, savedScrollY || 0);
+  function collapse(opts) {
+    var was = open || progress > 0;
+    markOpen(false);
+    paint(0, true);
+    if (was) {
+      var api = roomApi();
+      setTimeout(function () { if (!open && api && api.pause) api.pause(); }, DURATION + 160);
+    }
+    if ((!opts || opts.restore !== false) && was && savedScrollY) window.scrollTo(0, savedScrollY);
   }
-  window.__roomDrawer = { open: openDrawer, close: closeDrawer, isOpen: function () { return open; } };
+  window.__roomDrawer = { open: expand, close: collapse, isOpen: function () { return open; } };
 
-  // ---- 3) 桌面：滚轮 ----
   window.addEventListener('wheel', function (e) {
     if (e.ctrlKey) return;
     if (!open) {
-      if (!atTop() || !welcomeGone()) { pulling = 0; return; }
-      if (e.deltaY < 0) {
-        pulling += -e.deltaY;
-        body.classList.add('room-pulling');
-        if (pulling >= OPEN_PULL) { pulling = 0; openDrawer(); }
-      } else if (pulling > 0) {
-        pulling = 0; body.classList.remove('room-pulling');
-      }
-    } else {
-      // 展开状态下：在房间上向下滚 → 收回
-      if (e.deltaY > 0 && e.target && mount.contains(e.target)) {
-        pulling += e.deltaY;
-        if (pulling >= CLOSE_PULL) { pulling = 0; closeDrawer(); }
-      } else { pulling = 0; }
-    }
+      if (!atTop() || !welcomeGone()) { wheelAcc = 0; return; }
+      warm();
+      wheelAcc += -e.deltaY;
+      if (wheelAcc < 0) wheelAcc = 0;
+      body.classList.add('room-pulling');
+      paint(wheelAcc / WHEEL_FULL, false);
+      clearTimeout(wheelIdle);
+      wheelIdle = setTimeout(function () {
+        wheelAcc = 0; body.classList.remove('room-pulling');
+        if (progress > OPEN_AT) expand(); else collapse();
+      }, 110);
+    } else if (e.deltaY > 0 && mount.contains(e.target)) {
+      wheelAcc += e.deltaY;
+      if (wheelAcc > 200) { wheelAcc = 0; collapse(); }
+    } else { wheelAcc = 0; }
   }, { passive: true });
 
-  // ---- 4) 移动端：下拉手势 ----
   window.addEventListener('touchstart', function (e) {
-    if (e.touches.length !== 1) { touchStart = null; return; }
-    touchStart = { y: e.touches[0].clientY, mode: open ? 'close' : 'open' };
-    pulling = 0;
+    if (e.touches.length !== 1) { touch = null; return; }
+    touch = { y: e.touches[0].clientY, open: open };
   }, { passive: true });
   window.addEventListener('touchmove', function (e) {
-    if (!touchStart || e.touches.length !== 1) return;
-    var dy = e.touches[0].clientY - touchStart.y;
-    if (touchStart.mode === 'open') {
-      if (!atTop() || !welcomeGone()) { touchStart = null; return; }
-      if (dy > 0) {
-        pulling = dy * 1.1;
-        body.classList.add('room-pulling');
-        if (pulling >= OPEN_PULL_TOUCH) { pulling = 0; touchStart = null; openDrawer(); }
-      } else { pulling = 0; body.classList.remove('room-pulling'); }
-    } else {
-      if (dy < 0 && mount.contains(e.target)) {
-        pulling = -dy;
-        if (pulling >= CLOSE_PULL) { pulling = 0; touchStart = null; closeDrawer(); }
-      } else { pulling = 0; }
+    if (!touch || e.touches.length !== 1) return;
+    var dy = e.touches[0].clientY - touch.y;
+    if (!touch.open) {
+      if (!atTop() || !welcomeGone()) { touch = null; return; }
+      if (dy > 0) { warm(); body.classList.add('room-pulling'); paint(dy / TOUCH_FULL, false); }
+      else paint(0, false);
+    } else if (dy < 0 && mount.contains(e.target) && -dy > 200) {
+      touch = null; collapse();
     }
   }, { passive: true });
   window.addEventListener('touchend', function () {
-    touchStart = null; pulling = 0; body.classList.remove('room-pulling');
+    if (!touch) return;
+    var wasOpen = touch.open; touch = null;
+    body.classList.remove('room-pulling');
+    if (!wasOpen) { if (progress > OPEN_AT) expand(); else collapse(); }
   }, { passive: true });
 
-  // ---- 5) Esc / 按钮 / 顶部标记 ----
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && open) { e.preventDefault(); closeDrawer(); }
+    if (e.key === 'Escape' && open) { e.preventDefault(); collapse(); }
   });
-  if (closeBtn) closeBtn.addEventListener('click', function () { closeDrawer(); });
+  if (closeBtn) closeBtn.addEventListener('click', function () { collapse(); });
+  window.addEventListener('resize', function () { paint(open ? 1 : progress, false); syncTop(); });
   function syncTop() {
-    if (atTop() && welcomeGone()) body.classList.add('room-top');
+    if (!open && atTop() && welcomeGone()) body.classList.add('room-top');
     else body.classList.remove('room-top');
   }
   window.addEventListener('scroll', syncTop, { passive: true });
-  window.addEventListener('resize', function () {
-    if (body.classList.contains('room-need-landscape') && !isPortraitPhone()) {
-      body.classList.remove('room-need-landscape');
-      openDrawer();
-    }
-    syncTop();
-  });
   syncTop(); setInterval(syncTop, 600);
 
-  // ---- 6) 热点跳转 ----
   function onHotspot(id, url) {
-    closeDrawer();
+    collapse();
     if (!url) return;
     if (url.charAt(0) === '#') {
-      var el = document.querySelector(url);
-      if (el) setTimeout(function () { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 140);
-      else location.hash = url;
+      var sec = url.replace(/^#/, '');
+      setTimeout(function () {
+        // 站点的板块不是文档流滚动，而是它自己的导航系统（navigateTo / data-target）。
+        var nav = document.querySelector('[data-target="' + sec + '"]');
+        if (nav) { nav.click(); return; }
+        var el = document.querySelector(url);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else location.hash = url;
+      }, DURATION + 120);
     } else {
-      location.href = url; // 唱片机 → 音乐博物馆（整页跳转）
+      var btn = document.querySelector('[data-museum]');
+      if (btn) { btn.click(); return; }
+      location.href = url;
     }
   }
-  window.addEventListener('room:hotspot', function (e) {
-    var d = e.detail || {};
-    if (!window.__roomWired) onHotspot(d.id, d.url);
-  });
-  // 注册回调以「接管」跳转，从而不再触发房间自身的兜底跳转
   (function wire() {
     var api = roomApi();
-    if (api && api.onHotspot) { api.onHotspot(onHotspot); window.__roomWired = true; return; }
+    if (api && api.onHotspot) { api.onHotspot(onHotspot); return; }
     setTimeout(wire, 200);
   })();
 
-  // ---- 7) 初始为收起状态：先让贴图/模型加载完，再暂停渲染省电 ----
   setTimeout(function () {
     var api = roomApi();
-    if (api && api.pause && !open) api.pause();
-  }, 6000);
+    if (api && api.pause && !open && progress === 0) api.pause();
+  }, 8000);
 })();
