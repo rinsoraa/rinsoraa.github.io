@@ -13,12 +13,12 @@ body { --p: 0; background: transparent; }
 #roomDrawerMount canvas { display: block; width: 100% !important; height: 100% !important; }
 
 /* 满格后：主页所有子元素（房间与提示除外）整体下滑一屏 */
-body.room-open > *:not(#roomSection):not(#roomHint):not(#roomUp) {
+body.room-open > *:not(#roomSection):not(#roomHint):not(#roomUp):not(#mmLoad):not(#mmScene) {
   translate: 0 100vh;
   transition: translate .62s cubic-bezier(.22,.8,.22,1);
 }
 /* 静息：translate 复位为 none（none 同样不生成包含块） */
-body:not(.room-open) > *:not(#roomSection):not(#roomHint):not(#roomUp) {
+body:not(.room-open) > *:not(#roomSection):not(#roomHint):not(#roomUp):not(#mmLoad):not(#mmScene) {
   translate: none;
   transition: translate .62s cubic-bezier(.22,.8,.22,1);
 }

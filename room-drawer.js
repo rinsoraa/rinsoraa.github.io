@@ -86,6 +86,7 @@
   // 手势：页面顶端（scrollY<=2）+ 向上滚 → 累积进度环 → 满则主页整体下滑露出房间
   window.addEventListener('wheel', function (e) {
     if (welcomeVisible()) return;                     // 欢迎页内绝对不能进房间
+    if (document.body.classList.contains('museum-open')) return;  // 博物馆浮层内放行滚轮：.mm-detail-card 等要能滚
     if (open) { e.preventDefault(); return; }         // 房间内滚轮不返回
     if (e.deltaY > 0) { if (progress > 0) { e.preventDefault(); document.body.classList.remove('room-pulling'); bump(-STEP * 0.8); } return; }
     if (window.scrollY > 2) return;
@@ -97,6 +98,7 @@
   window.addEventListener('touchstart', function (e) { lastY = e.touches[0].clientY; }, { passive: true });
   window.addEventListener('touchmove', function (e) {
     if (welcomeVisible()) return;
+    if (document.body.classList.contains('museum-open')) return;
     if (open) { e.preventDefault(); return; }
     if (lastY == null) return;
     var dy = e.touches[0].clientY - lastY;
@@ -130,8 +132,10 @@
 
   setTimeout(function () {
     if (hintSeen || welcomeVisible()) return;
-    progress = 0.002; render();
-    setTimeout(function () { reset(); hintSeen = true; }, 1600);
+    // ⚠️ 必须 > 0.002：render() 的显隐判据是 progress > 0.002，写 0.002 时这段是死代码（环永不出现）。
+    // 收回时若用户已经开始滚动（progress 已涨过 0.06），就不要清掉他的进度。
+    progress = 0.06; render();
+    setTimeout(function () { if (!open && progress <= 0.061) reset(); hintSeen = true; }, 1600);
   }, 1600);
 
   window.addEventListener('room:hotspot', function (e) {
