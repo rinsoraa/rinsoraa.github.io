@@ -16660,7 +16660,7 @@ var If = {
 	lantern: 62,
 	sky: new J("#d6daf0"),
 	exposure: .8
-}, Rf = 0, zf = 0;
+}, Rf = 1, zf = 0;
 function Bf(e) {
 	jd.background.copy(If.background).lerp(Lf.background, e), jd.fog.color.copy(If.fog).lerp(Lf.fog, e), pf.color.copy(If.hemiSky).lerp(Lf.hemiSky, e), pf.groundColor.copy(If.hemiGround).lerp(Lf.hemiGround, e), pf.intensity = If.hemi + (Lf.hemi - If.hemi) * e, mf.color.copy(If.sunColor).lerp(Lf.sunColor, e), mf.intensity = If.sun + (Lf.sun - If.sun) * e, kf.intensity = If.lamp + (Lf.lamp - If.lamp) * e, Ff.intensity = If.lantern + (Lf.lantern - If.lantern) * e, Z.lampShade.emissive.setRGB(1, .84, .6).multiplyScalar(e * .75);
 	let t = Df.userData.shader;

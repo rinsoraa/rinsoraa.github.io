@@ -1,32 +1,33 @@
-/* Room drawer v5 —— 房间在文档流中位于主页之后；向上滚动把主页滚出屏幕 */
+/* Room drawer v6 —— 房间在主页【上方】；向上滚把主页向下推出屏幕 */
 #roomSection { position: relative; width: 100%; height: 100vh; background: #0d0b12; overflow: hidden; }
 #roomDrawerMount { position: absolute; inset: 0; }
 #roomDrawerMount canvas { display: block; width: 100% !important; height: 100% !important; }
 
-/* 关键：所有 fixed 覆盖层在进入房间时一起滑出（否则左侧导航会一直悬在屏幕上） */
-body { --p-out: 0px; }
-body.room-scrolled .side-rail,
-body.room-scrolled .scene,
-body.room-scrolled #starCanvas,
-body.room-scrolled .ambient-glow,
-body.room-scrolled .screen-grain,
-body.room-scrolled .bg-decor,
-body.room-scrolled .mobile-nav,
-body.room-scrolled .top-actions {
-  transform: translateY(-100%) !important;
-  transition: transform .55s cubic-bezier(.22,.8,.22,1) !important;
+/* 进入房间时，fixed 覆盖层（左侧导航等）随页面向下滑出屏幕 */
+body.room-open .side-rail,
+body.room-open .scene,
+body.room-open #starCanvas,
+body.room-open .ambient-glow,
+body.room-open .screen-grain,
+body.room-open .bg-decor,
+body.room-open .mobile-nav,
+body.room-open .top-actions,
+body.room-open .welcome-screen {
+  transform: translateY(100%) !important;
+  transition: transform .58s cubic-bezier(.22,.8,.22,1) !important;
   pointer-events: none !important;
 }
-body:not(.room-scrolled) .side-rail,
-body:not(.room-scrolled) .scene,
-body:not(.room-scrolled) #starCanvas,
-body:not(.room-scrolled) .ambient-glow,
-body:not(.room-scrolled) .screen-grain,
-body:not(.room-scrolled) .bg-decor,
-body:not(.room-scrolled) .mobile-nav,
-body:not(.room-scrolled) .top-actions {
+body:not(.room-open) .side-rail,
+body:not(.room-open) .scene,
+body:not(.room-open) #starCanvas,
+body:not(.room-open) .ambient-glow,
+body:not(.room-open) .screen-grain,
+body:not(.room-open) .bg-decor,
+body:not(.room-open) .mobile-nav,
+body:not(.room-open) .top-actions,
+body:not(.room-open) .welcome-screen {
   transform: translateY(0) !important;
-  transition: transform .55s cubic-bezier(.22,.8,.22,1) !important;
+  transition: transform .58s cubic-bezier(.22,.8,.22,1) !important;
 }
 
 /* 顶部提示：边框即进度环 */
@@ -49,15 +50,17 @@ body:not(.room-scrolled) .top-actions {
   -webkit-mask-composite: xor; mask-composite: exclude; z-index: -1;
 }
 
-/* 房间内浮现的向上小箭头（点击回主页） */
+/* 房间内的返回箭头：放在屏幕【底端】，点击后主页从下往上滑回 */
 #roomUp {
-  position: fixed; left: 50%; top: 18px; transform: translateX(-50%) scale(.9);
-  width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,.2); background: rgba(18,14,26,.55);
+  position: fixed; left: 50%; bottom: 26px; top: auto;
+  transform: translateX(-50%) translateY(14px) scale(.9);
+  width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.22); background: rgba(18,14,26,.58);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   color: #fff; cursor: pointer; opacity: 0; pointer-events: none; z-index: 71;
   transition: opacity .3s ease, transform .3s cubic-bezier(.2,.8,.2,1);
 }
-#roomUp.is-on { opacity: .92; pointer-events: auto; transform: translateX(-50%) scale(1); }
+#roomUp.is-on { opacity: .94; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
 #roomUp:hover { opacity: 1; }
+#roomUp svg path { transform: rotate(180deg); transform-origin: center; }
 @media (prefers-reduced-motion: reduce) { #roomHint, #roomUp { transition: opacity .01s linear; } }
