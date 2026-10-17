@@ -17811,11 +17811,11 @@ var Hf = {
 	] },
 	sit: {
 		position: [
-			-2.05,
+			-1.88,
 			.52,
 			1
 		],
-		legBend: .5,
+		legBend: .48,
 		faceTarget: [3.2, 1],
 		headFaceCamera: !0
 	}
