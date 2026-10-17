@@ -89,6 +89,19 @@ window.RINSORA_PROJECTS = {
       ],
       "icon": "🤖",
       "date": "2026.10.04"
+    },
+    {
+      "id": "dsh-pulse-rail",
+      "name": "dsh-pulse-rail",
+      "category": "Github项目",
+      "url": "https://github.com/rinsoraa/dsh-pulse-rail",
+      "desc": "把 DeepSeek Harness 的轮次导航条变成音乐可视化的插件",
+      "tags": [
+        "GitHub",
+        "rinsoraa"
+      ],
+      "icon": "📦",
+      "date": "2026.10.18"
     }
   ]
 };
