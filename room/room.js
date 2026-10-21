@@ -15593,7 +15593,7 @@ function md({ renderer: e, scene: t, camera: n, width: r, height: i, lightWorldP
 		distanceFallOff: 1,
 		screenSpaceRadius: !1
 	}), o.addPass(s);
-	let c = new $u(new H(r, i), .34, .58, .8);
+	let c = new $u(new H(r, i), .2, .58, .82);
 	o.addPass(c);
 	let l = new qu(fd);
 	o.addPass(l);
@@ -15606,7 +15606,7 @@ function md({ renderer: e, scene: t, camera: n, width: r, height: i, lightWorldP
 		bloom: !0,
 		godRays: !1,
 		grade: !0,
-		bloomStrength: .34,
+		bloomStrength: .2,
 		godRaysDay: .45,
 		godRaysNight: 0,
 		grain: .002,
@@ -16645,22 +16645,22 @@ var zf = {
 	hemi: 1.7,
 	sunColor: new J("#9db4e8"),
 	sun: .16,
-	lamp: 4,
-	lantern: 48,
+	lamp: 1.2,
+	lantern: 26,
 	sky: new J("#d6daf0"),
-	exposure: .96,
-	fill: .36,
-	moon: 3.2,
-	monitor: 2
+	exposure: .86,
+	fill: .26,
+	moon: 1.6,
+	monitor: .6
 }, Vf = 1, Hf = 0;
 function Uf(e) {
-	Ad.background.copy(zf.background).lerp(Bf.background, e), Ad.fog.color.copy(zf.fog).lerp(Bf.fog, e), ff.color.copy(zf.hemiSky).lerp(Bf.hemiSky, e), ff.groundColor.copy(zf.hemiGround).lerp(Bf.hemiGround, e), ff.intensity = zf.hemi + (Bf.hemi - zf.hemi) * e, pf.color.copy(zf.sunColor).lerp(Bf.sunColor, e), pf.intensity = zf.sun + (Bf.sun - zf.sun) * e, Of.intensity = zf.lamp + (Bf.lamp - zf.lamp) * e, Pf.intensity = zf.lantern + (Bf.lantern - zf.lantern) * e, Ff.intensity = zf.fill + (Bf.fill - zf.fill) * e, If.intensity = zf.moon + (Bf.moon - zf.moon) * e, Lf.intensity = zf.monitor + (Bf.monitor - zf.monitor) * e, Rf.intensity = e * 10.5, Z.lampShade.emissive.setRGB(1, .84, .6).multiplyScalar(e * .75);
+	Ad.background.copy(zf.background).lerp(Bf.background, e), Ad.fog.color.copy(zf.fog).lerp(Bf.fog, e), ff.color.copy(zf.hemiSky).lerp(Bf.hemiSky, e), ff.groundColor.copy(zf.hemiGround).lerp(Bf.hemiGround, e), ff.intensity = zf.hemi + (Bf.hemi - zf.hemi) * e, pf.color.copy(zf.sunColor).lerp(Bf.sunColor, e), pf.intensity = zf.sun + (Bf.sun - zf.sun) * e, Of.intensity = zf.lamp + (Bf.lamp - zf.lamp) * e, Pf.intensity = zf.lantern + (Bf.lantern - zf.lantern) * e, Ff.intensity = zf.fill + (Bf.fill - zf.fill) * e, If.intensity = zf.moon + (Bf.moon - zf.moon) * e, Lf.intensity = zf.monitor + (Bf.monitor - zf.monitor) * e, Rf.intensity = e * 4.2, Z.lampShade.emissive.setRGB(1, .84, .6).multiplyScalar(e * .35);
 	let t = Ef.userData.shader;
-	t && (t.uniforms.skyMix.value = e), Ef.color.copy(zf.sky).lerp(Bf.sky, e), Md.toneMappingExposure = zf.exposure + (Bf.exposure - zf.exposure) * e, Nf.emissiveIntensity = e * 1.15, kf.position.x = -5.65125 - e * .02, kf.position.z = -2.5;
+	t && (t.uniforms.skyMix.value = e), Ef.color.copy(zf.sky).lerp(Bf.sky, e), Md.toneMappingExposure = zf.exposure + (Bf.exposure - zf.exposure) * e, Nf.emissiveIntensity = e * .7, kf.position.x = -5.65125 - e * .02, kf.position.z = -2.5;
 }
 function Wf() {
 	let e = Vf < .5;
-	Vf = +!!e, window.dispatchEvent(new CustomEvent("room:night", { detail: { night: e } })), Jp(e ? "夜晚模式：吊灯已点亮" : "白天模式：阳光回来了");
+	Vf = +!!e, window.dispatchEvent(new CustomEvent("room:night", { detail: { night: e } })), Yp(e ? "夜晚模式：吊灯已点亮" : "白天模式：阳光回来了");
 }
 for (let [e, t] of [
 	[-4.36, -.46],
@@ -17840,7 +17840,7 @@ for (let e = 0; e < 13; e++) {
 	let i = new wi({
 		color: "#ffe2ad",
 		emissive: new J("#ffb35c"),
-		emissiveIntensity: 1.55,
+		emissiveIntensity: .9,
 		roughness: .42,
 		metalness: 0
 	}), a = $(Q, "fairy-bulb-" + e, [
@@ -17982,8 +17982,8 @@ var rp = {
 			.52,
 			1
 		],
-		legBend: .5,
-		faceTarget: [-1.88, 5.2],
+		legBend: .48,
+		faceTarget: [3.2, 1],
 		headFaceCamera: !0
 	}
 }, ip = new Nt();
@@ -18058,40 +18058,41 @@ window.__eyeAnim = {
 	replay: mp
 };
 var hp = {
-	enabled: !1,
+	enabled: !0,
 	maxYaw: 1.31,
 	maxPitch: .87,
 	smoothing: 8,
 	faceForward: .25,
 	faceUp: .25
-}, gp = !1, _p = new ro(), vp = new W(), yp = 0, bp = 0, xp = null, Sp = new W(0, 1, 0), Cp = new W(0, 0, -1), wp = new W(), Tp = new W(), Ep = new W(), Dp = new U(), Op = new ht(0, 0, 0, "YXZ");
-function kp() {
+}, gp = !1, _p = new ro(), vp = new W(), yp = 0, bp = 0, xp = null, Sp = null, Cp = new W(0, 1, 0), wp = new W(0, 0, -1), Tp = new W(), Ep = new W(), Dp = new W(), Op = new U(), kp = new U();
+new ht(0, 0, 0, "YXZ");
+function Ap() {
 	if (!xp) return null;
 	let e = ip.scale.x || 1;
-	return xp.getWorldPosition(wp), Ep.copy(Cp).applyQuaternion(xp.getWorldQuaternion(Dp)), Tp.copy(wp).addScaledVector(Ep, hp.faceForward * e).addScaledVector(Sp, hp.faceUp * e);
+	return xp.getWorldPosition(Tp), Dp.copy(wp).applyQuaternion(xp.getWorldQuaternion(Op)), Ep.copy(Tp).addScaledVector(Dp, hp.faceForward * e).addScaledVector(Cp, hp.faceUp * e);
 }
-function Ap(e) {
+function jp(e) {
 	if (!xp || !hp.enabled) return;
-	xp.getWorldPosition(wp);
+	xp.getWorldPosition(Tp);
 	let t = !1;
 	if (gp) {
 		_p.setFromCamera(tf, jd);
 		let e = _p.intersectObject(Q, !0);
 		e.length && (vp.copy(e[0].point), e[0].object.name, t = !0);
 	}
-	t || vp.copy(jd.position), Ep.copy(vp).sub(wp).normalize(), xp.parent.getWorldQuaternion(Dp).invert(), Ep.applyQuaternion(Dp).normalize();
-	let n = Math.atan2(-Ep.x, -Ep.z), r = Math.asin(V.clamp(Ep.y, -1, 1)), i = 1 - Math.exp(-hp.smoothing * Math.max(0, e)), a = n - yp;
+	t || vp.copy(jd.position), Dp.copy(vp).sub(Tp).normalize(), xp.parent.getWorldQuaternion(Op).invert(), Dp.applyQuaternion(Op).normalize();
+	let n = Math.atan2(-Dp.x, -Dp.z), r = Math.asin(V.clamp(Dp.y, -1, 1)), i = 1 - Math.exp(-hp.smoothing * Math.max(0, e)), a = n - yp;
 	for (; a > Math.PI;) a -= Math.PI * 2;
 	for (; a < -Math.PI;) a += Math.PI * 2;
-	yp = V.clamp(yp + a * i, -hp.maxYaw, hp.maxYaw), bp = V.clamp(bp + (r - bp) * i, -hp.maxPitch, hp.maxPitch), xp.quaternion.setFromEuler(Op.set(bp, yp, 0, "YXZ"));
+	yp = V.clamp(yp + a * i, -hp.maxYaw, hp.maxYaw), bp = V.clamp(bp + (r - bp) * i, -hp.maxPitch, hp.maxPitch), Sp && (Op.copy(Sp).invert(), Dp.applyQuaternion(Op).normalize()), kp.setFromUnitVectors(wp, Dp), Sp && kp.premultiply(Sp), xp.quaternion.slerp(kp, 1 - Math.exp(-hp.smoothing * Math.max(0, e)));
 }
-function jp(e, t) {
+function Mp(e, t) {
 	let n = Math.atan2(e, t);
 	return rp.FRONT_AXIS < 0 ? n + Math.PI : n;
 }
 ip.position.set(ap.position[0], ap.position[1], ap.position[2]);
-var Mp = ap.faceTarget || [jd.position.x, jd.position.z];
-ip.rotation.y = jp(Mp[0] - ap.position[0], Mp[1] - ap.position[2]), Ad.add(ip), window.__room = window.__room || {}, window.__room.character = ip, window.__room.setCharacterYaw = (e) => (ip.rotation.y = Number(e) || 0, ip.rotation.y), window.__room.setNight = (e) => (Vf = +!!e, window.dispatchEvent(new CustomEvent("room:night", { detail: { night: !!e } })), Vf), window.__room.getNight = () => Vf === 1, new Hl().load(rp.url, (e) => {
+var Np = ap.faceTarget || [jd.position.x, jd.position.z];
+ip.rotation.y = Mp(Np[0] - ap.position[0], Np[1] - ap.position[2]), Ad.add(ip), window.__room = window.__room || {}, window.__room.character = ip, window.__room.setCharacterYaw = (e) => (ip.rotation.y = Number(e) || 0, ip.rotation.y), window.__room.setNight = (e) => (Vf = +!!e, window.dispatchEvent(new CustomEvent("room:night", { detail: { night: !!e } })), Vf), window.__room.getNight = () => Vf === 1, new Hl().load(rp.url, (e) => {
 	let t = e.scene, n = new rn().setFromObject(t), r = n.getSize(new W()), i = n.getCenter(new W());
 	if (!Number.isFinite(r.y) || r.y <= 0) {
 		console.error("[character] GLB 包围盒异常，已放弃放置：", r.toArray());
@@ -18114,9 +18115,9 @@ ip.rotation.y = jp(Mp[0] - ap.position[0], Mp[1] - ap.position[2]), Ad.add(ip), 
 		}), console.log("[character] 坐姿：已旋转 " + r.length + " 根大腿节点（匹配 " + n.length + " 个）" + (r.length ? " → " + r.map((e) => e.name).join(", ") : " ⚠️ 一根都没匹配到！") + " " + (ap.legBend * 180 / Math.PI).toFixed(0) + "°");
 	}
 	t.traverse((e) => {
-		!xp && /^Head/.test(e.name || "") && (e.isBone || e.children && e.children.length) && (xp = e);
+		!xp && /^Head/.test(e.name || "") && (e.isBone || e.children && e.children.length) && (xp = e, Sp = e.quaternion.clone());
 	}), ip.scale.setScalar(a), ip.add(t), sp.partsBound = 0, cp(t, e.animations), Id();
-	let o = kp();
+	let o = Ap();
 	console.log("[character] 已加载 " + rp.url + "：原始高度 " + r.y.toFixed(3) + "，缩放 " + a.toFixed(4) + "，最终身高 " + (r.y * a).toFixed(3) + (o ? "；面部世界坐标 (" + o.x.toFixed(3) + ", " + o.y.toFixed(3) + ", " + o.z.toFixed(3) + ")" : ""));
 }, void 0, (e) => {
 	console.error("[character] GLB 加载失败：" + rp.url, e);
@@ -18153,19 +18154,19 @@ ip.rotation.y = jp(Mp[0] - ap.position[0], Mp[1] - ap.position[2]), Ad.add(ip), 
 	2.8,
 	.1
 ]);
-var Np = 96, Pp = /* @__PURE__ */ new Float32Array(288), Fp = new Float32Array(Np), Ip = new Float32Array(Np), Lp = /* @__PURE__ */ new Float32Array(288), Rp = [
+var Pp = 96, Fp = /* @__PURE__ */ new Float32Array(288), Ip = new Float32Array(Pp), Lp = new Float32Array(Pp), Rp = /* @__PURE__ */ new Float32Array(288), zp = [
 	new J("#ffe6b8"),
 	new J("#ffc9df"),
 	new J("#bcd8ff")
 ];
-for (let e = 0; e < Np; e++) {
-	Pp[e * 3] = (Math.random() - .5) * 10.5, Pp[e * 3 + 1] = .45 + Math.random() * 4.7, Pp[e * 3 + 2] = (Math.random() - .5) * 6.4, Fp[e] = .22 + Math.random() * .62, Ip[e] = Math.random() * Math.PI * 2;
-	let t = Rp[e % Rp.length];
-	Lp[e * 3] = t.r, Lp[e * 3 + 1] = t.g, Lp[e * 3 + 2] = t.b;
+for (let e = 0; e < Pp; e++) {
+	Fp[e * 3] = (Math.random() - .5) * 10.5, Fp[e * 3 + 1] = .45 + Math.random() * 4.7, Fp[e * 3 + 2] = (Math.random() - .5) * 6.4, Ip[e] = .22 + Math.random() * .62, Lp[e] = Math.random() * Math.PI * 2;
+	let t = zp[e % zp.length];
+	Rp[e * 3] = t.r, Rp[e * 3 + 1] = t.g, Rp[e * 3 + 2] = t.b;
 }
-var zp = new Ln();
-zp.setAttribute("position", new Sn(Pp, 3)), zp.setAttribute("aSize", new Sn(Fp, 1)), zp.setAttribute("aPhase", new Sn(Ip, 1)), zp.setAttribute("aColor", new Sn(Lp, 3));
-var Bp = new Si({
+var Bp = new Ln();
+Bp.setAttribute("position", new Sn(Fp, 3)), Bp.setAttribute("aSize", new Sn(Ip, 1)), Bp.setAttribute("aPhase", new Sn(Lp, 1)), Bp.setAttribute("aColor", new Sn(Rp, 3));
+var Vp = new Si({
 	uniforms: {
 		uTime: { value: 0 },
 		uOpacity: { value: .58 },
@@ -18176,20 +18177,20 @@ var Bp = new Si({
 	transparent: !0,
 	depthWrite: !1,
 	blending: 2
-}), Vp = new oi(zp, Bp);
-Vp.name = "ambient-dust", Ad.add(Vp);
-var Hp = new ro(), Up = new H(), Wp = null, Gp = 0, Kp = 0, qp;
-function Jp(e) {
-	kd.textContent = e, kd.classList.add("is-visible"), clearTimeout(qp), qp = setTimeout(() => kd.classList.remove("is-visible"), 1800);
+}), Hp = new oi(Bp, Vp);
+Hp.name = "ambient-dust", Ad.add(Hp);
+var Up = new ro(), Wp = new H(), Gp = null, Kp = 0, qp = 0, Jp;
+function Yp(e) {
+	kd.textContent = e, kd.classList.add("is-visible"), clearTimeout(Jp), Jp = setTimeout(() => kd.classList.remove("is-visible"), 1800);
 }
-var Yp = {
+var Xp = {
 	moments: "#moments",
 	blog: "#blog",
 	projects: "#projects",
 	music: "https://rinsora.dpdns.org/#museum"
-}, Xp = null;
-window.__room = window.__room || {}, window.__room.hotspots = () => ({ ...Yp }), window.__room.onHotspot = (e) => (Xp = typeof e == "function" ? e : null, !0);
-function Zp(e) {
+}, Zp = null;
+window.__room = window.__room || {}, window.__room.hotspots = () => ({ ...Xp }), window.__room.onHotspot = (e) => (Zp = typeof e == "function" ? e : null, !0);
+function Qp(e) {
 	if (!e) return !1;
 	if (e.charAt(0) === "#") {
 		let t = document.querySelector(e);
@@ -18200,79 +18201,79 @@ function Zp(e) {
 	} else location.href = e;
 	return !0;
 }
-function Qp(e) {
-	let t = Yp[e] || null;
+function $p(e) {
+	let t = Xp[e] || null;
 	return window.dispatchEvent(new CustomEvent("room:hotspot", { detail: {
 		id: e,
 		url: t
-	} })), typeof Xp == "function" ? (Xp(e, t), !0) : typeof window.roomOnHotspot == "function" ? (window.roomOnHotspot(e, t), !0) : Zp(t);
+	} })), typeof Zp == "function" ? (Zp(e, t), !0) : typeof window.roomOnHotspot == "function" ? (window.roomOnHotspot(e, t), !0) : Qp(t);
 }
-window.__room.trigger = (e) => Qp(e);
-function $p(e) {
-	vd ? Qp(e.id) : (Ed.textContent = e.eyebrow, Dd.textContent = e.title, Od.textContent = e.description, typeof wd.showModal == "function" ? wd.showModal() : Jp(`${e.title}：${e.description}`));
-}
+window.__room.trigger = (e) => $p(e);
 function em(e) {
+	vd ? $p(e.id) : (Ed.textContent = e.eyebrow, Dd.textContent = e.title, Od.textContent = e.description, typeof wd.showModal == "function" ? wd.showModal() : Yp(`${e.title}：${e.description}`));
+}
+function tm(e) {
 	let t = Md.domElement.getBoundingClientRect();
-	Up.x = (e.clientX - t.left) / t.width * 2 - 1, Up.y = -((e.clientY - t.top) / t.height) * 2 + 1;
+	Wp.x = (e.clientX - t.left) / t.width * 2 - 1, Wp.y = -((e.clientY - t.top) / t.height) * 2 + 1;
 }
 Md.domElement.addEventListener("pointermove", (e) => {
-	em(e), Hp.setFromCamera(Up, jd);
-	let t = Hp.intersectObjects(mf, !1)[0]?.object ?? null;
-	Gp = t && t.userData.hotspot && t.userData.hotspot.id === "projects" ? 1 : 0, t !== Wp && (Wp = t, Md.domElement.style.cursor = Wp ? "pointer" : "default");
+	tm(e), Up.setFromCamera(Wp, jd);
+	let t = Up.intersectObjects(mf, !1)[0]?.object ?? null;
+	Kp = t && t.userData.hotspot && t.userData.hotspot.id === "projects" ? 1 : 0, t !== Gp && (Gp = t, Md.domElement.style.cursor = Gp ? "pointer" : "default");
 }), Md.domElement.addEventListener("click", (e) => {
-	em(e), Hp.setFromCamera(Up, jd);
-	let t = Hp.intersectObjects(mf, !1);
+	tm(e), Up.setFromCamera(Wp, jd);
+	let t = Up.intersectObjects(mf, !1);
 	if (t.length) {
 		let e = t[0].object;
 		if (e.userData.action === "toggleNight") {
 			Wf();
 			return;
 		}
-		$p(e.userData.hotspot);
+		em(e.userData.hotspot);
 	}
 }), window.addEventListener("pointermove", (e) => {
 	if (e.pointerType === "touch") return;
 	let t = e.target;
 	t && typeof t.closest == "function" && t.closest(".reset-view, .lock-zoom, .info-dialog") ? cf() : lf(e.clientX, e.clientY);
 }, { passive: !0 }), Md.domElement.addEventListener("pointerleave", () => {
-	cf(), Gp = 0;
+	cf(), Kp = 0;
 }), document.addEventListener("mouseleave", () => {
-	cf(), Gp = 0;
+	cf(), Kp = 0;
 }), document.addEventListener("visibilitychange", () => {
-	dm = document.hidden, dm || (cm = performance.now(), requestAnimationFrame(pm)), document.hidden && cf();
+	fm = document.hidden, fm || (lm = performance.now(), requestAnimationFrame(mm)), document.hidden && cf();
 }), window.addEventListener("blur", cf), window.addEventListener("pagehide", cf);
-var tm = /* @__PURE__ */ new Map(), nm = 0, rm = 0;
-function im() {
-	let [e, t] = [...tm.values()];
+var nm = /* @__PURE__ */ new Map(), rm = 0, im = 0;
+function am() {
+	let [e, t] = [...nm.values()];
 	return Math.hypot(e.x - t.x, e.y - t.y);
 }
 Md.domElement.addEventListener("pointerdown", (e) => {
-	e.pointerType === "touch" && (tm.set(e.pointerId, {
+	e.pointerType === "touch" && (nm.set(e.pointerId, {
 		x: e.clientX,
 		y: e.clientY
-	}), tm.size === 2 && (nm = im(), rm = of));
+	}), nm.size === 2 && (rm = am(), im = of));
 }), Md.domElement.addEventListener("pointermove", (e) => {
-	if (e.pointerType !== "touch" || !tm.has(e.pointerId) || (tm.set(e.pointerId, {
+	if (e.pointerType !== "touch" || !nm.has(e.pointerId) || (nm.set(e.pointerId, {
 		x: e.clientX,
 		y: e.clientY
-	}), tm.size !== 2 || sf || nm <= 0)) return;
-	let t = im();
-	t <= 0 || (of = V.clamp(nm / t * rm, Gd, Kd));
+	}), nm.size !== 2 || sf || rm <= 0)) return;
+	let t = am();
+	t <= 0 || (of = V.clamp(rm / t * im, Gd, Kd));
 });
-function am(e) {
-	e.pointerType === "touch" && (tm.delete(e.pointerId), tm.size < 2 && (nm = 0));
-}
-Md.domElement.addEventListener("pointerup", am), Md.domElement.addEventListener("pointercancel", am);
 function om(e) {
-	sf = e, Cd.classList.toggle("is-active", e), Cd.setAttribute("aria-pressed", String(e)), Cd.querySelector("span").textContent = e ? "缩放已固定" : "固定缩放", e && (of = Zd), Jp(e ? "已固定缩放大小，只保留鼠标平移" : "已恢复滚轮 / 双指缩放");
+	e.pointerType === "touch" && (nm.delete(e.pointerId), nm.size < 2 && (rm = 0));
 }
-Cd.addEventListener("click", () => om(!sf)), Sd.addEventListener("click", () => {
-	cf(), nf.x = 0, nf.y = 0, of = Zd, af = Zd, jd.position.copy(Ld), jd.quaternion.copy(qd), Jp("已回到最初的观察视角");
+Md.domElement.addEventListener("pointerup", om), Md.domElement.addEventListener("pointercancel", om);
+function sm(e) {
+	sf = e, Cd.classList.toggle("is-active", e), Cd.setAttribute("aria-pressed", String(e)), Cd.querySelector("span").textContent = e ? "缩放已固定" : "固定缩放", e && (of = Zd), Yp(e ? "已固定缩放大小，只保留鼠标平移" : "已恢复滚轮 / 双指缩放");
+}
+Cd.addEventListener("click", () => sm(!sf)), Sd.addEventListener("click", () => {
+	cf(), nf.x = 0, nf.y = 0, of = Zd, af = Zd, jd.position.copy(Ld), jd.quaternion.copy(qd), Yp("已回到最初的观察视角");
 }), Td.addEventListener("click", () => wd.close()), wd.addEventListener("click", (e) => {
 	let t = wd.getBoundingClientRect();
 	(e.clientX < t.left || e.clientX > t.right || e.clientY < t.top || e.clientY > t.bottom) && wd.close();
 });
-function sm() {
+function cm() {
 	let e = Math.max(1, _d.clientWidth), t = Math.max(1, _d.clientHeight);
 	if (jd.aspect = e / t, jd.updateProjectionMatrix(), Md.setSize(e, t, !1), hd.root || vd) {
 		let e = Md.domElement;
@@ -18280,29 +18281,29 @@ function sm() {
 	}
 	Pd.setSize(e, t), Nd.setSize(e, t);
 }
-new ResizeObserver(sm).observe(_d), sm(), Md.domElement.style.cursor = "default", xd.classList.add("is-hidden");
-var cm = performance.now(), lm = 0, um = !1, dm = !1, fm = 0;
-window.__room = window.__room || {}, window.__room.pause = () => (um = !0, !0), window.__room.resume = () => {
-	let e = um;
-	return um = !1, e && !dm && (cm = performance.now(), requestAnimationFrame(pm)), e;
-}, window.__room.isPaused = () => um || dm, window.__room.frames = () => fm;
-function pm() {
-	if (um || dm) return;
-	requestAnimationFrame(pm), fm++;
-	let e = performance.now(), t = Math.min((e - cm) / 1e3, Wd);
-	cm = e, lm += t;
-	let n = lm;
-	Bp.uniforms.uTime.value = n, Vp.rotation.y = n * .012;
+new ResizeObserver(cm).observe(_d), cm(), Md.domElement.style.cursor = "default", xd.classList.add("is-hidden");
+var lm = performance.now(), um = 0, dm = !1, fm = !1, pm = 0;
+window.__room = window.__room || {}, window.__room.pause = () => (dm = !0, !0), window.__room.resume = () => {
+	let e = dm;
+	return dm = !1, e && !fm && (lm = performance.now(), requestAnimationFrame(mm)), e;
+}, window.__room.isPaused = () => dm || fm, window.__room.frames = () => pm;
+function mm() {
+	if (dm || fm) return;
+	requestAnimationFrame(mm), pm++;
+	let e = performance.now(), t = Math.min((e - lm) / 1e3, Wd);
+	lm = e, um += t;
+	let n = um;
+	Vp.uniforms.uTime.value = n, Hp.rotation.y = n * .012;
 	for (let e = 0; e < Gf.length; e++) {
 		let t = Gf[e];
 		t.rotation.z = t.userData.baseRot + Math.sin(n * .62 + e * 1.7) * .012;
 	}
-	for (let e = 0; e < Kf.length; e++) Kf[e].emissiveIntensity = 1.45 + Math.sin(n * 1.8 + Jf[e]) * .22;
-	Qf.intensity = Hf * (2.4 + Math.sin(n * 2.1) * .28), ep.material.opacity = .55 + Math.sin(n * .85) * .18, tp.material.opacity = .5 + Math.cos(n * .67) * .16, np.position.y = 1.18 + Math.sin(n * 1.25) * .004;
+	for (let e = 0; e < Kf.length; e++) Kf[e].emissiveIntensity = .82 + Math.sin(n * 1.8 + Jf[e]) * .12;
+	Qf.intensity = Hf * (.9 + Math.sin(n * 2.1) * .1), ep.material.opacity = .55 + Math.sin(n * .85) * .18, tp.material.opacity = .5 + Math.cos(n * .67) * .16, np.position.y = 1.18 + Math.sin(n * 1.25) * .004;
 	for (let e = 0; e < op.length; e++) op[e].rotation.x = ap.legBend + Math.sin(n * 1.35 + e * Math.PI) * .018;
-	ip.position.y = ap.position[1] + Math.sin(n * 1.15) * .005, df(t), Ap(t), dp(t), Hf += (Vf - Hf) * (1 - Math.exp(-2.6 * t)), Math.abs(Vf - Hf) < .001 && (Hf = Vf), Uf(Hf), Nd.update(t, n, Hf), Kp += (Gp - Kp) * (1 - Math.exp(-7 * t)), Math.abs(Gp - Kp) < .002 && (Kp = Gp), Rl(bf, Kp), bf.emissiveIntensity = Kp * .85, Lf.intensity += Kp * 1.7, Id();
+	ip.position.y = ap.position[1] + Math.sin(n * 1.15) * .005, df(t), jp(t), dp(t), Hf += (Vf - Hf) * (1 - Math.exp(-2.6 * t)), Math.abs(Vf - Hf) < .001 && (Hf = Vf), Uf(Hf), Nd.update(t, n, Hf), qp += (Kp - qp) * (1 - Math.exp(-7 * t)), Math.abs(Kp - qp) < .002 && (qp = Kp), Rl(bf, qp), bf.emissiveIntensity = qp * .3, Lf.intensity += qp * .55, Id();
 }
-pm(), window.__roomDebug = { camera() {
+mm(), window.__roomDebug = { camera() {
 	return {
 		position: [
 			+jd.position.x.toFixed(4),

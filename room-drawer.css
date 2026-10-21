@@ -6,9 +6,11 @@ body { --p: 0; background: transparent; }
 #roomSection {
   position: fixed; inset: 0; z-index: -1;
   background: #0d0b12; overflow: hidden;
-  opacity: 0; transition: opacity .5s ease;
+  opacity: 0; visibility: hidden;
+  transition: opacity .5s ease, visibility .5s ease;
 }
-#roomSection.room-ready { opacity: 1; }
+/* 只有真正拉开抽屉时才显形：ready 只表示场景加载完成，不能直接亮在主页背后。 */
+body.room-open #roomSection { opacity: 1; visibility: visible; }
 #roomDrawerMount { position: absolute; inset: 0; }
 #roomDrawerMount canvas { display: block; width: 100% !important; height: 100% !important; }
 

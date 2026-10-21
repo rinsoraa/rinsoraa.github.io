@@ -36,7 +36,7 @@ index.html
 | --- | --- | --- | --- |
 | P0 | 房间藏在 z-index:-1 视口层里，但 rAF 仍持续渲染 | 桌面首屏就持续占 GPU / 电量，即使从未进房间 | 已修：room-drawer 在 ready 后 pause，进入时 resume；实测隐藏 4 秒帧数从 159 降到 2 |
 | P1 | room/room.js 是 870KB 构建产物，仓库内无源码 / 构建脚本 | 无法复现、升级 Three.js 或改模型细节 | 部分缓解：在独立源码工程改造后重新构建；建议后续把 src/ 纳入仓库并加 CI build |
-| P1 | 3D 后处理固定 4x MSAA + GTAO + Bloom + DPR 2 | Retina / 低端 GPU 填充率过高 | 已优化：DPR 上限 1.75、PCFShadowMap、GTAO 0.12、Bloom 0.34 |
+| P1 | 3D 后处理固定 4x MSAA + GTAO + Bloom + DPR 2 | Retina / 低端 GPU 填充率过高 | 已优化：DPR 上限 1.75、PCFShadowMap、GTAO 0.12、Bloom 0.20 |
 | P1 | script.js / style.css / music-museum.js 体量大，靠注释维护契约 | 修改一处可能影响其他模块 | 新增 v4.css / v4.js 独立命名空间；建议后续拆 ES module |
 | P1 | 首页误加载 room/room.css，其 :root / body / h1 / .status-dot 是独立试玩页的全局样式 | 夜间根背景被钉成奶油色、首页状态点尺寸被改，主题切换看似失效 | 已修：首页不再加载 room/room.css；canvas 尺寸由 room.js + room-drawer.css 负责，body 保持透明让 3D 视口层可见 |
 | P2 | 音频约 36MB，单曲最大 9.5MB | 移动流量 / 首播等待 | 建议转 96–128kbps Opus/Ogg，保留 MP3 fallback |
@@ -59,10 +59,11 @@ index.html
 
 ### 2.2 3D 场景
 
-- 默认夜晚照明重构：冷色 hemi + 月光点光 + 镜头侧 fill + 显示器背光 + 角色前暖补光；夜晚曝光 0.8 → 0.96，暗角 0.6 → 0.38。
-- 后处理：Bloom 0.26 → 0.34，GTAO 0.20 → 0.12，夜晚 lift 0.030 → 0.042。
+- 默认夜晚照明重构：冷色 hemi + 月光点光 + 镜头侧 fill + 显示器背光 + 角色前暖补光；夜晚曝光 0.8 → 0.86，暗角 0.6 → 0.38。
+- 后处理：Bloom 0.26 → 0.20，GTAO 0.20 → 0.12，夜晚 lift 0.030 → 0.042。
 - 新增建模细节：窗前双色布帘与帘杆（缓慢摆动）；后墙 13 颗暖色灯串（悬链线 + 导线 + 呼吸闪烁 + 局部点光）；窗外两层星屑 Points；床尾奶油猫玩偶（身体 / 头 / 耳 / 眼 / 鼻 / 尾 / 爪 + 呼吸）；角色坐姿朝向 / 腿摆幅微调与呼吸；96 粒 shader 点精灵尘埃（逐粒大小 / 相位 / 冷暖色，不再每帧改 CPU buffer）。
 - 新增 #roomLight 玻璃按钮与左下角场景标题；支持夜灯 / 日光切换，并同步 3D 内墙面按钮触发的 room:night 事件。
+- 根据实机反馈做了第二轮修正：关闭抽屉时 #roomSection 完全 opacity/visibility 隐藏（不再透到主页背景）；角色恢复上一版的朝右前坐姿，并保留头部 base quaternion 的鼠标朝向；台灯 / 灯串 / 屏幕 / 角色补光与 Bloom 全部下调（Bloom 0.34 → 0.20），屏幕 hover 不再过曝。
 
 ### 2.3 首页视觉层
 
@@ -90,5 +91,7 @@ index.html
 - [x] 移动 390×844：欢迎页 / 主页无横向溢出
 - [x] 房间隐藏时 __room.isPaused() === true，进入后 false，帧数正常推进
 - [x] 房间灯光按钮可切换 nightTarget，room:night 事件可反向同步 UI
+- [x] 抽屉关闭时 3D 层 opacity=0 / visibility=hidden，不参与主页视觉
+- [x] 夜间台灯、灯串、显示器 hover、角色补光逐项截图复核
 - [x] 控制台无脚本异常；嵌入模式 warning 属于既有降级路径
 - [ ] GitHub Actions site-check（推送后由远端执行）
