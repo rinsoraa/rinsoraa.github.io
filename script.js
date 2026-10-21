@@ -132,6 +132,9 @@
   const bootT0 = nowMs();
   let bootLoaded = document.readyState === 'complete';
   if (!bootLoaded) window.addEventListener('load', () => { bootLoaded = true; });
+  // 兜底：任何一个外部字体 / 音频 metadata 卡住都会让 load 永不到来。
+  // 7 秒后放行开屏，避免用户永远停在 90%；真实资源仍会在后台继续加载。
+  setTimeout(() => { bootLoaded = true; }, 7000);
 
   const bootTimer = setInterval(() => {
     let next = bootPct + (bootPct < 70 ? 9 : 5);

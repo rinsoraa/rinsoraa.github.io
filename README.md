@@ -35,7 +35,11 @@
 rinsora-home/                  ← 就是仓库根
 ├── index.html                 首页：开屏 + 欢迎页 + 桌面态三板块
 ├── style.css                  全站样式表（同时是各模块的「类名契约」，见 §4）
+├── v3.css                     V3 组件 / 转场 / 响应式层
+├── v4.css                     V4 视觉增强层（极光 / 玻璃 / 卡片柔光 / 房间控件）
 ├── script.js                  首页交互层（开屏 / 主题 / 进场动画 / 路由 / 特效）
+├── v4.js                      V4 渐进增强（视差 / 卡片柔光 / 流星 / 灯光按钮）
+├── AUDIT.md                   代码审计、风险清单与本次改造记录
 ├── 404.html                   站内 404
 ├── CNAME                      rinsora.dpdns.org
 ├── .nojekyll                  关掉 Jekyll，保住下划线开头的文件
@@ -78,7 +82,7 @@ rinsora-home/                  ← 就是仓库根
 
 ```text
 index.html
-  ├─ style.css
+  ├─ style.css → v3.css → v4.css
   ├─ music-data.js → music.js      → music-upload.js（按需）
   ├─ projects-data.js → projects.js
   ├─ blog-admin.js
@@ -505,3 +509,19 @@ git push
 - **写作台草稿**：表单输入 600ms 防抖写进 `localStorage.rinsora-editor-draft`，
   保存成功 / 「新建」会清掉；下次进来只在同一篇的上下文里提示恢复。
   里面只存正文与元信息，绝不存 Token。
+
+---
+
+## 9. V4 视觉层与 3D 房间
+
+V4 是**独立命名空间**的增强层，不改变任何旧模块的类名契约：
+
+- `v4.css`：背景极光 / 光尘 / 流星、玻璃边缘、卡片指针柔光、标题层次、手机端降级。
+- `v4.js`：用 CSS 变量驱动视差；注入流星、房间灯光按钮与场景标题。
+- 房间打开时主页整体下滑，3D 场景以 camera scale 1.035 → 1 入场；隐藏时
+  `room-drawer.js` 会调用 `window.__room.pause()`，不再让房间在首屏后台空转。
+- 3D 房间新增：窗前布帘、后墙 13 颗暖色灯串、窗外两层星屑、床尾猫玩偶、
+  shader 尘埃、角色前暖补光；右下角玻璃按钮可切换夜灯 / 日光（也会同步墙面按钮）。
+- 房间与音乐博物馆都是按需加载；手机端仍不加载 3D 房间。
+
+完整的审计结论、优先级与后续建议见 [AUDIT.md](./AUDIT.md)。

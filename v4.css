@@ -1,0 +1,444 @@
+/* ============================================================
+   v4.css —— Rinsora Home「微光工坊」视觉层
+   ------------------------------------------------------------
+   只在首页加载，接在 style.css / v3.css / posts/post.css 之后。
+   设计原则：
+     1. 不改任何模块的类名契约，不重写布局；
+     2. 只增强背景光、玻璃边缘、标题层次和微交互；
+     3. 所有持续动画都尊重 prefers-reduced-motion。
+   ============================================================ */
+
+/* 让根背景始终跟随主题变量。主页不再加载独立 3D 试玩页的 room.css，
+   但保留这一条可以防止任何组件层以后再用 :root 背景覆盖主题。 */
+html.v4 {
+  background: var(--bg);
+  color: var(--ink);
+  --v4-ease: cubic-bezier(.2, .8, .2, 1);
+  --v4-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --v4-edge: rgba(255, 255, 255, .62);
+  --v4-glow: rgba(255, 143, 189, .22);
+  scrollbar-color: rgba(230, 146, 184, .62) transparent;
+}
+
+html.v4 ::selection {
+  background: rgba(255, 143, 189, .28);
+  color: var(--ink);
+}
+
+html.v4 body {
+  /* 房间是 z-index:-1 的视口层；body 必须透明，否则会把 3D 画布盖住。
+     页面底色由 html.v4 的 var(--bg) + 固定 .scene 层负责。 */
+  background: transparent;
+  color: var(--ink);
+  overflow-x: clip;
+}
+
+/* ---------- 背景：多一层会呼吸的光，不让极光只是静止色块 ---------- */
+html.v4 .scene {
+  transform: translate3d(var(--v4-bg-x, 0px), var(--v4-bg-y, 0px), 0) scale(1.045);
+  transition: transform 1.4s var(--v4-ease-out);
+  will-change: transform;
+}
+html.v4 .scene::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 48%;
+  width: 92vmax; height: 92vmax;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: conic-gradient(from 210deg,
+    transparent 0deg,
+    rgba(255, 172, 209, .20) 52deg,
+    rgba(255, 232, 160, .17) 116deg,
+    transparent 176deg,
+    rgba(203, 185, 255, .14) 248deg,
+    transparent 312deg);
+  filter: blur(64px) saturate(1.15);
+  opacity: .48;
+  animation: v4AuroraTurn 42s linear infinite;
+  pointer-events: none;
+}
+html.v4 .scene::after {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  background-image:
+    radial-gradient(circle at 14% 32%, rgba(255, 231, 166, .55) 0 1.5px, transparent 2.6px),
+    radial-gradient(circle at 76% 28%, rgba(255, 183, 216, .52) 0 1.5px, transparent 2.6px),
+    radial-gradient(circle at 64% 72%, rgba(199, 185, 255, .40) 0 1.5px, transparent 2.6px),
+    radial-gradient(circle at 30% 78%, rgba(255, 247, 214, .45) 0 1.2px, transparent 2.3px);
+  background-size: 460px 460px, 620px 620px, 540px 540px, 700px 700px;
+  opacity: .42;
+  filter: blur(.2px);
+  animation: v4MoteDrift 52s linear infinite;
+  pointer-events: none;
+}
+html.v4 #starCanvas {
+  transform: translate3d(calc(var(--v4-bg-x, 0px) * .35), calc(var(--v4-bg-y, 0px) * .35), 0);
+  transition: transform 1.8s var(--v4-ease-out);
+}
+html.v4 .aurora {
+  filter: blur(62px) saturate(1.2);
+}
+html.v4 .scene-noise { opacity: .048; }
+
+@keyframes v4AuroraTurn { to { rotate: 360deg; } }
+@keyframes v4MoteDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-46px, 32px, 0); }
+}
+
+/* 偶尔划过的流星：由 v4.js 插入 2 条，纯装饰 */
+html.v4 .v4-meteor {
+  position: fixed;
+  top: -8vh; right: -18vw;
+  width: clamp(120px, 18vw, 270px);
+  height: 1.5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.88) 56%, var(--accent-secondary));
+  filter: drop-shadow(0 0 7px rgba(255, 221, 160, .72));
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  rotate: -27deg;
+  animation: v4Meteor 13s linear infinite;
+}
+html.v4 .v4-meteor.m2 { top: 4vh; right: -28vw; width: 130px; animation-delay: 6.5s; animation-duration: 17s; opacity: 0; }
+@keyframes v4Meteor {
+  0%, 92% { opacity: 0; translate: 0 0; }
+  93% { opacity: .82; }
+  100% { opacity: 0; translate: -72vw 46vh; }
+}
+
+/* ---------- 欢迎页：更像一块有厚度的亚克力展示牌 ---------- */
+html.v4 .welcome-card {
+  perspective: 1100px;
+  box-shadow:
+    0 42px 100px rgba(166, 107, 145, .20),
+    0 6px 22px rgba(166, 107, 145, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .78);
+  border-color: rgba(255, 255, 255, .78);
+}
+html.v4 .welcome-card::after {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border-radius: 33px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  box-shadow: inset 0 0 32px rgba(255, 255, 255, .12);
+  pointer-events: none;
+}
+html.v4 .mascot-wrap {
+  transform: rotateX(var(--v4-rx, 0deg)) rotateY(var(--v4-ry, 0deg)) translateZ(18px);
+  transform-style: preserve-3d;
+  transition: transform .55s var(--v4-ease-out);
+  will-change: transform;
+}
+html.v4 .avatar-glass {
+  box-shadow:
+    0 34px 58px rgba(190, 117, 150, .23),
+    inset 0 1px rgba(255, 255, 255, .8),
+    0 0 0 1px rgba(255, 255, 255, .18);
+}
+html.v4 .avatar-backlight {
+  background: radial-gradient(circle, rgba(255, 186, 214, .54), transparent 68%);
+  animation: v4AvatarPulse 5.5s ease-in-out infinite;
+}
+html.v4 .mascot-ring {
+  box-shadow: 0 0 24px rgba(255, 171, 207, .14);
+}
+html.v4 .mascot-orbit {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, .35));
+}
+html.v4 .orbit-one { animation: v4OrbitTilt 11s ease-in-out infinite alternate; }
+html.v4 .orbit-two { animation: v4OrbitTilt 14s ease-in-out infinite alternate-reverse; }
+@keyframes v4AvatarPulse {
+  0%, 100% { transform: scale(.94); opacity: .72; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+@keyframes v4OrbitTilt {
+  from { rotate: -4deg; }
+  to { rotate: 7deg; }
+}
+html.v4 .enter-btn {
+  isolation: isolate;
+  box-shadow: 0 20px 40px rgba(239, 143, 176, .26), inset 0 1px rgba(255, 255, 255, .58);
+}
+html.v4 .enter-btn::before {
+  content: "";
+  position: absolute;
+  inset: -40% -20%;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,.58) 50%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform .8s var(--v4-ease-out);
+  pointer-events: none;
+  z-index: -1;
+}
+html.v4 .enter-btn:hover::before { transform: translateX(120%); }
+html.v4 .enter-btn:hover { box-shadow: 0 26px 52px rgba(239, 143, 176, .34), inset 0 1px rgba(255, 255, 255, .7); }
+html.v4 .enter-icon { animation: v4HeartBeat 4.8s ease-in-out infinite; }
+@keyframes v4HeartBeat {
+  0%, 88%, 100% { transform: scale(1); }
+  92% { transform: scale(1.1) rotate(-4deg); }
+  96% { transform: scale(.97); }
+}
+
+/* ---------- 顶栏 / 侧栏：用细细的光把层级拉开 ---------- */
+html.v4 .topbar { position: relative; padding-bottom: 6px; }
+html.v4 .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary) 36%, transparent 82%);
+  opacity: .55;
+  pointer-events: none;
+}
+html.v4 .topbar h2 {
+  text-shadow: 0 4px 24px rgba(233, 137, 176, .13);
+}
+html.v4 .crumb .eyebrow { color: #b35f82; letter-spacing: .2em; }
+html.v4 body.night .crumb .eyebrow { color: #e8a7c5; }
+html.v4 .page-progress {
+  height: 3px;
+  background: rgba(255, 255, 255, .38);
+  box-shadow: 0 0 18px rgba(255, 172, 205, .16);
+}
+html.v4 .page-progress i {
+  position: relative;
+  background-size: 220% 100%;
+  animation: v4ProgressFlow 4.8s linear infinite;
+  box-shadow: 0 0 14px rgba(255, 182, 214, .62);
+}
+@keyframes v4ProgressFlow { to { background-position: -220% 0; } }
+
+html.v4 .side-rail::after {
+  content: "";
+  position: absolute;
+  top: 9%; right: 0;
+  width: 1px; height: 82%;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .74) 30%, rgba(255, 207, 230, .22) 70%, transparent);
+  pointer-events: none;
+}
+html.v4 .avatar-nav-wrap::before {
+  content: "";
+  position: absolute;
+  width: 176px; height: 176px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  border-radius: 50%;
+  box-shadow: 0 0 36px rgba(255, 190, 218, .11);
+  animation: v4HaloOrbit 24s linear infinite;
+  pointer-events: none;
+}
+html.v4 .avatar-nav-wrap::after {
+  content: "✦";
+  position: absolute;
+  right: 27px; top: 38px;
+  color: #ec9fbe;
+  font-size: 12px;
+  text-shadow: 0 0 14px rgba(255, 194, 221, .65);
+  animation: v4Twinkle 3.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes v4HaloOrbit { to { transform: rotate(360deg); } }
+@keyframes v4Twinkle {
+  0%, 100% { opacity: .35; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+html.v4 .radial-item:hover,
+html.v4 .radial-item:focus-visible {
+  box-shadow: 0 18px 36px rgba(175, 111, 150, .22), inset 0 1px rgba(255, 255, 255, .65), 0 0 0 1px var(--accent-glow);
+}
+
+/* ---------- 卡片：干净的边缘 + 随手移动的柔光 ---------- */
+html.v4 .card {
+  background-image:
+    radial-gradient(300px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgba(255, 255, 255, .12), transparent 72%),
+    linear-gradient(135deg, rgba(255, 220, 237, .15), rgba(255, 247, 216, .06) 48%, rgba(218, 208, 255, .13));
+  box-shadow:
+    0 30px 80px rgba(169, 113, 154, .15),
+    inset 0 1px 0 rgba(255, 255, 255, .62);
+}
+html.v4 .card:hover {
+  box-shadow:
+    0 38px 92px rgba(169, 113, 154, .21),
+    0 0 0 1px rgba(255, 170, 207, .22),
+    inset 0 1px 0 rgba(255, 255, 255, .74);
+}
+html.v4 body.night .card {
+  background-image:
+    radial-gradient(300px circle at var(--spot-x, 50%) var(--spot-y, 0%), rgba(255, 220, 240, .06), transparent 72%),
+    linear-gradient(135deg, rgba(120, 75, 110, .08), rgba(45, 48, 82, .06) 52%, rgba(118, 94, 148, .08));
+  box-shadow:
+    0 30px 80px rgba(6, 3, 11, .46),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+html.v4 body.night .card:hover {
+  box-shadow:
+    0 38px 92px rgba(6, 3, 11, .58),
+    0 0 0 1px rgba(255, 170, 207, .18),
+    inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+html.v4 .intro-card h3 span {
+  background: linear-gradient(100deg, #e97fa8, #d38dcd 54%, #a98cdf);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 8px 28px rgba(234, 127, 169, .15);
+}
+html.v4 .section-heading .line {
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary) 42%, transparent 78%);
+  opacity: .72;
+}
+html.v4 .section-heading > span:first-child { animation: v4Twinkle 4.2s ease-in-out infinite; }
+html.v4 .recent-card {
+  border: 1px solid rgba(255, 255, 255, .46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .26);
+  transition: transform .28s var(--v4-ease-out), background .28s, border-color .28s, box-shadow .28s;
+}
+html.v4 .recent-card:hover {
+  border-color: rgba(255, 170, 207, .42);
+  box-shadow: 0 14px 34px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, .42);
+}
+html.v4 .now-live i {
+  box-shadow: 0 0 0 4px rgba(144, 221, 177, .13), 0 0 16px rgba(144, 221, 177, .55);
+  animation: v4Online 2.8s ease-in-out infinite;
+}
+@keyframes v4Online {
+  0%, 100% { opacity: .6; transform: scale(.92); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+html.v4 .bm-cat,
+html.v4 .bm-min,
+html.v4 .bf-chip { backdrop-filter: blur(8px); }
+
+html.v4 .blog-card h4 { position: relative; }
+html.v4 .blog-card h4::after {
+  content: "";
+  display: block;
+  width: 34px; height: 2px;
+  margin-top: 11px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  transform: scaleX(.45);
+  transform-origin: left;
+  transition: transform .4s var(--v4-ease-out), width .4s var(--v4-ease-out);
+}
+html.v4 .blog-card:hover h4::after { width: 62px; transform: scaleX(1); }
+
+html.v4 .hero-orbit::after,
+html.v4 .project-mascot::after {
+  content: "✦";
+  position: absolute;
+  color: #ed9cba;
+  font-size: 11px;
+  top: 7px; right: 17px;
+  animation: v4Twinkle 3.4s ease-in-out infinite;
+}
+
+html.v4 .project-note {
+  box-shadow: 0 22px 50px rgba(185, 132, 157, .1), inset 0 1px rgba(255, 255, 255, .45);
+}
+html.v4 .pt-group { border: 1px solid rgba(255, 255, 255, .42); }
+html.v4 .pt-link:hover { box-shadow: 0 10px 28px rgba(161, 109, 143, .12); }
+
+html.v4 .settings-panel {
+  box-shadow: 0 34px 90px rgba(90, 48, 75, .22), inset 0 1px rgba(255, 255, 255, .58);
+}
+
+/* ---------- 房间控件：藏在 3D 场景上的一小块玻璃 ---------- */
+html.v4 #roomLight {
+  position: fixed;
+  right: 24px; bottom: 24px;
+  z-index: 72;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  border-radius: 999px;
+  color: #f7eef8;
+  background: rgba(22, 17, 31, .58);
+  border: 1px solid rgba(255, 255, 255, .2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28), inset 0 1px rgba(255, 255, 255, .14);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  font-size: 12px;
+  letter-spacing: .06em;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .35s ease, transform .35s var(--v4-ease-out), background .2s;
+}
+html.v4 body.room-open #roomLight {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+html.v4 #roomLight:hover { background: rgba(42, 31, 50, .76); }
+html.v4 #roomLight .bulb { color: #ffd38a; font-size: 15px; text-shadow: 0 0 12px rgba(255, 190, 108, .8); }
+html.v4 #roomLight[data-night="0"] .bulb { color: #b9ddff; text-shadow: 0 0 12px rgba(140, 198, 255, .8); }
+html.v4 .room-caption {
+  position: fixed;
+  left: 26px; bottom: 24px;
+  z-index: 72;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 247, 252, .74);
+  font: 600 11px/1.2 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .14em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .6);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .45s ease .15s, transform .45s var(--v4-ease-out) .15s;
+}
+html.v4 body.room-open .room-caption { opacity: 1; transform: none; }
+html.v4 .room-caption .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #ffd28a; box-shadow: 0 0 12px rgba(255, 196, 112, .9);
+  animation: v4Online 3s ease-in-out infinite;
+}
+html.v4 .room-caption b { color: #fff; letter-spacing: .2em; }
+html.v4 .room-caption em { font-style: normal; color: rgba(255, 226, 239, .55); letter-spacing: .08em; }
+
+/* ---------- 手机：少一点模糊，多一点可读性 ---------- */
+@media (max-width: 860px) {
+  html.v4 .scene::before { opacity: .32; filter: blur(48px); }
+  html.v4 .content { padding-bottom: 128px; }
+  html.v4 .mobile-nav {
+    box-shadow: 0 16px 42px rgba(94, 49, 74, .18), inset 0 1px rgba(255, 255, 255, .52);
+    background: rgba(255, 250, 253, .82);
+  }
+  html.v4 body.night .mobile-nav { background: rgba(28, 22, 38, .86); }
+  html.v4 .room-caption { display: none; }
+  html.v4 #roomLight { display: none; }
+}
+@media (max-width: 620px) {
+  html.v4 .welcome-card { perspective: none; }
+  html.v4 .welcome-card::after { display: none; }
+  html.v4 .enter-btn::before { display: none; }
+  html.v4 .topbar { padding-bottom: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.v4 .scene,
+  html.v4 .scene::before,
+  html.v4 .scene::after,
+  html.v4 .v4-meteor,
+  html.v4 .avatar-backlight,
+  html.v4 .mascot-orbit,
+  html.v4 .mascot-wrap,
+  html.v4 .enter-icon,
+  html.v4 .page-progress i,
+  html.v4 .section-heading > span:first-child,
+  html.v4 .now-live i,
+  html.v4 .avatar-nav-wrap::before,
+  html.v4 .avatar-nav-wrap::after,
+  html.v4 .hero-orbit::after,
+  html.v4 .project-mascot::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -17,8 +17,8 @@
   section.appendChild(mount);
   document.body.appendChild(section);
 
-  document.documentElement.style.background = '#0d0b12';
-
+  // 不再把 <html> 内联成固定深色：页面底色交给主题变量 / .scene，
+  // 房间自己的 #roomSection 已有独立深色背景，离开房间时不会留下黑边。
   window.__ROOM_OPTIONS__ = { embed: true, root: '#roomDrawerMount', embedClass: false };
   var mod = document.createElement('script');
   mod.type = 'module';
@@ -39,6 +39,19 @@
 
   var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false;
   var STEP = 0.055, IDLE_MS = 1000;
+
+  // 3D 场景常驻在 z-index:-1 的视口层里；用户没进房间时它不应该继续 60fps 渲染。
+  // 这里把「抽屉状态」翻译成 __room.pause()/resume()，等模块 ready 后执行一次初始暂停。
+  function syncRoomLifecycle() {
+    if (!window.__room || typeof window.__room.pause !== 'function') return false;
+    if (open) window.__room.resume();
+    else window.__room.pause();
+    return true;
+  }
+  var lifecyclePoll = setInterval(function () {
+    if (syncRoomLifecycle()) clearInterval(lifecyclePoll);
+  }, 250);
+  setTimeout(function () { clearInterval(lifecyclePoll); }, 15000);
 
   // 开屏 / 欢迎页期间：既不允许进入房间，也不显示进度
   function welcomeVisible() {
@@ -75,11 +88,13 @@
     clearTimeout(idleTimer);
     open = true; hintSeen = true; progress = 0;
     document.body.classList.add('room-open');
+    syncRoomLifecycle();
     render();
   }
   function leaveRoom() {
     open = false;
     document.body.classList.remove('room-open');
+    syncRoomLifecycle();
     progress = 0; render();
   }
 
