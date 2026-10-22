@@ -1,0 +1,77 @@
+{
+  "status": "PROPOSED_ONLY_NOT_STAGED",
+  "baseline": "323e793e8ec147ce5eb59ed7088049588a090469",
+  "branch": "main",
+  "commits": [
+    {
+      "id": "art",
+      "title": "chore(assets): preserve original illustrations and add responsive cover crop",
+      "files": [
+        "assets/illustrations/character-pose.png",
+        "assets/illustrations/character-reference.png",
+        "assets/illustrations/cover-bedroom-desktop.png",
+        "assets/illustrations/cover-bedroom-desktop.webp",
+        "assets/illustrations/cover-bedroom-mobile.webp",
+        "assets/illustrations/hero-desktop.png",
+        "assets/illustrations/hero-desktop.webp",
+        "assets/illustrations/hero-mobile.png",
+        "assets/illustrations/hero-mobile.webp"
+      ],
+      "order": 1,
+      "validation": "Existing site-check syntax/data/HTML/site-map commands; asset SHA check; no new test references before group 3",
+      "rollback": "After explicit approval and commit only: revert this new commit after reverting all later dependent commits. No reset/clean/history rewriting."
+    },
+    {
+      "id": "product",
+      "title": "feat(home): integrate editorial home, museum repair and ambient cover",
+      "files": [
+        ".gitignore",
+        "index.html",
+        "style.css",
+        "script.js",
+        "room-drawer.css",
+        "room-drawer.js",
+        "home-hero.css",
+        "home-hero.js",
+        "ui02.css",
+        "ui02.js",
+        "cover-stage.css",
+        "cover-stage.js"
+      ],
+      "order": 2,
+      "validation": "Existing site-check syntax/data/HTML/site-map commands; asset SHA check; no new test references before group 3",
+      "rollback": "After explicit approval and commit only: revert this new commit after reverting all later dependent commits. No reset/clean/history rewriting."
+    },
+    {
+      "id": "regressions",
+      "title": "test(home): establish portable loading and room regression gates",
+      "files": [
+        ".github/workflows/site-check.yml",
+        "tests/cover-art.test.cjs",
+        "tests/cover-loading.test.cjs",
+        "tests/museum-loading.test.cjs",
+        "tests/room-controller.test.cjs",
+        "tests/ui02.test.cjs",
+        "tools/check-site.py"
+      ],
+      "order": 3,
+      "validation": "python tools/check-site.py; git diff --check; git diff --cached --check",
+      "rollback": "After explicit approval and commit only: revert this new commit after reverting all later dependent commits. No reset/clean/history rewriting."
+    },
+    {
+      "id": "reviewed-docs",
+      "title": "docs: record UI-03 checkpoint and remaining release risks",
+      "files": [
+        "docs/checkpoints/checkpoint-01.md",
+        "docs/checkpoints/checkpoint-01-files.json",
+        "docs/ui-03f/risks.json",
+        "docs/ui-03f/asset-manifest.json"
+      ],
+      "order": 4,
+      "validation": "python tools/check-site.py; git diff --check; git diff --cached --check",
+      "rollback": "After explicit approval and commit only: revert this new commit after reverting all later dependent commits. No reset/clean/history rewriting."
+    }
+  ],
+  "totalFiles": 32,
+  "rawEvidence": "Historical phase captures, tools, archives and this audit inventory are retained locally; not included by directory wildcard."
+}

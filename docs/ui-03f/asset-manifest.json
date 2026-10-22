@@ -1,0 +1,92 @@
+[
+  {
+    "file": "assets/illustrations/character-pose.png",
+    "bytes": 1377448,
+    "sha256": "34175e9c2b34c307e9d7e4d1ac1783c3423dc1f11686352d4ac030f709d5a50b",
+    "size": [
+      1122,
+      1402
+    ],
+    "role": "original"
+  },
+  {
+    "file": "assets/illustrations/character-reference.png",
+    "bytes": 1332392,
+    "sha256": "92301a1a9041fb089666b83defafd4f8605b8cf8ba751f67925deffddef051c2",
+    "size": [
+      1491,
+      1055
+    ],
+    "role": "original"
+  },
+  {
+    "file": "assets/illustrations/cover-bedroom-desktop.png",
+    "bytes": 2190809,
+    "sha256": "743147aa384b987e61f75aeea1aa319d844b1f4371e0c9857175dbd4997ea5fe",
+    "size": [
+      1672,
+      941
+    ],
+    "role": "original"
+  },
+  {
+    "file": "assets/illustrations/cover-bedroom-desktop.webp",
+    "bytes": 222206,
+    "sha256": "f3b4a0cd994888ed13485fbca643925c6d348be4cf6ad6c3cb1419d840b58683",
+    "size": [
+      1672,
+      941
+    ],
+    "role": "deployment-derivative"
+  },
+  {
+    "file": "assets/illustrations/cover-bedroom-mobile.webp",
+    "bytes": 132284,
+    "sha256": "3841f04e63f4cc7253950686b6d3900a4499cfca2afb9338d2e392667d9debae",
+    "size": [
+      832,
+      941
+    ],
+    "role": "deployment-derivative"
+  },
+  {
+    "file": "assets/illustrations/hero-desktop.png",
+    "bytes": 1989125,
+    "sha256": "587ccaabb5e3f1149f5ed52477ebb75a6092c87ebcec348f7ace6bb116c56b96",
+    "size": [
+      1536,
+      1024
+    ],
+    "role": "original"
+  },
+  {
+    "file": "assets/illustrations/hero-desktop.webp",
+    "bytes": 186304,
+    "sha256": "10c530b47ca4e3c2b4fdefc0c844bf9dc9f6f3b897a77cfdca67f8e698bc5f6f",
+    "size": [
+      1536,
+      1024
+    ],
+    "role": "deployment-derivative"
+  },
+  {
+    "file": "assets/illustrations/hero-mobile.png",
+    "bytes": 2055370,
+    "sha256": "ca1c0013cc05268b4c32b74349a8e7ecc1d4cc543f97dfc3eb152744aaff4933",
+    "size": [
+      1086,
+      1448
+    ],
+    "role": "original"
+  },
+  {
+    "file": "assets/illustrations/hero-mobile.webp",
+    "bytes": 181018,
+    "sha256": "2953d425ec06db0bc435aa6ff4439f253a349172696ccca9a6d1126665ec9d90",
+    "size": [
+      1086,
+      1448
+    ],
+    "role": "deployment-derivative"
+  }
+]

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "E-PERF-MOBILE",
+    "priority": "P2",
+    "status": "IMPROVED_OPEN",
+    "reproduce": "冷缓存直达 Cover #about，Lighthouse DevTools 移动慢网/CPU4x",
+    "scope": "移动首屏与主线程",
+    "evidence": "before/after-results.json, Lighthouse traces",
+    "finding": "Cover LCP中位数7.449→3.507s；推荐约3.5s附近，未达2.5s；After第5组TBT2538ms，波动仍在",
+    "blocksLocalCommit": false,
+    "releaseAction": "生产等效传输条件、真实硬件及主线程长任务验收；不能宣称全站性能达标"
+  },
+  {
+    "id": "E-WELCOME-CLS",
+    "priority": "P2",
+    "status": "OPEN",
+    "reproduce": "冷启动等待欢迎页，点击进入，再观察动画后CLS",
+    "scope": "真实欢迎进场",
+    "evidence": "welcome-cls.json",
+    "finding": "本轮重测UI-02=0.6250, Cover=0.6306；未修改原进场动画",
+    "blocksLocalCommit": false,
+    "releaseAction": "单独修复布局交班或明确接受该已知发布风险"
+  },
+  {
+    "id": "E-A11Y-REMAINDER",
+    "priority": "P2",
+    "status": "OPEN",
+    "reproduce": "Lighthouse accessibility检查播放器进度及文字对比",
+    "scope": "既有播放器及少量标签",
+    "evidence": "remaining-accessibility.json",
+    "finding": "播放器slider缺少aria-valuenow等；不在本轮改播放引擎",
+    "blocksLocalCommit": false,
+    "releaseAction": "针对语义与对比度专项修复后复核"
+  },
+  {
+    "id": "E-INIT-OLD",
+    "priority": "P2",
+    "status": "UNKNOWN / NOT_REPRODUCED",
+    "reproduce": "旧UI-03D #coverStage.art-ready visible等待曾超时，原现场资料不足",
+    "scope": "历史初始化证据缺口",
+    "evidence": "UI-03E REPORT.md及本轮startup-results.json",
+    "finding": "本轮12独立上下文/24次冷暖导航和解码期间切页通过；不能虚构旧根因",
+    "blocksLocalCommit": false,
+    "releaseAction": "保留启动诊断；有新证据再归因"
+  },
+  {
+    "id": "F-LAB-VARIABILITY",
+    "priority": "P2",
+    "status": "OPEN",
+    "reproduce": "重复同配置Lighthouse：UI-02 LCP候选在Hero图和文字之间变化",
+    "scope": "实验室采样可信范围、剩余初始化开销",
+    "evidence": "全部20份Lighthouse报告、after-analysis.json",
+    "finding": "After最后一组UI-02/Cover均有高TBT；原因未完全定位，不能直接归为外部负载或已消失",
+    "blocksLocalCommit": false,
+    "releaseAction": "保留全体样本和异常；上线前补充生产等效测量"
+  },
+  {
+    "id": "F-AUTOMATION-SCROLL",
+    "priority": "P2",
+    "status": "TEST_PATH_LIMITATION",
+    "reproduce": "动画中连续locator.click，工具附带滚入视口；新旧冻结页面均可出现主动scroll-close",
+    "scope": "自动化输入路径",
+    "evidence": "startup-first-attempt.json,input-race*.json",
+    "finding": "原始鼠标6轮68次实际命中、键盘6轮72次命中均无滚动且状态符合次数；浏览器内部机制尚未完全定位",
+    "blocksLocalCommit": false,
+    "releaseAction": "回归采用真实输入并保留原始失败；不将工具自动滚动冒充用户手势"
+  },
+  {
+    "id": "F-UI02-FRAGMENT",
+    "priority": "P2",
+    "status": "OBSERVED / UNATTRIBUTED",
+    "reproduce": "普通UI-02直达#about，图片解码后立即读scrollY",
+    "scope": "原生片段定位与初始化时序",
+    "evidence": "isolation-first-attempt.log,isolation-results.json",
+    "finding": "初次截图比较曾看到旧版scrollY约140而新版0；文档几何/内容在统一滚动位置后相同，尚不确定该时序差异的归因",
+    "blocksLocalCommit": false,
+    "releaseAction": "单独验证片段定位的稳定性；本轮不为性能分数改普通启动路径"
+  },
+  {
+    "id": "E-PHYSICAL-TOUCH",
+    "priority": "P2",
+    "status": "NOT_TESTED",
+    "reproduce": "真实手机、浏览器下拉刷新、触控板与设备旋转",
+    "scope": "物理设备",
+    "evidence": "当前仅Edge浏览器移动模拟",
+    "finding": "未获得物理设备证据",
+    "blocksLocalCommit": false,
+    "releaseAction": "发布前真实设备测试"
+  },
+  {
+    "id": "E-CROSS-BROWSER",
+    "priority": "P2",
+    "status": "NOT_TESTED",
+    "reproduce": "Firefox/Safari等其它引擎",
+    "scope": "跨浏览器",
+    "evidence": "本轮只测试安装的Edge155",
+    "finding": "不能把同引擎模拟当成兼容性验收",
+    "blocksLocalCommit": false,
+    "releaseAction": "发布前兼容性测试"
+  },
+  {
+    "id": "E-FIELD-INP",
+    "priority": "P2",
+    "status": "NOT_MEASURED",
+    "reproduce": "足够线上会话与真实交互样本",
+    "scope": "线上p75 INP及长期会话",
+    "evidence": "本轮TBT不是INP；UI-03E压力样本仅历史实验室记录",
+    "finding": "无新有效INP测量；不以执行时间或帧间隔代替",
+    "blocksLocalCommit": false,
+    "releaseAction": "发布环境交互观测与长期使用验证"
+  }
+]
