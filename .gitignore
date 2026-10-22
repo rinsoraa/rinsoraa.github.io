@@ -9,3 +9,19 @@ _shot_*.html
 _probe_*.html
 *.probe.html
 _gap_*.html
+
+# Local phase archives / raw browser captures. Keep reports and test sources
+# reviewable; retain the ignored evidence on disk and in external checkpoints.
+docs/**/*.zip
+docs/**/stage/
+docs/**/screenshots*/
+docs/**/raw-traces/
+docs/**/tooling/
+docs/**/*.har
+docs/**/lighthouse*/
+# Raw phase captures/logs also exist outside named screenshot directories.
+# They stay in the verified local archives, not in a broad Git staging action.
+docs/**/*.png
+docs/**/*.jpg
+docs/**/*.log
+node_modules/

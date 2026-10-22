@@ -3,6 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <script>
+    // Discover only the explicit Cover-home critical resources before the
+    // parser-blocking base styles/scripts. Media hints select ONE art variant.
+    if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('cover') === '1' && location.hash.toLowerCase() === '#about') {
+      for (const [href, media] of [['cover-bedroom-mobile.webp', '(max-width: 430px)'], ['cover-bedroom-desktop.webp', '(min-width: 431px)']]) {
+        const hint = document.createElement('link');
+        hint.rel = 'preload'; hint.as = 'image'; hint.type = 'image/webp'; hint.media = media;
+        hint.href = 'assets/illustrations/' + href; hint.fetchPriority = 'high';
+        document.head.appendChild(hint);
+      }
+      for (const [href, as] of [['ui02.css?v=ui03e-3', 'style'], ['cover-stage.css?v=ui03f-1', 'style'], ['cover-stage.js?v=ui03f-1', 'script']]) {
+        const hint = document.createElement('link'); hint.rel = 'preload'; hint.as = as; hint.href = href;
+        document.head.appendChild(hint);
+      }
+    }
+  </script>
   <meta name="theme-color" content="#ffd2e5">
   <meta name="description" content="空凛 / Rinsora 的个人小窝：记录 AI、Minecraft、Web、项目、博客与日常折腾。">
   <link rel="canonical" href="https://rinsora.dpdns.org/">
@@ -21,7 +37,7 @@
   <meta name="twitter:description" content="记录一些喜欢的东西，也记录正在成为的自己。">
   <meta name="twitter:image" content="https://rinsora.dpdns.org/assets/site-card.png">
   <title>空凛 · Rinsora 的小窝</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=ui03a-1">
   <!-- V3 组件 / 动画层：必须排在 style.css 之后（同名选择器靠后写者胜） -->
   <link rel="stylesheet" href="v3.css">
   <!-- 文章排版：真实文章页用它，首页点进文章时的 #spaPost 浮层也复用它 -->
@@ -78,8 +94,116 @@
 <link rel="stylesheet" href="room-drawer.css">
 <!-- V4 视觉增强层：必须最后加载，用独立命名空间覆盖微光 / 玻璃 / 房间控件 -->
 <link rel="stylesheet" href="v4.css">
+<link rel="stylesheet" href="home-hero.css">
+<!-- UI-02 is opt-in; this file only activates presentation for ?ui02=1. -->
+<script src="ui02.js?v=ui03e-3"></script>
+<script>
+  // Load Cover Reveal resources only for its explicit preview.
+  if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('cover') === '1') {
+    document.documentElement.classList.add('cover-preview');
+    if (location.hash.toLowerCase() === '#about') document.documentElement.classList.add('cover-home');
+    document.documentElement.dataset.coverLoadState = 'loading';
+    // Resource failure must leave a usable UI-02 page. Reload retries the same
+    // URL without retaining half-initialized listeners or a second controller.
+    const coverFallback = () => {
+      const root = document.documentElement;
+      root.dataset.coverLoadState = 'error';
+      document.getElementById('coverStage')?.remove();
+      root.classList.remove('cover-preview', 'cover-home', 'cover-exposed', 'cover-settling');
+      const offerRetry = () => {
+        if (document.getElementById('coverRetry')) return;
+        const retry = document.createElement('button');
+        retry.id = 'coverRetry'; retry.className = 'soft-btn'; retry.type = 'button';
+        retry.textContent = '封面加载失败，点击重试';
+        retry.addEventListener('click', () => location.reload());
+        document.getElementById('about')?.before(retry);
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', offerRetry, { once: true });
+      else offerRetry();
+    };
+    window.addEventListener('rinsora-cover-error', coverFallback, { once: true });
+    // Resolve preview geometry before the direct-about first paint.
+    document.querySelector('link[rel="stylesheet"][href^="ui02.css"]')?.setAttribute('blocking', 'render');
+    const coverStyle = document.createElement('link');
+    coverStyle.rel = 'stylesheet';
+    coverStyle.href = 'cover-stage.css?v=ui03f-1';
+    coverStyle.dataset.coverStageStyles = '1';
+    coverStyle.dataset.coverStageState = 'loading';
+    coverStyle._rinsoraCoverReady = new Promise(resolve => {
+      let completed = false;
+      const finish = (ok) => {
+        if (completed) return;
+        completed = true; clearTimeout(deadline);
+        coverStyle.dataset.coverStageState = ok ? 'ready' : 'error';
+        if (!ok) { coverStyle.remove(); coverFallback(); }
+        resolve(ok);
+      };
+      const deadline = setTimeout(() => finish(false), 12000);
+      coverStyle.addEventListener('load', () => finish(true), { once: true });
+      coverStyle.addEventListener('error', () => finish(false), { once: true });
+    });
+    coverStyle.setAttribute('blocking', 'render');
+    document.head.appendChild(coverStyle);
+    const coverScript = document.createElement('script');
+    coverScript.src = 'cover-stage.js?v=ui03f-1';
+    coverScript.defer = true;
+    const scriptDeadline = setTimeout(coverFallback, 12000);
+    coverScript.addEventListener('load', () => clearTimeout(scriptDeadline), { once: true });
+    coverScript.addEventListener('error', () => { clearTimeout(scriptDeadline); coverFallback(); }, { once: true });
+    document.head.appendChild(coverScript);
+  }
+</script>
 </head>
 <body>
+<script>
+// Opt-in ambient image only: paint it without waiting for all deferred app
+// scripts. The existing Cover controller still owns every interaction/state.
+if (document.documentElement.classList.contains('cover-preview') && document.documentElement.dataset.coverLoadState !== 'error') {
+  const stage = document.createElement('div');
+  stage.id = 'coverStage'; stage.setAttribute('aria-hidden', 'true');
+  stage.style.display = 'none'; // Never expose unstyled DOM if Cover CSS fails.
+  stage.innerHTML = '<picture class="cover-art"><source media="(max-width: 430px)" type="image/webp"><source type="image/webp"><img id="coverBedroomImage" width="1672" height="941" alt="" decoding="async" fetchpriority="high"></picture>';
+  document.body.appendChild(stage);
+  const image = stage.querySelector('img'), sources = stage.querySelectorAll('source');
+  let started = false, pngFallback = false, failed = false;
+  const art = {
+    stage, image,
+    get failed() { return failed; },
+    prepare(highPriority = false) {
+      if (highPriority) image.fetchPriority = 'high';
+      if (started) return;
+      started = true;
+      sources[0].srcset = 'assets/illustrations/cover-bedroom-mobile.webp';
+      sources[1].srcset = 'assets/illustrations/cover-bedroom-desktop.webp';
+      image.src = 'assets/illustrations/cover-bedroom-desktop.png';
+    }
+  };
+  window.RinsoraCoverArt = art;
+  image.addEventListener('load', async () => {
+    const current = image.currentSrc;
+    try {
+      await image.decode();
+      if (current !== image.currentSrc) return;
+      stage.style.setProperty('--cover-image', `url("${current}")`);
+      stage.classList.add('art-ready');
+    } catch (_) { /* Keep the theme gradient on decode failure. */ }
+    stage.dispatchEvent(new Event('coverartchange'));
+  });
+  image.addEventListener('error', () => {
+    if (!pngFallback) {
+      pngFallback = true;
+      sources.forEach(source => source.removeAttribute('srcset'));
+      image.src = 'assets/illustrations/cover-bedroom-desktop.png';
+    } else { failed = true; stage.classList.remove('art-ready'); }
+    stage.dispatchEvent(new Event('coverartchange'));
+  });
+  document.querySelector('[data-cover-stage-styles]')._rinsoraCoverReady.then(ok => {
+    if (ok && document.documentElement.dataset.coverLoadState !== 'error') stage.style.removeProperty('display');
+  });
+  if (location.hash.toLowerCase() === '#about') art.prepare(true);
+}
+</script>
+
 <!-- Step 3：房间抽屉撑开块（位于正常流，展开时把页面内容真正往下推） -->
 <div id="roomDrawerSpacer" aria-hidden="true"></div>
 <a class="skip-link" href="#mainContent">跳到主内容</a>
@@ -221,7 +345,7 @@
     </div>
   </aside>
 
-  <section class="content" id="mainContent">
+  <section class="content" id="mainContent" role="main">
     <header class="topbar">
       <div class="crumb">
         <p class="eyebrow">MY LITTLE SPACE</p>
@@ -253,34 +377,28 @@
     <div class="section-stack">
       <!-- ABOUT -->
       <section class="page-section active" id="about">
-        <div class="about-hero">
-          <article class="intro-card card tilt-card">
-            <div class="card-sheen"></div>
-            <div class="sticker sticker-pink">HELLO ♡</div>
-            <div class="section-kicker">✿ ABOUT ME / 01</div>
-            <h3>你好呀，<br>我是 <span>空凛</span>。</h3>
-            <p class="lead">也可以叫我 <b>Rinsora</b>。我喜欢研究那些“本来没有必要，但做出来很有意思”的东西。</p>
-            <p>平时会在 AI、Minecraft、网页折腾、电商设计之间来回横跳。这个页面会慢慢记录我做过的项目、写下的东西，以及一些只属于自己的碎碎念。</p>
-            <div class="tag-row">
-              <span>AI</span><span>Minecraft</span><span>Web</span><span>Design</span><span>折腾中</span>
-            </div>
-            <div class="hero-sign">Rinsora <em>✦</em></div>
-          </article>
-
-          <aside class="mini-card card tilt-card">
-            <div class="profile-chip"><span class="chip-icon">♡</span><span>空凛的小资料</span><em>PROFILE</em></div>
-            <div class="profile-avatar-row">
-              <div class="mini-avatar"><img src="assets/avatar.png" alt="" onerror="this.onerror=null;this.src='assets/avatar.svg'"></div>
-              <div><strong>空凛 / Rinsora</strong><small>little room resident</small></div>
-            </div>
-            <dl>
-              <div><dt>NAME</dt><dd>空凛 / Rinsora</dd></div>
-              <div><dt>STATUS</dt><dd><span class="online-dot"></span> Online</dd></div>
-              <div><dt>MOOD</dt><dd>☀ sunny day</dd></div>
-              <div><dt>NOW</dt><dd>想把小窝继续变温馨 ✦</dd></div>
-            </dl>
-            <div class="quote">“记录一些喜欢的东西，也记录正在成为的自己。”</div>
-          </aside>
+        <div class="about-hero home-hero" aria-labelledby="homeHeroTitle">
+          <div class="home-hero-copy">
+            <p class="home-hero-kicker">RINSORA'S HOME / LIVING LAB</p>
+            <h3 id="homeHeroTitle">你好，我是<span>空凛。</span></h3>
+            <p class="home-hero-lead">也可以叫我 Rinsora。<br>把喜欢的东西，慢慢装进自己的小世界。</p>
+            <p class="home-hero-description">喜欢研究那些“本来没有必要，但做出来很有意思”的东西。在这里记录项目、创作，以及日常的碎碎念。</p>
+            <ul class="home-hero-tags" aria-label="兴趣"><li>AI</li><li>Minecraft</li><li>Web</li><li>Design</li></ul>
+          </div>
+          <figure class="home-hero-art">
+            <picture>
+              <source media="(max-width: 620px)" type="image/webp" srcset="assets/illustrations/hero-mobile.webp" width="1086" height="1448">
+              <source media="(max-width: 620px)" srcset="assets/illustrations/hero-mobile.png" width="1086" height="1448">
+              <source type="image/webp" srcset="assets/illustrations/hero-desktop.webp" width="1536" height="1024">
+              <img id="homeHeroImage" src="assets/illustrations/hero-desktop.png" width="1536" height="1024" alt="暖灯下的小窝：空凛坐在书桌旁，窗外是夜空，猫咪在床上休息。" loading="lazy" decoding="async" fetchpriority="low">
+            </picture>
+            <figcaption>A LITTLE ROOM, A WORLD OF IDEAS.</figcaption>
+          </figure>
+          <div class="home-hero-actions">
+            <a class="home-hero-button home-hero-primary" href="#projects" data-target="projects" id="heroProjects">探索作品 <span aria-hidden="true">↗</span></a>
+            <button class="home-hero-button" type="button" id="heroRoom">进入我的房间 <span aria-hidden="true">→</span></button>
+            <p class="home-hero-status" id="heroRoomStatus" role="status"></p>
+          </div>
         </div>
 
         <div id="recentFeed"></div>
@@ -440,7 +558,7 @@
 
   <!-- 设置抽屉 -->
   <div class="settings-mask" id="settingsMask"></div>
-  <aside class="settings-panel" id="settingsPanel" aria-label="外观设置">
+  <aside class="settings-panel" id="settingsPanel" aria-label="外观设置" aria-hidden="true" inert>
     <div class="settings-head">
       <div><p>RINSORA LAB</p><h3>小窝设置</h3></div>
       <button type="button" class="settings-close" id="settingsClose" aria-label="关闭">×</button>
@@ -734,17 +852,18 @@
 <script src="blog-admin.js"></script>
 <!-- 音乐博物馆（music-museum-data.js / music-museum.js）与它的 CSS 改为
      首次进馆时由 script.js 的 loadMuseum() 按需注入，见 enterMuseum 上方。 -->
-<script src="script.js"></script>
+<script src="script.js?v=ui03e-2"></script>
 
 <!-- Step 3：房间抽屉。room-drawer.js 先设置 __ROOM_OPTIONS__，随后 module 版 room.js 才执行 -->
 <div id="roomDrawer" aria-hidden="true"><div id="roomDrawerMount"></div></div>
 <button id="roomCloseBtn" type="button">收起房间</button>
 <div id="roomPullHint" aria-hidden="true">↑ SCROLL TO ENTER MY ROOM</div>
 <div id="roomRotateHint" aria-hidden="true"><div>请把手机横过来<small>横屏才能进入房间</small></div></div>
-<script src="room-drawer.js"></script>
+<script src="room-drawer.js?v=ui03e-2"></script>
+<script src="home-hero.js?v=ui03f-1"></script>
 <!-- V4：视觉增强 / 房间灯光控件；失败时静默降级，不影响任何既有逻辑 -->
 <script src="v4.js"></script>
-<!-- room.js 由 room-drawer.js 按需注入（手机端不加载） -->
+<!-- room.js 由 room-drawer.js 在首次进入房间时注入。 -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",

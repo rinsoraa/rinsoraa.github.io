@@ -109,3 +109,6 @@ body.room-open:not(.museum-open) > #mmScene { visibility: hidden; }
 #roomUp svg path { transform: rotate(180deg); transform-origin: center; }
 body.lyrics-on #roomUp { bottom: calc(var(--bar-h, 76px) + 26px); }
 @media (prefers-reduced-motion: reduce) { #roomHint, #roomUp { transition: opacity .01s linear; } }
+@media (prefers-reduced-motion: reduce) {
+  body.room-open > *, body:not(.room-open) > *, #roomSection { transition-duration: .01s !important; }
+}

@@ -1,0 +1,57 @@
+/* UI-01: scoped to the about hero; never changes fixed-element ancestors. */
+#about .home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+  grid-template-rows: 1fr auto;
+  gap: 0;
+  min-height: 440px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: linear-gradient(125deg, var(--glass-solid), var(--glass-2));
+  box-shadow: 0 18px 48px rgba(98, 69, 111, .1);
+  overflow: hidden;
+}
+#about .home-hero-copy { padding: clamp(24px, 3vw, 44px) 28px 10px; align-self: center; min-width: 0; }
+#about .home-hero-kicker { color: var(--ink); opacity: .8; font-size: 11px; font-weight: 700; letter-spacing: .16em; margin: 0 0 22px; }
+#about .home-hero h3 { font-size: clamp(30px, 2.65vw, 40px); line-height: 1.25; letter-spacing: -.045em; margin: 0 0 20px; color: var(--ink); }
+#about .home-hero h3 span { display: block; font-size: 1.38em; }
+#about .home-hero-lead { font-size: 16px; line-height: 1.85; color: var(--ink); margin: 0 0 12px; }
+#about .home-hero-description { font-size: 13px; line-height: 1.9; color: var(--ink); opacity: .85; margin: 0 0 16px; max-width: 38em; }
+#about .home-hero-tags { display: flex; flex-wrap: wrap; gap: 7px; padding: 0; margin: 0; list-style: none; }
+#about .home-hero-tags li { padding: 5px 10px; border: 1px solid var(--ring); border-radius: 8px; font-size: 11px; color: var(--ink); }
+#about .home-hero-art { grid-column: 2; grid-row: 1 / 3; margin: 0; display: flex; flex-direction: column; justify-content: center; background: rgba(180, 136, 112, .09); min-width: 0; }
+#about .home-hero-art picture { display: block; width: 100%; }
+#about .home-hero-art img { display: block; width: 100%; height: auto; max-height: 420px; aspect-ratio: 3 / 2; object-fit: contain; object-position: center; }
+#about .home-hero-art figcaption { font-size: 10px; letter-spacing: .18em; padding: 16px; text-align: center; color: var(--ink); opacity: .8; }
+#about .home-hero-actions { padding: 14px 28px 26px; display: flex; flex-wrap: wrap; gap: 10px; align-content: start; }
+#about .home-hero-button { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 15px; min-height: 44px; border-radius: 12px; border: 1px solid var(--ring); background: var(--glass); color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.3; font-family: inherit; text-decoration: none; cursor: pointer; transition: background .2s, box-shadow .2s; }
+#about .home-hero-primary { background: var(--ink); color: var(--bg); border-color: transparent; }
+#about .home-hero-button:hover { box-shadow: 0 4px 16px var(--accent-soft); }
+#about .home-hero-button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+#about .home-hero-button:disabled { cursor: progress; opacity: .7; }
+#about .home-hero-status { margin: 0; flex-basis: 100%; font-size: 12px; color: var(--ink); }
+#about .home-hero-status:empty { display: none; }
+@media (min-width: 1600px) { #about .home-hero { min-height: 460px; } }
+@media (min-width: 621px) and (max-width: 1100px) {
+  #about .home-hero-copy { padding: 25px 20px 8px; }
+  #about .home-hero-actions { padding: 14px 20px 24px; }
+  #about .home-hero-kicker { letter-spacing: .08em; }
+}
+@media (max-width: 620px) {
+  /* Five existing destinations fit one row on the home page. */
+  body:has(#about.active) .mobile-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  #about .home-hero { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; border-radius: 22px; min-height: 0; }
+  #about .home-hero-copy { padding: 26px 23px 22px; }
+  #about .home-hero-kicker { font-size: 10px; margin-bottom: 15px; }
+  #about .home-hero h3 { font-size: 30px; margin-bottom: 14px; }
+  #about .home-hero h3 span { display: inline; font-size: 1em; }
+  #about .home-hero-lead { font-size: 14px; }
+  #about .home-hero-description { font-size: 12px; }
+  #about .home-hero-art { grid-column: 1; grid-row: 2; }
+  #about .home-hero-art img { aspect-ratio: 3 / 4; max-height: none; }
+  #about .home-hero-art figcaption { padding: 12px; font-size: 9px; }
+  #about .home-hero-actions { grid-row: 3; padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #about .home-hero-button { padding: 12px 10px; gap: 5px; font-size: 12px; }
+  #about .home-hero-status { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { #about .home-hero-button { transition: none; } }

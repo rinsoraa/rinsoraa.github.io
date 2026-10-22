@@ -506,7 +506,7 @@
     /* 切分栏 = 退出音乐博物馆浮层。放在最前面（比「已经在目标分栏」的
        提前返回还早）：在博物馆里点键盘 1~4 想回小窝，如果先提前返回，
        展厅会一直盖在上面，看着像按键失灵。 */
-    if (AppState.museumOpen) exitMuseum();
+    if (AppState.museumOpen || museumEntry) exitMuseum();
 
     if (page === AppState.currentPage && !o.force) {
       /* 已经在目标分栏：不用转场，但**必须**照样把首帧兜底交班，
@@ -637,7 +637,7 @@
       hidePost();
       /* hash 被清掉（浏览器后退）时，博物馆也该跟着退场 —— 否则
          地址已经不是 #museum 了，展厅还盖在上面，进退两难。 */
-      if (AppState.museumOpen && (location.hash || '') !== '#museum') exitMuseum();
+      if ((AppState.museumOpen || museumEntry) && (location.hash || '') !== '#museum') exitMuseum();
     }
   });
 
@@ -873,76 +873,112 @@
      music-museum.js 自己也兼容「DOMContentLoaded 之后才执行」。
      ============================================================ */
   let museumLoading = null;
+  let museumEntry = null;
+  let museumEntryToken = 0;
+  const museumAssets = new Map();
 
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error('加载失败：' + src));
-      document.head.appendChild(s);
+  function loadMuseumAsset(kind, src) {
+    const key = kind + ':' + src;
+    if (museumAssets.has(key)) return museumAssets.get(key);
+    const node = document.createElement(kind);
+    node.dataset.museumAsset = src;
+    if (kind === 'link') { node.rel = 'stylesheet'; node.href = src; }
+    else node.src = src;
+    const pending = new Promise((resolve, reject) => {
+      let timer = null;
+      const finish = (error) => {
+        clearTimeout(timer);
+        node.onload = node.onerror = null;
+        if (error) {
+          museumAssets.delete(key);
+          node.remove();
+          reject(error);
+        } else {
+          node.dataset.museumReady = 'true';
+          resolve(true);
+        }
+      };
+      node.onload = () => finish();
+      node.onerror = () => finish(new Error('加载失败：' + src));
+      // Removing a timed-out stylesheet is safe. Scripts use their native error
+      // event: retrying a still-running script could register duplicate handlers.
+      if (kind === 'link') timer = setTimeout(() => finish(new Error('样式加载超时')), 15000);
+      document.head.appendChild(node);
     });
+    museumAssets.set(key, pending);
+    return pending;
   }
 
   function loadMuseum() {
-    if (window.RinsoraMuseum) return Promise.resolve(true);
     if (!museumLoading) {
-      const css = document.createElement('link');
-      css.rel = 'stylesheet';
-      css.href = 'music-museum.css';
-      document.head.appendChild(css);          /* CSS 先上场，场景 DOM 出现时样式已经在 */
-      museumLoading = loadScript('music-museum-data.js')
-        .then(() => loadScript('music-museum.js'))
+      museumLoading = loadMuseumAsset('link', 'music-museum.css')
+        .then(() => loadMuseumAsset('script', 'music-museum-data.js'))
+        .then(() => loadMuseumAsset('script', 'music-museum.js'))
         .then(() => {
           /* 「退出展厅」必须由宿主关（见下面 exitMuseum 的注释）。
              museum 是懒加载的，注册时机跟着搬到加载完成这里。 */
-          if (window.RinsoraMuseum && window.RinsoraMuseum.onExitRequest) {
-            window.RinsoraMuseum.onExitRequest(exitMuseum);
-          }
+          if (!window.RinsoraMuseum) throw new Error('博物馆初始化失败');
+          window.RinsoraMuseum.onExitRequest(exitMuseum);
           return true;
+        }).catch((error) => {
+          museumLoading = null;
+          throw error;
         });
-      museumLoading.catch(() => { museumLoading = null; });   /* 失败允许重试 */
     }
     return museumLoading;
   }
 
   function enterMuseum(opts) {
     const o = opts || {};
-    if (!window.RinsoraMuseum) {
-      /* 首次进馆：先把场景层拉下来再开门。失败就安静退场，
-         别把 body.museum-open 留在半路（此时还没挂上，正好）。 */
-      return loadMuseum().then(() => enterMuseum(o)).catch(() => false);
+    if (museumEntry) return museumEntry;
+    if (window.RinsoraMuseum && window.RinsoraMuseum.isOpen() && !o.force) {
+      return Promise.resolve(window.RinsoraMuseum.records());
     }
-    const M = window.RinsoraMuseum;
+    const token = ++museumEntryToken;
+    const attempt = loadMuseum().then(() => {
+      if (token !== museumEntryToken) return false;
+      const M = window.RinsoraMuseum;
 
-    closeNav(true);                 /* 导航先收，别压在加载层上 */
-    hidePost();                     /* 文章浮层让位 */
-    closeSettings();                /* 设置抽屉也收掉 */
+      closeNav(true);
+      hidePost();
+      closeSettings();
 
-    AppState.museumOpen = true;
-    state.museumOpen = true;
-    /* 小窝淡出：只作用于侧栏与内容这两块**子元素** ——
-       .app 自己保持 opacity:1 / 无 filter（不变量 ②）。 */
-    body.classList.add('museum-open');
-    if (history.replaceState) history.replaceState(null, '', '#museum');
+      AppState.museumOpen = true;
+      state.museumOpen = true;
+      /* 小窝淡出只作用于侧栏与内容；不改变 .app 的包含块。 */
+      body.classList.add('museum-open');
+      if (history.replaceState) history.replaceState(null, '', '#museum');
 
-    return Promise.resolve(M.enter(o)).then((list) => {
-      /* 加载层被 Esc 中途掐掉的情况：enter 的 token 会作废，
-         这里跟着把状态摆正，别留下「museumOpen=true 但没进场景」。 */
-      if (!M.isOpen() && !M.isEntering()) AppState.museumOpen = false;
-      return list;
+      return Promise.resolve(M.enter(o)).then((list) => {
+        /* Museum and host tokens both reject stale entry completion. */
+        if (token !== museumEntryToken) return false;
+        if (!M.isOpen() && !M.isEntering()) exitMuseum();
+        return list;
+      });
+    }).catch(() => {
+      if (token === museumEntryToken) {
+        exitMuseum();
+        toast('音乐博物馆加载失败，请点击入口重试');
+      }
+      return false;
+    }).finally(() => {
+      if (museumEntry === attempt) museumEntry = null;
     });
+    museumEntry = attempt;
+    return attempt;
   }
 
   function exitMuseum() {
+    const pending = !!museumEntry;
+    ++museumEntryToken;
+    museumEntry = null;             /* Esc / navigation also cancel an asset wait. */
     const M = window.RinsoraMuseum;
-    if (!M) return false;
-    const was = !!(AppState.museumOpen || M.isOpen());
-    M.exit();
+    const was = !!(pending || AppState.museumOpen || (M && (M.isOpen() || M.isEntering())));
+    if (M) M.exit();
     AppState.museumOpen = false;
     state.museumOpen = false;
     body.classList.remove('museum-open');
-    if (was && history.replaceState) {
+    if (was && location.hash === '#museum' && history.replaceState) {
       history.replaceState(null, '', '#' + (AppState.currentPage || 'about'));
     }
     return was;
@@ -1083,6 +1119,7 @@
      initSettings —— 外观 / 特效 / 关于
      ============================================================ */
   function openSettings() {
+    if (settingsPanel) { settingsPanel.inert = false; settingsPanel.setAttribute('aria-hidden', 'false'); }
     settingsPanel && settingsPanel.classList.add('open');
     settingsMask && settingsMask.classList.add('open');
     /* 遮罩是铺满整屏且吃指针事件的，底下那页还能滚就是明显的错位感
@@ -1100,6 +1137,7 @@
     /* 焦点要还回去，否则键盘用户的焦点会掉在一个已经收起来的面板里 */
     const opener = $('.settings-open');
     if (wasOpen && opener && opener.focus) opener.focus({ preventScroll: true });
+    if (settingsPanel) { settingsPanel.inert = true; settingsPanel.setAttribute('aria-hidden', 'true'); }
   }
   $$('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
   $('#settingsClose') && $('#settingsClose').addEventListener('click', closeSettings);
@@ -1383,7 +1421,7 @@
     return $$('#blog .blog-grid .blog-card').map((card) => {
       const a = $('.card-title-link', card), d = $('.date', card), p = card.querySelector('p');
       if (!a) return null;
-      return { title: a.textContent.trim(), href: a.getAttribute('href') || '#', date: d ? d.textContent.trim() : '', desc: p ? p.textContent.trim() : '' };
+      return { title: a.textContent.trim(), href: a.getAttribute('href') || '#', date: d ? d.textContent.trim() : '', desc: p ? p.textContent.trim() : '', category: card.dataset.cat || '' };
     }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit || 3);
   }
   function readRecentProjects(limit) {
@@ -1410,6 +1448,10 @@
     if (!host) return;
     const posts = readRecentPosts(3);
     const projects = readRecentProjects(3);
+    if (window.RinsoraUI02) {
+      host.innerHTML = window.RinsoraUI02.renderRecent(posts, projects);
+      return;
+    }
     if (!posts.length && !projects.length) { host.innerHTML = ''; return; }
 
     /* ⚠️ 每个区块是「recent-grid-wrap > (recent-sub + recent-grid)」两层，
@@ -1522,10 +1564,15 @@
   let mx = innerWidth / 2, my = innerHeight / 2, rx = mx, ry = my;
   let glowX = mx, glowY = my;
   let hoverCard = null;
+  let cursorRaf = 0;
+  const cursorCanMove = () => state.effects.cursor && !reduceMotion() && !document.hidden && matchMedia('(pointer: fine)').matches;
 
   document.addEventListener('pointermove', (e) => {
     mx = e.clientX; my = e.clientY;
-    if (cursorDot) { cursorDot.style.left = mx + 'px'; cursorDot.style.top = my + 'px'; }
+    if (cursorCanMove()) {
+      if (cursorDot) { cursorDot.style.left = mx + 'px'; cursorDot.style.top = my + 'px'; }
+      if (!cursorRaf) cursorRaf = requestAnimationFrame(cursorLoop);
+    }
 
     /* 卡片倾斜：只写两个比例变量（-0.5 ~ 0.5），角度在 CSS 里算。
        这样「调手感」是改 CSS 的 --tilt-* ，不用动 JS。 */
@@ -1558,15 +1605,17 @@
   }, { passive: true });
 
   /* 光标环 + 环境光晕都用「目标点 → 缓动跟随」，mousemove 里不直接改 DOM */
-  (function cursorLoop() {
+  function cursorLoop() {
+    cursorRaf = 0;
+    if (!cursorCanMove()) return;
     rx += (mx - rx) * .18;
     ry += (my - ry) * .18;
     glowX += (mx - glowX) * .07;
     glowY += (my - glowY) * .07;
     if (cursorRing) { cursorRing.style.left = rx + 'px'; cursorRing.style.top = ry + 'px'; }
     if (ambientGlow) { ambientGlow.style.left = glowX + 'px'; ambientGlow.style.top = glowY + 'px'; }
-    requestAnimationFrame(cursorLoop);
-  })();
+    if (Math.max(Math.abs(mx-rx), Math.abs(my-ry), Math.abs(mx-glowX), Math.abs(my-glowY)) > .05) cursorRaf = requestAnimationFrame(cursorLoop);
+  }
 
   document.addEventListener('pointerover', (e) => {
     if (e.target.closest && e.target.closest('a,button,.card,.mp-btn,.mp-disc,.avatar-button,.radial-item,.bf-chip,input,textarea,select')) {
@@ -1660,7 +1709,7 @@
          音乐博物馆 → 文章浮层 → 设置抽屉 → 导航 → 添加音乐弹窗。
          博物馆排最前：它是「最外面那一层」，Esc 应该先退它。
          两边都幂等，误调不会出事。 */
-      if (AppState.museumOpen || (window.RinsoraMuseum && window.RinsoraMuseum.isOpen())) {
+      if (museumEntry || AppState.museumOpen || (window.RinsoraMuseum && window.RinsoraMuseum.isOpen())) {
         exitMuseum();
         return;
       }

@@ -36,6 +36,10 @@
    两件事互相独立，各自记在 localStorage 里。
    --hue 是色相微调，只作用在背景场景层上，不会污染正文配色。
    ============================================================ */
+/* UI-03A: the optional museum DOM must not enter layout before its CSS.
+   Zero specificity lets the lazy sheet own display and all exit transitions. */
+:where(.mm-load, .mm-scene){display:none}
+
 :root{
   --pink:#ff9ecb; --pink-2:#ffd5e6; --yellow:#ffe48f; --yellow-2:#fff7cc;
   --peach:#ffc0a6; --lav:#d9c7ff; --blue:#c8eaff; --mint:#c7efdf;

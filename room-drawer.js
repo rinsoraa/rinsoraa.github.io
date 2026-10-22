@@ -1,9 +1,12 @@
 (function () {
   'use strict';
   var coarse = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-  if (coarse || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent)) return;
+  var mobile = coarse || /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent);
+  // Explicit ownership: Cover preview owns home pull-up. Buttons still enter this room.
+  var previewQuery = new URLSearchParams(location.search);
+  var coverOwnsPull = previewQuery.get('ui02') === '1' && previewQuery.get('cover') === '1';
 
-  ['roomDrawer', 'roomDrawerSpacer', 'roomDrawerMount', 'roomHint', 'roomUp'].forEach(function (id) {
+  ['roomDrawer', 'roomDrawerSpacer', 'roomDrawerMount', 'roomHint', 'roomUp', 'roomCloseBtn', 'roomPullHint', 'roomRotateHint'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el && el.parentNode) el.parentNode.removeChild(el);
   });
@@ -12,6 +15,8 @@
   // 关键：完全不改动文档滚动（不再插 100vh 的流内块），因此站点自身的滚动联动逻辑不受影响。
   var section = document.createElement('section');
   section.id = 'roomSection';
+  section.inert = true;
+  section.setAttribute('aria-hidden', 'true');
   var mount = document.createElement('div');
   mount.id = 'roomDrawerMount';
   section.appendChild(mount);
@@ -23,7 +28,16 @@
   var mod = document.createElement('script');
   mod.type = 'module';
   mod.src = '/room/room.js';
-  document.head.appendChild(mod);
+  mod.addEventListener('load', syncRoomLifecycle);
+  // Mobile keeps the existing scene unloaded until the explicit Hero action.
+  var moduleStarted = false, pendingEntry = null, entryGeneration = 0;
+  function startModule() {
+    if (moduleStarted) return;
+    moduleStarted = true;
+    document.head.appendChild(mod);
+  }
+  // The scene is invisible until entry. Both desktop and mobile use the same
+  // existing readiness/retry path, avoiding its startup parse and texture cost.
 
   var hint = document.createElement('div');
   hint.id = 'roomHint';
@@ -34,10 +48,12 @@
   up.id = 'roomUp';
   up.type = 'button';
   up.setAttribute('aria-label', '回到主页');
+  up.tabIndex = -1;
+  up.setAttribute('aria-hidden', 'true');
   up.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5V12M8 12l-4-4M8 12l4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   document.body.appendChild(up);
 
-  var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false;
+  var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false, returnFocus = null, returnScrollY = 0;
   var STEP = 0.055, IDLE_MS = 1000;
 
   // 3D 场景常驻在 z-index:-1 的视口层里；用户没进房间时它不应该继续 60fps 渲染。
@@ -74,6 +90,10 @@
     hint.classList.toggle('is-on', progress > 0.002);
     document.body.style.setProperty('--p', progress.toFixed(4));
     up.classList.toggle('is-on', open);
+    section.inert = !open;
+    section.setAttribute('aria-hidden', String(!open));
+    up.tabIndex = open ? 0 : -1;
+    up.setAttribute('aria-hidden', String(!open));
   }
   function reset() { progress = 0; render(); }
 
@@ -84,22 +104,56 @@
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () { reset(); hintSeen = true; }, IDLE_MS);
   }
-  function enterRoom() {
+  function revealRoom() {
     clearTimeout(idleTimer);
+    returnFocus = document.activeElement;
+    returnScrollY = window.scrollY;
     open = true; hintSeen = true; progress = 0;
     document.body.classList.add('room-open');
     syncRoomLifecycle();
     render();
+    up.focus({ preventScroll: true });
   }
   function leaveRoom() {
+    entryGeneration++;
+    var wasOpen = open;
     open = false;
     document.body.classList.remove('room-open');
     syncRoomLifecycle();
-    progress = 0; render();
+    progress = 0;
+    if (wasOpen && returnFocus && returnFocus.focus) returnFocus.focus({ preventScroll: true });
+    render();
+    if (wasOpen) window.scrollTo({ top: returnScrollY, behavior: 'instant' });
   }
+  function enterRoom() {
+    if (welcomeVisible() || document.body.classList.contains('museum-open')) return Promise.resolve(false);
+    if (open) return Promise.resolve(true);
+    if (pendingEntry) return pendingEntry;
+    startModule();
+    var generation = entryGeneration;
+    pendingEntry = new Promise(function (resolve) {
+      var started = Date.now();
+      function check() {
+        if (generation !== entryGeneration || welcomeVisible() || document.body.classList.contains('museum-open')) { resolve(false); return; }
+        if (window.__room && typeof window.__room.resume === 'function' && window.__room.character && window.__room.character.children.length) {
+          section.classList.add('room-ready');
+          revealRoom(); resolve(true); return;
+        }
+        if (Date.now() - started > 20000) { resolve(false); return; }
+        setTimeout(check, 100);
+      }
+      check();
+    }).then(function (result) { pendingEntry = null; return result; });
+    return pendingEntry;
+  }
+  window.RinsoraRoom = { enter: enterRoom, leave: leaveRoom, isOpen: function () { return open; } };
+  window.addEventListener('keydown', function (e) { if (e.key === 'Escape' || /^[1-4]$/.test(e.key)) leaveRoom(); });
+  window.addEventListener('hashchange', leaveRoom);
 
   // 手势：页面顶端（scrollY<=2）+ 向上滚 → 累积进度环 → 满则主页整体下滑露出房间
   window.addEventListener('wheel', function (e) {
+    if (coverOwnsPull) return;
+    if (mobile) return;
     if (welcomeVisible()) return;                     // 欢迎页内绝对不能进房间
     if (document.body.classList.contains('museum-open')) return;  // 博物馆浮层内放行滚轮：.mm-detail-card 等要能滚
     if (open) { e.preventDefault(); return; }         // 房间内滚轮不返回
@@ -112,6 +166,8 @@
   var lastY = null;
   window.addEventListener('touchstart', function (e) { lastY = e.touches[0].clientY; }, { passive: true });
   window.addEventListener('touchmove', function (e) {
+    if (coverOwnsPull) return;
+    if (mobile) return;
     if (welcomeVisible()) return;
     if (document.body.classList.contains('museum-open')) return;
     if (open) { e.preventDefault(); return; }
@@ -131,7 +187,7 @@
   document.addEventListener('click', function (e) {
     var t = e.target;
     while (t && t !== document.body) {
-      if (t.getAttribute && t.getAttribute('data-target')) { leaveRoom(); return; }
+      if (t.getAttribute && (t.getAttribute('data-target') || t.getAttribute('data-museum'))) { leaveRoom(); return; }
       t = t.parentNode;
     }
   }, true);
@@ -146,7 +202,8 @@
   setTimeout(function () { if (!ready) { ready = true; section.classList.add('room-ready'); clearInterval(tick); } }, 12000);
 
   setTimeout(function () {
-    if (hintSeen || welcomeVisible()) return;
+    if (coverOwnsPull) return;
+    if (mobile || hintSeen || welcomeVisible()) return;
     // ⚠️ 必须 > 0.002：render() 的显隐判据是 progress > 0.002，写 0.002 时这段是死代码（环永不出现）。
     // 收回时若用户已经开始滚动（progress 已涨过 0.06），就不要清掉他的进度。
     progress = 0.06; render();

@@ -1,0 +1,143 @@
+/* Opt-in composition prototype. Never transform .app or fixed-overlay ancestors. */
+html.cover-preview {
+  --cover-content-shift: 0px; --cover-rail-shift: 0px; --cover-duration: 480ms;
+  /* Match measure() before the controller arrives, so early art does not
+     change its crop when the deferred application finishes initializing. */
+  --cover-art-height: min(720px, 80vh);
+  --cover-haze: .46; --cover-blur-low: 1px; --cover-blur-high: 3px;
+  --cover-softness: 1; --cover-particles: .55;
+}
+/* Direct links keep the site's real initialization boundary; no timed hiding. */
+html.cover-preview[data-pre-section="about"] #app:not(.visible) { visibility: hidden; }
+/* Reserve only the actual 36px control row before its DOM arrives. */
+html.cover-preview.cover-home .section-stack:not(:has(#coverControls))::before { content: ''; display: block; min-height: 36px; margin: -13px 0 12px; }
+#coverStage, #coverControls, #coverDebugPanel { display: none; }
+html.cover-preview.cover-home #coverStage {
+  display: block; position: fixed; inset: 0; z-index: 3; pointer-events: none;
+  background: radial-gradient(ellipse at 20% 16%, #c39580, transparent 65%), linear-gradient(115deg, #714c53, #caa395 34%, #efccd5);
+}
+/* The same room stays behind every card. A cheap translucent wash, not a
+   viewport backdrop-filter, softens the default state. Only its opacity changes. */
+#coverStage::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--bg) 8%, color-mix(in srgb, var(--bg) 78%, #e7c4d2) 64%, var(--bg)); opacity: var(--cover-haze); pointer-events: none; }
+/* Reuse the site's single star field above the room, below all foreground UI.
+   Its existing settings/reduced-motion cancellation remains authoritative. */
+html.cover-preview.cover-home #starCanvas { z-index: 4; opacity: var(--cover-particles); }
+html.cover-preview.cover-home #about {
+  position: relative; transform: translateY(var(--cover-content-shift));
+  /* A direct #about fragment belongs at the page top. Native smooth anchor
+     scrolling must not race an immediate reveal and trigger its scroll-close. */
+  scroll-margin-top: calc(var(--cover-origin, 0px) + var(--cover-content-shift));
+  background: transparent; border-radius: 28px; padding: 24px;
+  border: 1px solid transparent; box-shadow: none;
+}
+/* Transform only these local modules; .app / #mainContent and the fixed
+   player's containing block stay untouched. Top actions are in-flow here. */
+html.cover-preview.cover-home .topbar {
+  transform: translateY(var(--cover-content-shift)); padding: 12px 18px 18px;
+  border: 1px solid var(--border); border-radius: 22px;
+  background: color-mix(in srgb, var(--glass-solid) 88%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 var(--hi), 0 14px 32px #3e283b16;
+}
+html.cover-preview.cover-home .topbar::after { left: 18px; right: 18px; bottom: 7px; opacity: .55; }
+html.cover-preview.cover-home .topbar .crumb { opacity: 1; }
+html.cover-preview.cover-home .topbar .dock-btn { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.cover-preview.cover-home .page-progress {
+  transform: translateY(var(--cover-content-shift)); position: relative;
+  width: calc(100% - 36px); max-width: 1244px; margin: -21px auto 28px; opacity: 1;
+}
+html.cover-preview.cover-home #coverControls {
+  display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: -13px 0 12px; position: relative; z-index: 1; min-height: 36px;
+  transform: translateY(var(--cover-content-shift));
+}
+html.cover-preview #coverToggle { font: inherit; font-size: 12px; line-height: 1.5; padding: 8px 14px; min-height: 36px; border: 1px solid var(--border); border-radius: 99px; background: var(--glass-solid); color: var(--ink); cursor: pointer; }
+html.cover-preview #coverStatus { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+html.cover-preview.cover-home .side-rail {
+  left: 16px; top: 24px; bottom: auto; width: calc(var(--rail) - 32px); padding: 16px 10px;
+  border: 1px solid var(--border); border-radius: 28px; background: color-mix(in srgb, var(--glass-solid) 88%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); will-change: auto;
+  box-shadow: 0 12px 35px rgba(84, 53, 84, .08); transform: translateY(var(--cover-rail-shift));
+  animation: none;
+}
+html.cover-preview.cover-home .avatar-nav-wrap { height: 176px; margin-top: 8px; }
+html.cover-preview.cover-home .avatar-hint { font-size: 8px; left: 110px; top: 6px; }
+html.cover-preview.cover-home .side-name { margin-top: 0; }
+html.cover-preview.cover-home .side-name strong { font-size: 21px; }
+html.cover-preview.cover-home .side-name small { max-width: 180px; line-height: 1.6; }
+html.cover-preview.cover-home .rail-bottom { margin-top: 16px; font-size: 9px; }
+/* Keep the existing room illustration, as a small workbench vignette. */
+html.cover-preview.cover-home #about .home-hero { min-height: 300px; grid-template-columns: minmax(0, 1fr) 30%; }
+html.cover-preview.cover-home #about .home-hero-copy { padding: 24px 26px 8px; }
+html.cover-preview.cover-home #about .home-hero h3 { font-size: 32px; }
+html.cover-preview.cover-home #about .home-hero h3 span { display: inline; font-size: 1em; }
+html.cover-preview.cover-home #about .home-hero-kicker { margin-bottom: 12px; }
+html.cover-preview.cover-home #about .home-hero-art { align-self: center; background: transparent; padding-right: 16px; }
+html.cover-preview.cover-home #about .home-hero-art picture { border-radius: 18px; overflow: hidden; border: 1px solid var(--border); }
+html.cover-preview.cover-home #about .home-hero-art img { mask-image: none; -webkit-mask-image: none; }
+html.cover-preview.cover-home #about .home-hero-art figcaption { font-size: 8px; padding: 10px 0; letter-spacing: .06em; }
+html.cover-preview.cover-home #roomHint { display: none; }
+html.cover-settling.cover-home :is(#about, .side-rail, .topbar, .page-progress, #coverControls) { transition: transform var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
+html.cover-settling #coverStage::after, html.cover-settling.cover-home #starCanvas { transition: opacity var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
+html.cover-settling .cover-art::after { transition: opacity var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
+/* Keep UI-03C's calibrated image box. The lower edge feathers into the room's
+   ambient color rather than cutting off at the foreground sheet. One source,
+   two fixed 1/3px blur surfaces. No per-frame filter or viewport backdrop blur. */
+.cover-art { position: absolute; top: 0; left: var(--rail); right: 0; height: var(--cover-art-height, 720px); display: block; }
+.cover-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: var(--cover-x, 50%) var(--cover-y, 30%); opacity: 0; filter: blur(var(--cover-blur-low)); }
+.cover-art::after { content: ''; position: absolute; inset: 0; background-image: var(--cover-image); background-size: cover; background-position: var(--cover-x, 50%) var(--cover-y, 30%); filter: blur(var(--cover-blur-high)); opacity: var(--cover-softness); pointer-events: none; }
+#coverStage.art-ready .cover-art img { opacity: 1; }
+.cover-art { mask-image: linear-gradient(to right, transparent, #000 24px), linear-gradient(to bottom, #000 70%, transparent); mask-composite: intersect; }
+/* Local glass for the primary cards, solid-enough editorial surfaces below. */
+html.cover-preview.cover-home #about .home-hero {
+  background: color-mix(in srgb, var(--u2-paper) 84%, transparent);
+  border-color: var(--border); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 var(--hi), 0 18px 44px #3e283b20;
+}
+html.cover-preview.cover-home #about :is(.u2-post, .u2-project, .now-panel, .mini-card) {
+  background: color-mix(in srgb, var(--u2-paper) 93%, transparent);
+  border-color: color-mix(in srgb, var(--border) 75%, var(--u2-line));
+  box-shadow: inset 0 1px 0 var(--hi), 0 12px 28px #3e283b12;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+html.cover-preview.cover-home #about :is(.u2-section-head, .section-heading) {
+  padding: 12px 16px; border-radius: 16px;
+  background: color-mix(in srgb, var(--u2-paper) 88%, transparent);
+}
+.cover-guides { display: none; }
+html.cover-debug .cover-guides { display: block; }
+.cover-visible-guide { position: absolute; inset: 8px; border: 1px dashed #fce1b980; font: 10px monospace; color: #fff7e6; padding: 8px; text-shadow: 0 1px 2px #432c40; }
+.cover-visible-guide span { position: absolute; right: 10px; top: calc(var(--cover-origin) + var(--cover-content-shift) - 32px); background: #493546d9; padding: 4px; }
+.cover-guide-box { position: absolute; border: 1px dashed #fff0bd; border-radius: 10px; }
+.cover-guide-box[data-guide="face"] { border-color: #d4f5e9; }
+.cover-guide-box span { position: absolute; top: -20px; left: 0; white-space: nowrap; padding: 2px 5px; background: #382c43d9; color: #fff6e6; font: 9px/1.5 monospace; border-radius: 3px; }
+html.cover-debug #coverDebugPanel { display: block; position: fixed; z-index: 55; right: 18px; top: 100px; width: 280px; max-height: calc(100dvh - 230px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--glass-solid); color: var(--ink); padding: 14px; box-shadow: 0 10px 32px #54345420; font: 11px/1.6 system-ui; }
+html.cover-debug:not(.cover-home) #coverDebugPanel { display: none; }
+#coverDebugPanel summary { cursor: pointer; font-weight: 700; }
+#coverDebugPanel label { display: grid; gap: 3px; margin-top: 9px; }
+#coverDebugPanel label span { display: flex; justify-content: space-between; }
+#coverDebugPanel input { width: 100%; accent-color: #a377a1; }
+#coverDebugPanel output { display: block; white-space: pre-line; margin-top: 10px; }
+#coverDebugPanel textarea { width: 100%; font: 10px/1.4 monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+#coverDebugPanel button { font: inherit; min-height: 32px; padding: 6px 10px; border-radius: 8px; background: var(--glass); color: var(--ink); border: 1px solid var(--border); cursor: pointer; }
+.cover-debug-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+#coverControls button:focus-visible, #coverDebugPanel :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+html.cover-preview body.night #coverStage { background: radial-gradient(ellipse at 65% 20%, #625164, transparent 60%), #332d40; }
+@media (max-width: 860px) {
+  html.cover-preview { --cover-art-height: min(620px, 70vh); }
+  html.cover-preview.cover-home #coverToggle { position: static; }
+  html.cover-preview.cover-home .topbar { padding: 10px 12px 16px; gap: 8px; border-radius: 18px; }
+  html.cover-preview.cover-home .topbar h2 { font-size: 25px; }
+  html.cover-preview.cover-home .topbar .eyebrow { font-size: 8px; letter-spacing: .12em; }
+  html.cover-preview.cover-home #about { padding: 12px; border-radius: 22px; }
+  html.cover-preview.cover-home #about .home-hero { grid-template-columns: 1fr; min-height: 0; }
+  html.cover-preview.cover-home #about .home-hero-art { grid-column: 1; grid-row: 2; width: 130px; padding: 0; margin: 4px 24px; }
+  html.cover-preview.cover-home #about .home-hero-art img { max-height: 174px; }
+  html.cover-preview.cover-home #about .home-hero-copy { padding: 24px 20px 8px; }
+  html.cover-preview.cover-home #about .home-hero h3 { font-size: 27px; }
+  html.cover-preview.cover-home #about .home-hero-actions { grid-column: 1; grid-row: 3; padding: 16px; }
+  .cover-art { left: 0; mask-image: linear-gradient(to bottom, #000 70%, transparent); mask-composite: add; }
+  html.cover-debug #coverDebugPanel { right: 10px; top: auto; bottom: 180px; width: min(280px, calc(100vw - 20px)); max-height: 40svh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.cover-preview.cover-home :is(#about, .side-rail, .topbar, .page-progress, #coverControls, #starCanvas), html.cover-preview #coverStage::after, html.cover-preview .cover-art::after { transition: none; }
+}
