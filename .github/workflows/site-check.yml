@@ -67,6 +67,12 @@ jobs:
           process.exit(bad);
           '
 
+      - name: 主页、房间与按需加载回归
+        run: |
+          for f in tests/*.test.cjs; do
+            node "$f" || exit 1
+          done
+
       - name: HTML 可解析检查
         run: |
           python3 - <<'PY'
