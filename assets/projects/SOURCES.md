@@ -49,3 +49,19 @@ Total: 463,842 bytes. Website gallery captures are historical page records rathe
 ## Pending projects
 
 TrayHider, CatooBot, Markdown-reader and Bilibili have no verified public screenshot in this delivery. They retain clearly identified CSS/SVG project portraits. Do not substitute unrelated interfaces. CatooBot media needs explicit public-use permission and privacy review; the other tools need verified runtime captures and account/notification review. No private QQ conversation was collected.
+
+## UI-04A.3 — Cover Reveal real interaction recording
+
+Captured on 2026-10-23 from the frozen Checkpoint-02 source at `96f94fc7fe5ccc017f9ec0f8598990cc7c89de8f`, in a clean, isolated Edge browser. Actual mouse wheel events drive the existing controller: default → upward wheel → revealed hold → downward wheel → closed. No synthetic UI, static-image interpolation, private profile, browser chrome or recorded audio.
+
+Viewport: 1440 × 810, recorded proportionally at 1280 × 720 / 25 fps. No spatial crop or speed change; only the initial loading/wait period is trimmed. Local Playwright recorder and its existing FFmpeg VP8 encoder were used without installing dependencies. MP4 was not produced because that bundled encoder does not support it; unsupported browsers keep the poster and static gallery. Safari/Firefox playback remains NOT_TESTED.
+
+| Asset | Dimensions / duration | Bytes | SHA256 |
+|---|---|---:|---|
+| Original browser recording (local evidence archive) | 1280 × 720, untrimmed | 1195445 | `c3fee99488a6ede606b7a74f885157c502b9b533f5a24c6aa6d53923c7760b44` |
+| `rinsoraa-rinsoraa-github-io/demo-cover.webm` | 1280 × 720, 8.56 s, VP8, no audio | 719845 | `c231e9e18e1f66afcbca4c10c6c062bf1e208f38dd2cc974065d555b73244d45` |
+| `rinsoraa-rinsoraa-github-io/demo-cover-poster.webp` | 960 × 540 | 81980 | `b310b33a570b5f3372620d1ee829736d3143b574daae085c1c0bec6fdb5e17c8` |
+
+The poster is extracted from the deployed clip at 3.9 s and proportionally resized (WebP quality 92); its full-size PNG frame SHA256 is `9ca097b09f9edbdc9853f63ddae02c2afc237a8b98024b6bc45b980e6051696b`. The video uses VP8 CRF 12 / target 1000 kbit/s, with no audio stream. Original recording, event timestamps, encoding command and source/frame hashes are retained in local review evidence rather than publishing machine paths or raw test logs.
+
+DSH Pulse Rail has no verified current-host recording; its existing two images remain historical material only. TrayHider, CatooBot, Markdown-reader and Bilibili also remain DEMO_PENDING. No compare experience is configured publicly: the labelled comparison fixtures used during validation are not product media or evidence of a TrayHider outcome.

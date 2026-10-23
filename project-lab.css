@@ -184,3 +184,34 @@ html.lab-preview :is(#creativeLab, .lab-modal, .lab-lightbox, .lab-recent) :focu
   html.lab-preview #about .lab-recent-main { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .lab-dialog-panel { animation: none; } }
+
+/* Experience surfaces live inside the existing, gated detail dialog only. */
+.lab-experience { margin: 34px 0; padding: 24px; border: 1px solid var(--lab-line); border-radius: 20px; background: linear-gradient(145deg, var(--lab-lavender), var(--lab-paper)); }
+.lab-experience h3 { margin: 9px 0; font-size: clamp(20px, 3vw, 27px); line-height: 1.5; }
+.lab-experience-description { margin: 0 0 20px; font-size: 14px; line-height: 1.8; }
+.lab-demo-frame { position: relative; overflow: hidden; border: 1px solid var(--lab-line); border-radius: 14px; background: var(--lab-lavender); }
+.lab-demo-video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.lab-demo-play { position: absolute; inset: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; border: 0; color: #fff; background: linear-gradient(0deg, #29213270, #29213225); text-shadow: 0 1px 5px #211729; font-family: inherit; font-weight: 600; font-size: 16px; line-height: 1.5; }
+.lab-demo-play > span { display: grid; place-items: center; width: 54px; height: 54px; font-size: 28px; border: 1px solid #ffffffc0; border-radius: 50%; background: #392d4670; }
+.lab-demo-play small { font: 12px/1.6 ui-monospace, monospace; }
+.lab-demo-play[hidden] { display: none; }
+.lab-demo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.lab-demo-tools button { min-height: 44px; padding: 8px 13px; border: 1px solid var(--lab-line); border-radius: 9px; color: var(--ink); background: var(--lab-paper); cursor: pointer; font: inherit; font-size: 12px; }
+.lab-demo-tools > span, .lab-experience-note, .lab-experience-source, .lab-demo-status { font-size: 11px; line-height: 1.9; color: var(--lab-muted); overflow-wrap: anywhere; }
+.lab-demo-status:empty { display: none; }
+.lab-experience-source { margin: 20px 0 0; padding-top: 12px; border-top: 1px solid var(--lab-line); }
+.lab-experience-note { margin: 7px 0 0; }
+.lab-compare-frame { position: relative; overflow: hidden; border-radius: 14px; background: var(--lab-paper); touch-action: pan-y; cursor: ew-resize; }
+.lab-compare-frame > img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.lab-compare-frame > .lab-compare-after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--compare)); }
+.lab-compare-label { position: absolute; top: 10px; padding: 5px 10px; border-radius: 6px; background: var(--lab-paper); border: 1px solid var(--lab-line); font-size: 11px; pointer-events: none; }
+.lab-compare-label-before { left: 10px; } .lab-compare-label-after { right: 10px; }
+.lab-compare-divider { position: absolute; left: var(--compare); top: 0; bottom: 0; width: 2px; background: var(--lab-paper); box-shadow: 0 0 0 1px var(--ink); pointer-events: none; }
+.lab-compare-divider b { position: absolute; top: 50%; left: 0; translate: -50% -50%; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--lab-line); border-radius: 50%; background: var(--lab-paper); color: var(--ink); }
+.lab-compare-control { display: block; margin-top: 10px; font-size: 12px; }
+.lab-compare-control output { float: right; font: 12px/1.6 ui-monospace, monospace; }
+.lab-compare-control input { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--ink); cursor: ew-resize; }
+.lab-compare-error[hidden] { display: none; }
+.lab-compare-failed > img { visibility: hidden; }
+.lab-compare-error { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 20px; font-size: 13px; line-height: 1.8; background: var(--lab-paper); }
+@media (max-width: 760px) { .lab-experience { padding: 16px; margin-inline: -8px; } .lab-demo-play { font-size: 13px; } .lab-demo-play > span { width: 44px; height: 44px; } }

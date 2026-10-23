@@ -40,6 +40,17 @@ window.RINSORA_PROJECT_LAB = {
     portrait: 'document',
     story: ['你正在逛的小窝，也是一件慢慢生长的作品。项目、博客和日常记录，都在这里相遇。'],
     highlights: ['个人网站', '创作记录', '项目与博客'],
+    experience: {
+      type: 'video', title: '轻轻揭开小窝的另一面',
+      description: '向上滚动，藏在页面背后的房间慢慢出现。',
+      src: 'assets/projects/rinsoraa-rinsoraa-github-io/demo-cover.webm',
+      mime: 'video/webm', codec: 'vp8', width: 1280, height: 720, duration: 8.56, audio: false,
+      poster: { src: 'assets/projects/rinsoraa-rinsoraa-github-io/demo-cover-poster.webp', width: 960, height: 540,
+        alt: '同一段真实录屏中的封面展开画面：内容卡与侧栏下移，露出房间和空凛' },
+      source: { method: '真实 Edge 浏览器录屏 / 原生滚轮输入', captured: '2026-10-23',
+        version: '96f94fc7fe5ccc017f9ec0f8598990cc7c89de8f', genuine: true,
+        note: '冻结的 Checkpoint-02 页面，默认 → 上滚展开 → 停留 → 下滚收起；1440×810 等比例录为1280×720，无空间裁切，仅裁去加载等待；本段无音轨。' }
+    },
     cover: {
       src: 'assets/projects/rinsoraa-rinsoraa-github-io/cover.webp', width: 960, height: 600,
       alt: 'Rinsora 小窝实际页面：封面完全展开，房间插画前悬浮着侧栏与主页卡片',

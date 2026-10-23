@@ -527,6 +527,10 @@
     }
 
     const from = AppState.currentPage;
+    // The first Lab deep link already paints #projects via the head guard.
+    // Do not animate the never-visible #about as an outgoing page: on a slow
+    // load its text can flash over the gallery and become a false LCP surface.
+    const initialLabProjects = LAB_PREVIEW && page === 'projects' && html.dataset.preSection === 'projects';
 
     hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
     html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
@@ -535,7 +539,12 @@
     AppState.currentPage = page;
     state.section = page;
 
-    runTransition(from, page);
+    if (initialLabProjects) {
+      $$('.page-section').forEach(section => {
+        section.classList.remove('leaving', ...TR_CLASSES);
+        section.classList.toggle('active', section.id === page);
+      });
+    } else runTransition(from, page);
 
     $$('.radial-item').forEach((b) => b.classList.toggle('active', b.dataset.target === page));
     $$('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.target === page));

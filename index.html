@@ -103,7 +103,7 @@
 if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1') {
   document.documentElement.classList.add('lab-preview');
   document.documentElement.dataset.labLoadState = 'loading';
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'project-lab.css?v=ui04a2-1';
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'project-lab.css?v=ui04a3-1';
   if (/^#(?:projects|\/lab\/)/i.test(location.hash)) css.setAttribute('blocking', 'render');
   const styled = new Promise((resolve, reject) => { css.onload = resolve; css.onerror = () => reject(new Error('Lab stylesheet unavailable')); });
   document.head.appendChild(css);
@@ -112,13 +112,22 @@ if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchPar
     s.onload = resolve; s.onerror = () => { s.remove(); reject(new Error('Lab script unavailable')); };
     document.head.appendChild(s);
   });
-  const scripts = load('project-lab-data.js?v=ui04a2-1').catch(() => { window.RINSORA_PROJECT_LAB = {}; })
-    .then(() => load('project-lab-model.js?v=ui04a2-1')).then(() => load('project-lab.js?v=ui04a2-1'));
+  // Start the existing ordered scripts' transfers together; execution stays serial.
+  if (/^#projects$/i.test(location.hash)) for (const href of ['project-lab-model.js?v=ui04a4-1', 'project-lab.js?v=ui04a4-1']) {
+    const hint = document.createElement('link'); hint.rel = 'preload'; hint.as = 'script'; hint.fetchPriority = 'low'; hint.href = href; document.head.appendChild(hint);
+  }
+  const mediaData = fetch('project-media-data.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('Media configuration unavailable'); return r.json(); });
+  mediaData.catch(() => {}); // Observed again below; avoid early unhandled rejection.
+  const scripts = load('project-lab-data.js?v=ui04a3-1').catch(() => { window.RINSORA_PROJECT_LAB = {}; })
+    .then(() => load('project-lab-model.js?v=ui04a4-1')).then(() => mediaData).then(doc => {
+      window.RINSORA_PROJECT_MEDIA = doc;
+    }).then(() => load('project-lab.js?v=ui04a4-1'));
   const dom = document.readyState === 'loading' ? new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true })) : Promise.resolve();
   let timer;
   const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Lab load timeout')), 12000); });
   window.RinsoraLabReady = Promise.race([Promise.all([styled, scripts, dom]), deadline]).then(() => {
     clearTimeout(timer);
+    if (window.RinsoraLabModel.validateMediaDocument(window.RINSORA_PROJECT_MEDIA, window.RinsoraProjects.read()).length) throw new Error('Invalid media configuration');
     if (!window.RinsoraLab?.init()) throw new Error('Lab initialization unavailable');
     document.documentElement.dataset.labLoadState = 'ready';
     window.RinsoraHome.routeHash();
