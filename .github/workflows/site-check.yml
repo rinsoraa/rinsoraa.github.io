@@ -73,6 +73,10 @@ jobs:
             node "$f" || exit 1
           done
 
+      - name: 作品补充数据与媒体检查
+        run: |
+          node tools/check-project-lab.cjs
+
       - name: HTML 可解析检查
         run: |
           python3 - <<'PY'

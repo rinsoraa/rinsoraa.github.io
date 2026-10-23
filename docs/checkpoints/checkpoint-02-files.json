@@ -1,0 +1,101 @@
+{
+  "status": "PROPOSED_ONLY_NOT_STAGED",
+  "baseline": "75ff6ab24365876fb6a7764ee2be76e7add7b167",
+  "branch": "codex/ui-04a-creative-lab",
+  "commits": [
+    {
+      "id": "project-status",
+      "order": 1,
+      "title": "fix(projects): preserve status through editor round trips",
+      "files": [
+        "projects.js",
+        "project-editor.js"
+      ],
+      "dependsOn": [],
+      "validation": [
+        "python tools/check-site.py (baseline helper: 5 Node groups)",
+        "audit-only actual editor Mock roundtrip with optional enrichment fixture"
+      ],
+      "impact": "Status input/serialization repair; guarded Lab refresh is dormant without Lab."
+    },
+    {
+      "id": "verified-media",
+      "order": 2,
+      "title": "chore(media): preserve verified project views and provenance",
+      "files": [
+        "assets/projects/rinsoraa-rinsoraa-github-io/cover-small.webp",
+        "assets/projects/rinsoraa-rinsoraa-github-io/cover.webp",
+        "assets/projects/rinsoraa-rinsoraa-github-io/screen-01.webp",
+        "assets/projects/rinsoraa-rinsoraa-github-io/screen-02.webp",
+        "assets/projects/rinsoraa-rinsoraa-github-io/screen-03.webp",
+        "assets/projects/dsh-pulse-rail/screen-01.webp",
+        "assets/projects/dsh-pulse-rail/screen-02.webp",
+        "assets/projects/dsh-pulse-rail/LICENSE.txt",
+        "assets/projects/SOURCES.md"
+      ],
+      "dependsOn": [
+        "project-status"
+      ],
+      "validation": [
+        "python tools/check-site.py (baseline helper: 5 Node groups)",
+        "manifest SHA256, full WebP decode, dimensions and license notice check"
+      ],
+      "impact": "Passive media and self-contained provenance; no runtime activation."
+    },
+    {
+      "id": "creative-lab",
+      "order": 3,
+      "title": "feat(lab): integrate opt-in gallery, detail routes and real media",
+      "files": [
+        "index.html",
+        "script.js",
+        "ui02.js",
+        "project-lab-data.js",
+        "project-lab-model.js",
+        "project-lab.js",
+        "project-lab.css"
+      ],
+      "dependsOn": [
+        "project-status",
+        "verified-media"
+      ],
+      "validation": [
+        "python tools/check-site.py (baseline helper: 5 Node groups)",
+        "audit invokes lab-bootstrap, project-lab and projects-roundtrip test harnesses against this source copy"
+      ],
+      "impact": "Complete strict opt-in Lab feature and media presentation; default paths retain current behavior."
+    },
+    {
+      "id": "regression-checkpoint",
+      "order": 4,
+      "title": "test(lab): add portable media gates and checkpoint documentation",
+      "files": [
+        ".github/workflows/site-check.yml",
+        "tools/check-site.py",
+        "tools/check-project-lab.cjs",
+        "tools/project-media.cjs",
+        "tests/lab-bootstrap.test.cjs",
+        "tests/project-lab.test.cjs",
+        "tests/projects-roundtrip.test.cjs",
+        "tests/project-media.test.cjs",
+        "assets/projects/README.md",
+        "docs/checkpoints/checkpoint-02.md",
+        "docs/checkpoints/checkpoint-02-files.json"
+      ],
+      "dependsOn": [
+        "project-status",
+        "verified-media",
+        "creative-lab"
+      ],
+      "validation": [
+        "python tools/check-site.py (9 Node groups)",
+        "node tools/check-project-lab.cjs",
+        "git diff --cached --check (actual future repository staging only)"
+      ],
+      "impact": "CI and local gates land only after every dependency and public asset exists."
+    }
+  ],
+  "fileCount": 29,
+  "rollback": "After approval and on a safely preserved worktree, revert commits in reverse order 4,3,2,1; do not reset or delete evidence.",
+  "excluded": "All original raw captures, phase reports/harnesses/logs, browser profiles, source copies and local audit records remain on disk outside this whitelist."
+}
