@@ -24,7 +24,7 @@
     badge: $('#modeBadge'),
 
     url: $('#fUrl'), name: $('#fName'), cat: $('#fCat'), icon: $('#fIcon'),
-    desc: $('#fDesc'), tags: $('#fTags'), status: $('#fStatus'),
+    desc: $('#fDesc'), tags: $('#fTags'), projectStatus: $('#fStatus'),
     btnProbe: $('#btnProbe'), probeStatus: $('#probeStatus'), iconPicks: $('#iconPicks'),
 
     btnSave: $('#btnSave'), btnReset: $('#btnReset'), btnDelete: $('#btnDelete'),
@@ -199,7 +199,7 @@
   function newItem() {
     state.id = ''; state.existing = false; state.iconAuto = true;
     el.url.value = ''; el.name.value = ''; el.desc.value = ''; el.tags.value = '';
-    el.status.value = '';
+    el.projectStatus.value = '';
     var cat = catsOf()[0] || '';
     fillCats(cat);
     el.icon.value = CAT_ICON[cat] || RP.DEFAULT_ICON;
@@ -217,7 +217,7 @@
     state.id = c.id; state.existing = true; state.iconAuto = false;
     el.url.value = c.url; el.name.value = c.name; el.desc.value = c.desc;
     el.tags.value = c.tags.join(', '); el.icon.value = c.icon;
-    el.status.value = c.status || '';
+    el.projectStatus.value = c.status || '';
     fillCats(c.category);
     setMode(true);
     setProbe('');
@@ -240,7 +240,7 @@
       desc: el.desc.value.trim(),
       tags: splitTags(el.tags.value),
       icon: el.icon.value.trim() || RP.DEFAULT_ICON,
-      status: el.status.value.trim()
+      status: el.projectStatus.value.trim()
     });
   }
 
@@ -274,7 +274,7 @@
       tags: splitTags(el.tags.value),
       icon: el.icon.value.trim() || RP.DEFAULT_ICON,
       date: (old && old.date) || RP.today(),
-      status: el.status.value.trim()
+      status: el.projectStatus.value.trim()
     });
   }
 
@@ -545,7 +545,7 @@
     /* 图标手改过就不再自动换 */
     el.icon.addEventListener('input', function () { state.iconAuto = false; refreshPreview(); });
 
-    [el.url, el.name, el.desc, el.tags].forEach(function (n) {
+    [el.url, el.name, el.desc, el.tags, el.projectStatus].forEach(function (n) {
       n.addEventListener('input', refreshPreview);
     });
 

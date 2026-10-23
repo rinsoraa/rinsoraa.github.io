@@ -42,7 +42,7 @@
 
   /* ----------------------------------------------- 数据读写 --- */
 
-  var ORDER = ['id', 'name', 'category', 'url', 'desc', 'tags', 'icon', 'date'];
+  var ORDER = ['id', 'name', 'category', 'url', 'desc', 'tags', 'icon', 'date', 'status'];
 
   var HEADER = [
     '/* ============================================================',
@@ -251,6 +251,7 @@
     if (!host) return;
 
     var data = read();
+    if (w.RinsoraLab && w.RinsoraLab.enabled) w.RinsoraLab.refresh();
     var groups = groupOf(data);
 
     if (!groups.length) {
