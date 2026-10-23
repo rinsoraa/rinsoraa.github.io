@@ -24,4 +24,7 @@ docs/**/lighthouse*/
 docs/**/*.png
 docs/**/*.jpg
 docs/**/*.log
+# Original browser recordings remain in verified local evidence archives.
+docs/**/originals/*.webm
+docs/**/originals/*.mp4
 node_modules/
