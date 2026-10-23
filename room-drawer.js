@@ -5,6 +5,7 @@
   // Explicit ownership: Cover preview owns home pull-up. Buttons still enter this room.
   var previewQuery = new URLSearchParams(location.search);
   var coverOwnsPull = previewQuery.get('ui02') === '1' && previewQuery.get('cover') === '1';
+  var labPreview = previewQuery.get('ui02') === '1' && previewQuery.get('lab') === '1';
 
   ['roomDrawer', 'roomDrawerSpacer', 'roomDrawerMount', 'roomHint', 'roomUp', 'roomCloseBtn', 'roomPullHint', 'roomRotateHint'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -55,6 +56,7 @@
 
   var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false, returnFocus = null, returnScrollY = 0;
   var STEP = 0.055, IDLE_MS = 1000;
+  var hintTimer = null, hintResetTimer = null;
 
   // 3D 场景常驻在 z-index:-1 的视口层里；用户没进房间时它不应该继续 60fps 渲染。
   // 这里把「抽屉状态」翻译成 __room.pause()/resume()，等模块 ready 后执行一次初始暂停。
@@ -95,12 +97,51 @@
     up.tabIndex = open ? 0 : -1;
     up.setAttribute('aria-hidden', String(!open));
   }
-  function reset() { progress = 0; render(); }
+  function reset() { clearTimeout(idleTimer); idleTimer = null; progress = 0; render(); }
+
+  // Lab owns list/detail/media scrolling, including before its async bootstrap
+  // has finished. Do not change the legacy non-Lab column gesture contract.
+  function otherInputOwner(event) {
+    var detail = document.getElementById('labDetail');
+    var lightbox = document.getElementById('labLightbox');
+    var settings = document.getElementById('settingsPanel');
+    var projects = document.getElementById('projects');
+    var page = window.RinsoraHome && window.RinsoraHome.AppState;
+    var hash = String(location.hash || '');
+    if (document.body.classList.contains('lab-detail-open') || (detail && detail.open) || (lightbox && lightbox.open)) return true;
+    if (labPreview && ((page && page.currentPage === 'projects') || (projects && projects.classList.contains('active')) || /^#(?:projects|\/lab\/.*)$/i.test(hash))) return true;
+    if (document.body.classList.contains('museum-open') || document.body.classList.contains('spa-post-open') || (settings && settings.classList.contains('open'))) return true;
+    var target = event && event.target;
+    return !!(target && target.closest && target.closest('#creativeLab, #labDetail, #labLightbox, #settingsPanel, .spa-post, #mmScene'));
+  }
+  function gestureUnavailable(event) {
+    return coverOwnsPull || mobile || otherInputOwner(event) || welcomeVisible();
+  }
+  function finishEntry(entry, result) {
+    if (entry.done) return;
+    entry.done = true; clearTimeout(entry.timer);
+    if (pendingEntry === entry) {
+      pendingEntry = null;
+      if (!result && entry.source === 'gesture') reset();
+    }
+    entry.resolve(result);
+  }
+  function relinquishGesture() {
+    clearTimeout(hintTimer); clearTimeout(hintResetTimer);
+    hintTimer = hintResetTimer = null; hintSeen = true;
+    if (pendingEntry && pendingEntry.source === 'gesture') {
+      entryGeneration++; finishEntry(pendingEntry, false);
+    }
+    reset();
+  }
+  function syncGestureOwnership() {
+    if (!open && gestureUnavailable()) relinquishGesture();
+  }
 
   function bump(d) {
     progress = Math.max(0, Math.min(1, progress + d));
     render();
-    if (progress >= 1) { enterRoom(); return; }
+    if (progress >= 1) { enterRoom('gesture'); return; }
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () { reset(); hintSeen = true; }, IDLE_MS);
   }
@@ -116,6 +157,8 @@
   }
   function leaveRoom() {
     entryGeneration++;
+    if (pendingEntry) finishEntry(pendingEntry, false);
+    clearTimeout(idleTimer); idleTimer = null;
     var wasOpen = open;
     open = false;
     document.body.classList.remove('room-open');
@@ -125,37 +168,44 @@
     render();
     if (wasOpen) window.scrollTo({ top: returnScrollY, behavior: 'instant' });
   }
-  function enterRoom() {
+  function enterRoom(source) {
     if (welcomeVisible() || document.body.classList.contains('museum-open')) return Promise.resolve(false);
+    if (source === 'gesture' && gestureUnavailable()) { relinquishGesture(); return Promise.resolve(false); }
     if (open) return Promise.resolve(true);
-    if (pendingEntry) return pendingEntry;
+    if (pendingEntry) {
+      // A real button click can intentionally adopt an already-loading gesture.
+      if (source !== 'gesture') pendingEntry.source = 'explicit';
+      return pendingEntry.promise;
+    }
+    clearTimeout(idleTimer); idleTimer = null;
+    var entry = { source: source === 'gesture' ? 'gesture' : 'explicit', generation: entryGeneration, timer: null, done: false };
+    entry.promise = new Promise(function (resolve) { entry.resolve = resolve; });
+    pendingEntry = entry;
     startModule();
-    var generation = entryGeneration;
-    pendingEntry = new Promise(function (resolve) {
-      var started = Date.now();
-      function check() {
-        if (generation !== entryGeneration || welcomeVisible() || document.body.classList.contains('museum-open')) { resolve(false); return; }
-        if (window.__room && typeof window.__room.resume === 'function' && window.__room.character && window.__room.character.children.length) {
-          section.classList.add('room-ready');
-          revealRoom(); resolve(true); return;
-        }
-        if (Date.now() - started > 20000) { resolve(false); return; }
-        setTimeout(check, 100);
+    var started = Date.now();
+    function check() {
+      if (entry.done) return;
+      if (entry !== pendingEntry || entry.generation !== entryGeneration || welcomeVisible() || document.body.classList.contains('museum-open') || (entry.source === 'gesture' && gestureUnavailable())) {
+        finishEntry(entry, false); return;
       }
-      check();
-    }).then(function (result) { pendingEntry = null; return result; });
-    return pendingEntry;
+      if (window.__room && typeof window.__room.resume === 'function' && window.__room.character && window.__room.character.children.length) {
+        section.classList.add('room-ready');
+        revealRoom(); finishEntry(entry, true); return;
+      }
+      if (Date.now() - started > 20000) { finishEntry(entry, false); return; }
+      entry.timer = setTimeout(check, 100);
+    }
+    check();
+    return entry.promise;
   }
-  window.RinsoraRoom = { enter: enterRoom, leave: leaveRoom, isOpen: function () { return open; } };
+  window.RinsoraRoom = { enter: function () { return enterRoom('explicit'); }, leave: leaveRoom, isOpen: function () { return open; } };
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape' || /^[1-4]$/.test(e.key)) leaveRoom(); });
   window.addEventListener('hashchange', leaveRoom);
 
   // 手势：页面顶端（scrollY<=2）+ 向上滚 → 累积进度环 → 满则主页整体下滑露出房间
   window.addEventListener('wheel', function (e) {
-    if (coverOwnsPull) return;
-    if (mobile) return;
-    if (welcomeVisible()) return;                     // 欢迎页内绝对不能进房间
-    if (document.body.classList.contains('museum-open')) return;  // 博物馆浮层内放行滚轮：.mm-detail-card 等要能滚
+    if (gestureUnavailable(e)) { relinquishGesture(); return; }
+    if (e.defaultPrevented || e.ctrlKey || e.cancelable === false || !e.deltaY || Math.abs(e.deltaX || 0) > Math.abs(e.deltaY)) return;
     if (open) { e.preventDefault(); return; }         // 房间内滚轮不返回
     if (e.deltaY > 0) { if (progress > 0) { e.preventDefault(); document.body.classList.remove('room-pulling'); bump(-STEP * 0.8); } return; }
     if (window.scrollY > 2) return;
@@ -166,10 +216,7 @@
   var lastY = null;
   window.addEventListener('touchstart', function (e) { lastY = e.touches[0].clientY; }, { passive: true });
   window.addEventListener('touchmove', function (e) {
-    if (coverOwnsPull) return;
-    if (mobile) return;
-    if (welcomeVisible()) return;
-    if (document.body.classList.contains('museum-open')) return;
+    if (gestureUnavailable(e)) { lastY = null; relinquishGesture(); return; }
     if (open) { e.preventDefault(); return; }
     if (lastY == null) return;
     var dy = e.touches[0].clientY - lastY;
@@ -181,6 +228,15 @@
   window.addEventListener('touchend', function () { lastY = null; }, { passive: true });
 
   up.addEventListener('click', leaveRoom);
+
+  // pushState does not emit hashchange. Observe only the few ownership surfaces,
+  // not the whole animated DOM, and cancel gesture requests before late readiness.
+  if (typeof MutationObserver === 'function') {
+    var ownershipObserver = new MutationObserver(syncGestureOwnership);
+    [document.body, document.getElementById('projects'), document.getElementById('settingsPanel')].forEach(function (el) {
+      if (el) ownershipObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+  }
 
   // 站点导航点击：站点会把滚动拉回顶部。房间在层级下方且文档没有偏移，
   // 因此这里无需再做任何校准，也不会出现「进一半再弹回」。
@@ -201,13 +257,14 @@
   }, 200);
   setTimeout(function () { if (!ready) { ready = true; section.classList.add('room-ready'); clearInterval(tick); } }, 12000);
 
-  setTimeout(function () {
-    if (coverOwnsPull) return;
-    if (mobile || hintSeen || welcomeVisible()) return;
+  hintTimer = setTimeout(function () {
+    hintTimer = null;
+    if (gestureUnavailable()) { relinquishGesture(); return; }
+    if (hintSeen) return;
     // ⚠️ 必须 > 0.002：render() 的显隐判据是 progress > 0.002，写 0.002 时这段是死代码（环永不出现）。
     // 收回时若用户已经开始滚动（progress 已涨过 0.06），就不要清掉他的进度。
     progress = 0.06; render();
-    setTimeout(function () { if (!open && progress <= 0.061) reset(); hintSeen = true; }, 1600);
+    hintResetTimer = setTimeout(function () { hintResetTimer = null; if (!open && progress <= 0.061) reset(); hintSeen = true; }, 1600);
   }, 1600);
 
   window.addEventListener('room:hotspot', function (e) {
@@ -230,4 +287,5 @@
   });
 
   render();
+  syncGestureOwnership();
 })();
