@@ -79,6 +79,7 @@
     var hs = location.hash || '';
     if (/^#(about|blog|projects|moments)$/i.test(hs)) root.setAttribute('data-pre-section', hs.slice(1).toLowerCase());
     else if (/^#\/post\//i.test(hs)) root.setAttribute('data-pre-section', 'blog');
+    else if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1' && /^#\/lab\//i.test(hs)) root.setAttribute('data-pre-section', 'projects');
     if (root.hasAttribute('data-pre-section')) root.classList.add('no-boot');
 
     /* 回访（本会话里已经完整看过一次开屏，script.js 结束时记了标记）
@@ -97,6 +98,46 @@
 <link rel="stylesheet" href="home-hero.css">
 <!-- UI-02 is opt-in; this file only activates presentation for ?ui02=1. -->
 <script src="ui02.js?v=ui03e-3"></script>
+<script>
+// Strict Lab opt-in: no gallery assets or detail data on ordinary visits.
+if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1') {
+  document.documentElement.classList.add('lab-preview');
+  document.documentElement.dataset.labLoadState = 'loading';
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'project-lab.css?v=ui04a2-1';
+  if (/^#(?:projects|\/lab\/)/i.test(location.hash)) css.setAttribute('blocking', 'render');
+  const styled = new Promise((resolve, reject) => { css.onload = resolve; css.onerror = () => reject(new Error('Lab stylesheet unavailable')); });
+  document.head.appendChild(css);
+  const load = src => new Promise((resolve, reject) => {
+    const s = document.createElement('script'); s.src = src; s.async = false;
+    s.onload = resolve; s.onerror = () => { s.remove(); reject(new Error('Lab script unavailable')); };
+    document.head.appendChild(s);
+  });
+  const scripts = load('project-lab-data.js?v=ui04a2-1').catch(() => { window.RINSORA_PROJECT_LAB = {}; })
+    .then(() => load('project-lab-model.js?v=ui04a2-1')).then(() => load('project-lab.js?v=ui04a2-1'));
+  const dom = document.readyState === 'loading' ? new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true })) : Promise.resolve();
+  let timer;
+  const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Lab load timeout')), 12000); });
+  window.RinsoraLabReady = Promise.race([Promise.all([styled, scripts, dom]), deadline]).then(() => {
+    clearTimeout(timer);
+    if (!window.RinsoraLab?.init()) throw new Error('Lab initialization unavailable');
+    document.documentElement.dataset.labLoadState = 'ready';
+    window.RinsoraHome.routeHash();
+    return true;
+  }).catch(() => {
+    clearTimeout(timer); css.remove();
+    document.documentElement.classList.remove('lab-preview');
+    document.documentElement.dataset.labLoadState = 'error';
+    if (window.RinsoraLab) window.RinsoraLab.enabled = false;
+    for (const id of ['creativeLab', 'labDetail', 'labLightbox']) {
+      const node = document.getElementById(id); if (node?.open) node.close(); node?.remove();
+    }
+    document.getElementById('projects')?.classList.remove('lab-ready');
+    document.body?.classList.remove('lab-detail-open');
+    window.RinsoraHome?.refreshRecent();
+    return false; // Existing project tree remains available; reload retries.
+  });
+}
+</script>
 <script>
   // Load Cover Reveal resources only for its explicit preview.
   if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('cover') === '1') {

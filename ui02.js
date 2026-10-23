@@ -41,6 +41,7 @@
       '<span class="u2-card-foot"><time>' + esc(p.date) + '</time><span>阅读文章 <b aria-hidden="true">↗</b></span></span></a>';
   }
   function projectCard(p, index) {
+    if (window.RinsoraLab?.enabled) return window.RinsoraLab.recentCard(p, index);
     const identity = Object.prototype.hasOwnProperty.call(identities, p.id) ? identities[p.id] : 'generic';
     const tag = p.url ? 'a' : 'article';
     const attrs = p.url ? ' href="' + esc(p.url) + '" target="_blank" rel="noopener noreferrer"' : '';

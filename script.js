@@ -445,6 +445,7 @@
         但只用来描述「动画还在播」，不用来拒绝导航。
      ============================================================ */
   const TITLES = { about: '主页', blog: '博客 / 随笔', projects: '项目', moments: '碎碎念' };
+  const LAB_PREVIEW = new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1';
   const WIDTHS = { about: 25, blog: 50, projects: 75, moments: 100 };
 
   /* 四套转场 preset：不是所有页面都用同一个 fade */
@@ -501,8 +502,10 @@
   }
 
   function navigateTo(page, opts) {
-    const o = opts || {};
+    const o = { ...(opts || {}) };
     if (!TITLES[page]) page = 'about';
+    const labReturn = LAB_PREVIEW && !o.labDetail && window.RinsoraLab?.hide();
+    if (labReturn && labReturn.page === page && o.scrollY == null) o.scrollY = labReturn.y;
     /* 切分栏 = 退出音乐博物馆浮层。放在最前面（比「已经在目标分栏」的
        提前返回还早）：在博物馆里点键盘 1~4 想回小窝，如果先提前返回，
        展厅会一直盖在上面，看着像按键失灵。 */
@@ -516,6 +519,10 @@
       hidePost();
       if (!o.silent) closeNav(true);
       syncA11y(page);
+      if (o.scrollY != null) window.scrollTo({ top: o.scrollY, behavior: 'instant' });
+      if (labReturn) document.title = TITLES[page] + ' · 空凛 · Rinsora 的小窝';
+      if (labReturn && o.push !== false && history.replaceState) history.replaceState(null, '', '#' + page);
+      if (labReturn) window.RinsoraLab.restoreFocus(page);
       return true;
     }
 
@@ -544,8 +551,9 @@
     const back = o.scrollY;
     window.scrollTo({
       top: back == null ? 0 : back,
-      behavior: (back == null && !reduceMotion()) ? 'smooth' : 'auto'
+      behavior: labReturn && back != null ? 'instant' : (back == null && !reduceMotion()) ? 'smooth' : 'auto'
     });
+    if (labReturn) window.RinsoraLab.restoreFocus(page);
 
     /* 进入某个分栏时按需重新扫一遍滚动进场的目标 */
     observeReveal();
@@ -606,11 +614,33 @@
      #museum / #musicmuseum 直达音乐博物馆，
      #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
      #admin / #write / #editor / #project 跳后台页 */
+  function openLab(id) {
+    const lab = window.RinsoraLab;
+    if (!LAB_PREVIEW || !lab?.enabled || !lab.isReady() || !window.RinsoraLabModel.validId(id)) return false;
+    const replace = lab.isOpen(), origin = lab.captureReturn();
+    history[replace ? 'replaceState' : 'pushState']({ rinsoraLab: { origin } }, '', window.RinsoraLabModel.href(id));
+    return routeHash();
+  }
+  function closeLab(mode) {
+    const lab = window.RinsoraLab;
+    if (!LAB_PREVIEW || !lab?.isOpen()) return false;
+    if (lab.isMediaOpen()) { lab.closeMedia(); if (mode !== 'list') return true; }
+    if (mode !== 'list' && history.state?.rinsoraLab?.origin && history.length > 1) { history.back(); return true; }
+    history.replaceState(null, '', '#projects');
+    return routeHash();
+  }
   function routeHash() {
     const raw = (location.hash || '').replace(/^#/, '');
     const h = raw.toLowerCase();
     if (h === 'admin' || h === 'write' || h === 'editor') { location.href = 'editor.html'; return true; }
     if (h === 'project' || h === 'newproject') { location.href = 'project-editor.html'; return true; }
+    if (LAB_PREVIEW && /^\/lab\//i.test(raw)) {
+      skipBoot(); enterApp(true);
+      navigateTo('projects', { push: false, silent: true, labDetail: true, scrollY: 0 });
+      if (window.RinsoraLab?.enabled && document.documentElement.dataset.labLoadState === 'ready') window.RinsoraLab.openRoute(location.hash);
+      else window.RinsoraLabReady?.then(ok => { if (ok && location.hash.replace(/^#/, '') === raw) routeHash(); });
+      return true;
+    }
     /* 音乐博物馆：先进小窝（不然侧栏/播放器都没上场，退出来是一片欢迎页），
        再盖上展厅浮层。用 instant 进小窝 —— 这里已经在等一个加载动画了，
        再叠一层 Room Reveal 会很啰嗦。 */
@@ -635,6 +665,7 @@
        不在这里收就永远卡在文章上。 */
     if (!routeHash()) {
       hidePost();
+      if (LAB_PREVIEW) window.RinsoraLab?.hide({ restoreFocus: true });
       /* hash 被清掉（浏览器后退）时，博物馆也该跟着退场 —— 否则
          地址已经不是 #museum 了，展厅还盖在上面，进退两难。 */
       if ((AppState.museumOpen || museumEntry) && (location.hash || '') !== '#museum') exitMuseum();
@@ -929,6 +960,7 @@
   }
 
   function enterMuseum(opts) {
+    if (window.RinsoraLab?.enabled && window.RinsoraLab.isOpen()) closeLab('list');
     const o = opts || {};
     if (museumEntry) return museumEntry;
     if (window.RinsoraMuseum && window.RinsoraMuseum.isOpen() && !o.force) {
@@ -1119,6 +1151,7 @@
      initSettings —— 外观 / 特效 / 关于
      ============================================================ */
   function openSettings() {
+    if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
     if (settingsPanel) { settingsPanel.inert = false; settingsPanel.setAttribute('aria-hidden', 'false'); }
     settingsPanel && settingsPanel.classList.add('open');
     settingsMask && settingsMask.classList.add('open');
@@ -1713,6 +1746,7 @@
         exitMuseum();
         return;
       }
+      if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) { e.preventDefault(); closeLab('back'); return; }
       if (postUrl) { closePost(); return; }
       closeSettings();
       closeNav(true);
@@ -1847,6 +1881,9 @@
   window.RinsoraHome = {
     AppState,
     navigateTo,
+    routeHash,
+    openLab,
+    closeLab,
     initPage,
     initApp,
     observeReveal,
