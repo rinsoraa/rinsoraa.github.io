@@ -76,6 +76,7 @@ jobs:
       - name: 作品补充数据与媒体检查
         run: |
           node tools/check-project-lab.cjs
+          node tools/check-memory-gallery.cjs
 
       - name: HTML 可解析检查
         run: |

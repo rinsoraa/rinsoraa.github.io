@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 1,
+  "testFixture": true,
+  "categories": [
+    {
+      "id": "minecraft",
+      "label": "Minecraft"
+    },
+    {
+      "id": "illustration",
+      "label": "原创插画"
+    },
+    {
+      "id": "journal",
+      "label": "创作日记"
+    },
+    {
+      "id": "empty",
+      "label": "空分类测试"
+    },
+    {
+      "id": "future-category",
+      "label": "未来的新分类"
+    }
+  ],
+  "items": [
+    {
+      "id": "test-memory-01",
+      "title": "TEST FIXTURE / 收藏册布局样例 1",
+      "date": "2020-01-01",
+      "category": "minecraft",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-01/cover.webp",
+        "width": 960,
+        "height": 540,
+        "alt": "TEST FIXTURE synthetic pattern 1 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [
+        {
+          "src": "assets/memories/test-memory-01/portrait.webp",
+          "width": 600,
+          "height": 900,
+          "alt": "TEST FIXTURE synthetic pattern 1 / portrait.webp",
+          "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+        },
+        {
+          "src": "assets/memories/test-memory-01/square.webp",
+          "width": 720,
+          "height": 720,
+          "alt": "TEST FIXTURE synthetic pattern 1 / square.webp",
+          "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+        }
+      ],
+      "featuredRank": 0,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-02",
+      "title": "TEST FIXTURE / 很长的中文标题，仍然完整可读。很长的中文标题，仍然完整可读。很长的中文标题，仍然完整可读。很长的中文标题，仍然完整可读。很长的中文标题，仍然完整可读。",
+      "date": "2020-01-02",
+      "category": "illustration",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-02/cover.webp",
+        "width": 600,
+        "height": 900,
+        "alt": "TEST FIXTURE synthetic pattern 2 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-03",
+      "title": "TEST FIXTURE / AnUnbrokenEnglishTitleAnUnbrokenEnglishTitleAnUnbrokenEnglishTitleAnUnbrokenEnglishTitleAnUnbrokenEnglishTitle",
+      "date": "2020-01-03",
+      "category": "journal",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-03/cover.webp",
+        "width": 720,
+        "height": 720,
+        "alt": "TEST FIXTURE synthetic pattern 3 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-04",
+      "title": "TEST FIXTURE / 收藏册布局样例 4",
+      "date": "2020-01-04",
+      "category": "minecraft",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-04/cover.webp",
+        "width": 960,
+        "height": 540,
+        "alt": "TEST FIXTURE synthetic pattern 4 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-05",
+      "title": "TEST FIXTURE / 收藏册布局样例 5",
+      "date": "2020-01-05",
+      "category": "illustration",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-05/cover.webp",
+        "width": 600,
+        "height": 900,
+        "alt": "TEST FIXTURE synthetic pattern 5 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-06",
+      "title": "TEST FIXTURE / 收藏册布局样例 6",
+      "date": "2020-01-06",
+      "category": "journal",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-06/cover.webp",
+        "width": 720,
+        "height": 720,
+        "alt": "TEST FIXTURE synthetic pattern 6 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    },
+    {
+      "id": "test-memory-07",
+      "title": "TEST FIXTURE / 收藏册布局样例 7",
+      "date": "2020-01-07",
+      "category": "minecraft",
+      "description": "明确标记的测试样例：只验证排版、分类与媒体生命周期，不代表任何真实经历。",
+      "story": "这是一段测试说明。\n图片是带文字的几何色块；日期仅用于排序测试。",
+      "tags": [
+        "TEST FIXTURE",
+        "非真实回忆"
+      ],
+      "cover": {
+        "src": "assets/memories/test-memory-07/cover.webp",
+        "width": 960,
+        "height": 540,
+        "alt": "TEST FIXTURE synthetic pattern 7 / cover.webp",
+        "caption": "TEST FIXTURE · 几何测试图，不是真实照片或游玩记录。"
+      },
+      "gallery": [],
+      "featuredRank": null,
+      "source": {
+        "kind": "test-fixture",
+        "creator": "Automated test pattern",
+        "note": "TEST FIXTURE only; synthetic geometry generated locally; no private images, third-party art or actual personal events.",
+        "publicConfirmed": true
+      }
+    }
+  ]
+}

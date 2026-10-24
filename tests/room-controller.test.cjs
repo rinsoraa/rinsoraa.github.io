@@ -155,6 +155,22 @@ function harness(mobile = true, search = '') {
   adopt.body.classList.add('lab-detail-open'); adopt.flushOwnership();
   adopt.ready(); adopt.advance(100); assert.equal(await adopted,true,'explicit action adopts pending gesture');
   adopt.sandbox.RinsoraRoom.leave();
+  for(const [query,blocked]of [['?memory=1',false],['?ui02=1',false],['?ui02=1&memory=1',true],['?ui02=1&lab=1&memory=1',true]]) {
+    const memory=harness(false,query);memory.sandbox.scrollY=0;memory.sandbox.location.hash='#moments';
+    for(let i=0;i<7;i++)assert.equal(memory.wheel().defaultPrevented,!blocked);
+    if(blocked){assert.equal(memory.progress(),0);assert.equal(memory.modules,0);}
+  }
+  for(const owner of ['class','dialog','section']) {
+    const memory=harness(false,'?ui02=1&memory=1');memory.sandbox.scrollY=0;
+    for(let i=0;i<20;i++)memory.wheel();assert.equal(memory.modules,1);
+    if(owner==='class')memory.body.classList.add('memory-detail-open');
+    if(owner==='dialog'){const el=memory.element();el.open=true;memory.elements.set('memoryDetail',el);}
+    if(owner==='section'){const el=memory.element();el.classList.add('active');memory.elements.set('moments',el);}
+    memory.flushOwnership();memory.ready();memory.advance(400);
+    assert.equal(memory.sandbox.RinsoraRoom.isOpen(),false);assert.equal(memory.progress(),0);
+    assert.equal(memory.wheel().defaultPrevented,false);assert.equal(memory.wheel(120).defaultPrevented,false);
+    assert.equal(await memory.sandbox.RinsoraRoom.enter(),true,'explicit room entry remains independent');
+  }
   console.log('PASS dispatched wheel/touch: Lab list/detail/lightbox/media isolation, overlay ownership, legacy columns, cancellation and explicit entry');
   console.log('PASS room controller: desktop/mobile lazy load, deduplication, readiness, pause/resume, scroll restore, cancellation, timeout/retry, welcome guard');
 })().catch(error => { console.error(error); process.exitCode = 1; });

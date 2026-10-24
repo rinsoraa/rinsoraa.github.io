@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "categories": [
+    { "id": "minecraft", "label": "Minecraft" },
+    { "id": "illustration", "label": "原创插画" },
+    { "id": "creative-journal", "label": "创作日记" },
+    { "id": "everyday", "label": "日常瞬间" },
+    { "id": "collection", "label": "其他收藏" }
+  ],
+  "items": []
+}

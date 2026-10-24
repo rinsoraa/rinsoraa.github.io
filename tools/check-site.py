@@ -30,6 +30,7 @@ def main():
     for test in tests:
         run([node, str(test)])
     run([node, "tools/check-project-lab.cjs"])
+    run([node, "tools/check-memory-gallery.cjs"])
     workflow = (ROOT / ".github/workflows/site-check.yml").read_text(encoding="utf-8")
     js = re.search(r"node -e '(.*?)\n          '", workflow, re.S)
     python_checks = re.findall(r"python3 - <<'PY'\n(.*?)\n          PY", workflow, re.S)

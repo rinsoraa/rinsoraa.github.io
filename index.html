@@ -3,6 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Memory is independently gated; the tiny reservation exists only in preview. -->
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (q.get('ui02') !== '1' || q.get('memory') !== '1') return;
+  const root = document.documentElement;
+  root.classList.add('memory-preview', 'v4'); root.dataset.memoryLoadState = 'loading';
+  const guard = document.createElement('style'); guard.dataset.memoryBootStyle = '';
+  guard.textContent = 'html.memory-preview #moments{scroll-margin-block-start:100svh}html.memory-preview #memoryGalleryMount{display:block;min-height:640px}html[data-memory-load-state="loading"]:not([data-memory-rendered]) #memoryGalleryMount{min-height:max(640px,100svh);padding:40px;color:var(--text)}@media(max-width:860px){html.memory-preview[data-pre-section="moments"] body:has(#app #about.active) .mobile-nav{grid-template-columns:repeat(4,minmax(0,1fr))}}';
+  document.head.appendChild(guard);
+  const critical = (location.hash || '').toLowerCase() === '#moments';
+  // Only the active direct album competes for the startup network queue.
+  if (critical) for (const [href, as] of [['ui02.css?v=ui03e-3', 'style'], ['memory-gallery-model.js?v=ui04b2-1', 'script'], ['memory-gallery.js?v=ui04b2-1', 'script']]) {
+    const hint = document.createElement('link'); hint.rel = 'preload'; hint.as = as; hint.href = href; document.head.appendChild(hint);
+  }
+  const loader = document.createElement('script'); loader.src = 'memory-gallery-loader.js?v=ui04b2-1'; loader.fetchPriority = critical ? 'high' : 'low';
+  let timer;
+  function launch() { timer = setTimeout(failed, 12000); document.head.appendChild(loader); }
+  function failed() { clearTimeout(timer); if (root.dataset.memoryLoadState !== 'loading') return; root.dataset.memoryLoadState = 'error'; root.classList.remove('memory-preview'); guard.remove(); const host = document.getElementById('memoryGalleryMount'); if (host) host.hidden = true; }
+  loader.onload = () => clearTimeout(timer); loader.onerror = failed;
+  if (critical || document.readyState !== 'loading') launch();
+  else document.addEventListener('DOMContentLoaded', launch, { once: true });
+})();
+</script>
   <script>
     // Discover only the explicit Cover-home critical resources before the
     // parser-blocking base styles/scripts. Media hints select ONE art variant.
@@ -505,6 +529,14 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
 
       <!-- MOMENTS -->
       <section class="page-section" id="moments">
+        <div id="memoryGalleryMount" hidden aria-busy="true">正在翻开回忆册…</div>
+        <script>
+          if (document.documentElement.dataset.memoryLoadState === 'loading') {
+            document.getElementById('memoryGalleryMount').hidden = false;
+            if (document.documentElement.dataset.preSection === 'moments') document.getElementById('sectionTitle').textContent = '碎碎念';
+            document.dispatchEvent(new Event('rinsora:memory-mount'));
+          }
+        </script>
         <div class="section-hero-row moments-head">
           <div>
             <div class="section-kicker">☁ MOMENTS / 04</div>
@@ -902,7 +934,7 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
 <script src="blog-admin.js"></script>
 <!-- 音乐博物馆（music-museum-data.js / music-museum.js）与它的 CSS 改为
      首次进馆时由 script.js 的 loadMuseum() 按需注入，见 enterMuseum 上方。 -->
-<script src="script.js?v=ui03e-2"></script>
+<script src="script.js?v=ui04b2-1"></script>
 
 <!-- Step 3：房间抽屉。room-drawer.js 先设置 __ROOM_OPTIONS__，随后 module 版 room.js 才执行 -->
 <div id="roomDrawer" aria-hidden="true"><div id="roomDrawerMount"></div></div>

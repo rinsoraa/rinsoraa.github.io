@@ -6,6 +6,7 @@
   var previewQuery = new URLSearchParams(location.search);
   var coverOwnsPull = previewQuery.get('ui02') === '1' && previewQuery.get('cover') === '1';
   var labPreview = previewQuery.get('ui02') === '1' && previewQuery.get('lab') === '1';
+  var memoryPreview = previewQuery.get('ui02') === '1' && previewQuery.get('memory') === '1';
 
   ['roomDrawer', 'roomDrawerSpacer', 'roomDrawerMount', 'roomHint', 'roomUp', 'roomCloseBtn', 'roomPullHint', 'roomRotateHint'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -102,17 +103,21 @@
   // Lab owns list/detail/media scrolling, including before its async bootstrap
   // has finished. Do not change the legacy non-Lab column gesture contract.
   function otherInputOwner(event) {
+    var memoryDetail = document.getElementById('memoryDetail');
+    var moments = document.getElementById('moments');
     var detail = document.getElementById('labDetail');
     var lightbox = document.getElementById('labLightbox');
     var settings = document.getElementById('settingsPanel');
     var projects = document.getElementById('projects');
     var page = window.RinsoraHome && window.RinsoraHome.AppState;
     var hash = String(location.hash || '');
+    if (document.body.classList.contains('memory-detail-open') || (memoryDetail && memoryDetail.open)) return true;
+    if (memoryPreview && ((page && page.currentPage === 'moments') || (moments && moments.classList.contains('active')) || /^#moments$/i.test(hash))) return true;
     if (document.body.classList.contains('lab-detail-open') || (detail && detail.open) || (lightbox && lightbox.open)) return true;
     if (labPreview && ((page && page.currentPage === 'projects') || (projects && projects.classList.contains('active')) || /^#(?:projects|\/lab\/.*)$/i.test(hash))) return true;
     if (document.body.classList.contains('museum-open') || document.body.classList.contains('spa-post-open') || (settings && settings.classList.contains('open'))) return true;
     var target = event && event.target;
-    return !!(target && target.closest && target.closest('#creativeLab, #labDetail, #labLightbox, #settingsPanel, .spa-post, #mmScene'));
+    return !!(target && target.closest && target.closest('#creativeLab, #labDetail, #labLightbox, #memoryGalleryMount, #memoryDetail, #settingsPanel, .spa-post, #mmScene'));
   }
   function gestureUnavailable(event) {
     return coverOwnsPull || mobile || otherInputOwner(event) || welcomeVisible();
@@ -233,7 +238,7 @@
   // not the whole animated DOM, and cancel gesture requests before late readiness.
   if (typeof MutationObserver === 'function') {
     var ownershipObserver = new MutationObserver(syncGestureOwnership);
-    [document.body, document.getElementById('projects'), document.getElementById('settingsPanel')].forEach(function (el) {
+    [document.body, document.getElementById('projects'), document.getElementById('moments'), document.getElementById('settingsPanel')].forEach(function (el) {
       if (el) ownershipObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
     });
   }

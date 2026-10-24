@@ -1,0 +1,106 @@
+/* Preview-only scrapbook; no fixed-containing-block changes to app/player ancestors. */
+html.memory-preview { --memory-paper: #fffaf1; --memory-ink: #61516a; --memory-line: #ddcfdd; --memory-pink: #f7e6e5; --memory-lilac: #ece5f5; }
+html.memory-preview[data-theme="night"] { --memory-paper: #292332; --memory-ink: #efe3ef; --memory-line: #5a4b65; --memory-pink: #40313e; --memory-lilac: #393046; }
+html.memory-preview #memoryGalleryMount { display: block; min-height: 640px; }
+html.memory-preview .memory-book { color: var(--memory-ink); padding: 12px 0 8px; }
+html.memory-preview .memory-intro { display: grid; grid-template-columns: 1fr 190px; gap: 32px; align-items: center; margin-bottom: 32px; }
+html.memory-preview .memory-eyebrow { font: 10px/1.8 monospace; letter-spacing: .16em; margin: 0 0 14px; }
+html.memory-preview .memory-intro h3 { font-size: clamp(27px, 3.4vw, 44px); line-height: 1.5; max-width: 17em; margin: 0 0 16px; font-weight: 650; letter-spacing: .01em; }
+html.memory-preview .memory-intro-copy { font-size: 14px; line-height: 2; max-width: 34em; opacity: .9; margin: 0; }
+html.memory-preview .memory-bookmark { min-height: 170px; padding: 22px 18px; display: grid; justify-items: center; align-content: center; gap: 8px; background: linear-gradient(145deg, var(--memory-pink), var(--memory-lilac)); border: 1px solid var(--memory-line); border-radius: 45% 45% 14px 14px; text-align: center; }
+html.memory-preview .memory-bookmark span:first-child { font: 8px/1.5 monospace; letter-spacing: .08em; }
+html.memory-preview .memory-bookmark b { font: italic 48px/1.1 Georgia,serif; font-weight: 400; }
+html.memory-preview .memory-bookmark span:last-child { font-size: 11px; }
+html.memory-preview .memory-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+html.memory-preview .memory-book button, html.memory-preview .memory-dialog button { color: inherit; font: inherit; cursor: pointer; }
+html.memory-preview .memory-filters button, html.memory-preview .memory-image-pages button { border: 1px solid var(--memory-line); border-radius: 24px; background: var(--memory-paper); padding: 10px 16px; min-height: 44px; font-size: 12px; }
+html.memory-preview .memory-filters [aria-pressed="true"], html.memory-preview .memory-image-pages [aria-pressed="true"] { background: var(--memory-lilac); border-color: #ab8fb4; }
+html.memory-preview .memory-result { font-size: 11px; letter-spacing: .03em; margin: 16px 0 24px; opacity: .9; }
+html.memory-preview .memory-featured { margin-bottom: 28px; }
+html.memory-preview .memory-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 24px 18px; }
+html.memory-preview .memory-card { min-width: 0; border: 1px solid var(--memory-line); border-radius: 9px 12px 18px 12px; background: var(--memory-paper); box-shadow: 0 6px 18px #4e30450a; position: relative; }
+html.memory-preview .memory-card::before { content: ''; position: absolute; width: 60px; height: 17px; top: -9px; left: 24px; background: #dbc4de77; border: 1px solid #ae96b22e; pointer-events: none; rotate: -4deg; }
+html.memory-preview .memory-card:nth-child(3n+2)::before { background: #e7d69a77; left: auto; right: 22px; rotate: 4deg; }
+html.memory-preview .memory-card-button { display: block; width: 100%; padding: 12px; background: transparent; border: 0; text-align: left; border-radius: inherit; }
+html.memory-preview .memory-image { position: relative; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; background: var(--memory-lilac); min-height: 120px; max-height: 370px; border-radius: 4px; }
+html.memory-preview .memory-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+html.memory-preview .memory-image img[hidden] { display: none; }
+html.memory-preview .memory-image-fallback { position: absolute; inset: 0; place-content: center; padding: 25px; font-size: 12px; line-height: 1.9; text-align: center; }
+html.memory-preview .memory-image-fallback:not([hidden]) { display: grid; }
+html.memory-preview .memory-card-copy { padding: 17px 7px 8px; }
+html.memory-preview .memory-card-meta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 10px/1.8 monospace; opacity: .9; margin: 0 0 10px; }
+html.memory-preview .memory-card h4 { font-size: 17px; line-height: 1.6; margin: 0 0 8px; overflow-wrap: anywhere; }
+html.memory-preview .memory-description { font-size: 12px; line-height: 1.9; margin: 0 0 14px; white-space: pre-line; overflow-wrap: anywhere; }
+html.memory-preview .memory-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+html.memory-preview .memory-tags span { border: 1px solid var(--memory-line); padding: 2px 6px; border-radius: 5px; font-size: 10px; }
+html.memory-preview .memory-card-foot { display: block; font-size: 11px; margin-top: 18px; opacity: .9; }
+html.memory-preview .memory-feature-card .memory-card-button { display: grid; grid-template-columns: 56% 1fr; align-items: center; gap: 12px; }
+html.memory-preview .memory-feature-card .memory-image { max-height: 420px; }
+html.memory-preview .memory-feature-card h4 { font-size: clamp(21px, 2.5vw, 29px); }
+html.memory-preview .memory-feature-card .memory-card-copy { padding: 18px; }
+html.memory-preview .memory-more, html.memory-preview .memory-previous { display: block; margin: 26px auto 0; background: var(--memory-paper); padding: 13px 20px; border-radius: 24px; border: 1px solid var(--memory-line); }
+html.memory-preview .memory-empty { text-align: center; border: 1px dashed var(--memory-line); border-radius: 24px; min-height: 310px; padding: 35px 24px; background: linear-gradient(130deg, var(--memory-paper), transparent); }
+html.memory-preview .memory-empty h4 { font-size: 19px; margin: 24px 0 8px; }
+html.memory-preview .memory-empty p { font-size: 13px; line-height: 2; margin: 0; }
+html.memory-preview .memory-empty button { background: var(--memory-lilac); border: 1px solid var(--memory-line); border-radius: 20px; margin-top: 16px; padding: 12px 18px; }
+html.memory-preview .memory-empty-papers { position: relative; height: 130px; width: 180px; margin: auto; }
+html.memory-preview .memory-empty-papers span, html.memory-preview .memory-empty-papers i { position: absolute; background: var(--memory-paper); border: 1px solid var(--memory-line); border-radius: 3px; width: 118px; height: 123px; top: 0; left: 30px; }
+html.memory-preview .memory-empty-papers span:first-child { rotate: -11deg; background: var(--memory-lilac); }
+html.memory-preview .memory-empty-papers span:nth-child(2) { rotate: 9deg; background: var(--memory-pink); }
+html.memory-preview .memory-empty-papers i { rotate: -2deg; display: grid; place-content: center; font: italic 12px/1.8 Georgia,serif; white-space: pre-line; }
+html.memory-preview #moments > .moments-head { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--memory-line); }
+html.memory-preview .memory-fixture { font: bold 12px/1.8 monospace; padding: 12px 16px; border: 2px dashed #b17828; background: #fff0c8; color: #64431c; border-radius: 10px; margin: 0 0 24px; }
+html.memory-preview body.memory-detail-open { overflow: hidden; }
+html.memory-preview .memory-dialog { width: min(960px, calc(100vw - 48px)); max-width: none; max-height: calc(100dvh - 48px); padding: 0; color: var(--memory-ink); border: 1px solid var(--memory-line); background: var(--memory-paper); border-radius: 22px; overflow: hidden; }
+html.memory-preview .memory-dialog::backdrop { background: #372b435e; }
+html.memory-preview .memory-detail-panel { max-height: calc(100dvh - 50px); padding: 24px 32px 36px; overflow-y: auto; overscroll-behavior: contain; }
+html.memory-preview .memory-dialog-top { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 25px; }
+html.memory-preview .memory-dialog-top .memory-eyebrow { margin: 0; }
+html.memory-preview .memory-dialog button { min-height: 44px; border: 1px solid var(--memory-line); background: transparent; padding: 10px 15px; border-radius: 24px; }
+html.memory-preview .memory-dialog button:disabled { cursor: default; opacity: .45; }
+html.memory-preview .memory-dialog h2 { margin: 0 0 12px; font-size: clamp(25px, 3vw, 36px); line-height: 1.5; overflow-wrap: anywhere; }
+html.memory-preview .memory-detail-meta { font-size: 12px; opacity: .9; margin: 0 0 22px; }
+html.memory-preview .memory-detail-figure { margin: 0; }
+html.memory-preview .memory-detail-figure .memory-image { max-height: 64vh; min-height: 180px; }
+html.memory-preview .memory-detail-figure figcaption { font-size: 12px; line-height: 1.9; padding: 12px 0; overflow-wrap: anywhere; }
+html.memory-preview .memory-image-controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 16px; }
+html.memory-preview .memory-image-count { font: 12px/1.8 monospace; }
+html.memory-preview .memory-image-pages { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+html.memory-preview .memory-detail-description, html.memory-preview .memory-story { font-size: 14px; line-height: 2; white-space: pre-line; overflow-wrap: anywhere; }
+html.memory-preview .memory-source { font-size: 11px; line-height: 1.9; opacity: .95; padding-top: 20px; margin-top: 26px; border-top: 1px solid var(--memory-line); overflow-wrap: anywhere; }
+html.memory-preview .memory-source a { color: inherit; display: inline-block; min-height: 44px; padding: 12px 0; }
+html.memory-preview .memory-book button:focus-visible, html.memory-preview .memory-dialog :focus-visible { outline: 3px solid #9c70ad; outline-offset: 4px; }
+html.memory-preview .memory-book [hidden], html.memory-preview .memory-dialog [hidden] { display: none; }
+@media (max-width: 1100px) { html.memory-preview .memory-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 600px) {
+  html.memory-preview .memory-intro { grid-template-columns: 1fr; gap: 20px; }
+  html.memory-preview .memory-bookmark { display: none; }
+  html.memory-preview .memory-grid { grid-template-columns: 1fr; gap: 24px; }
+  html.memory-preview .memory-feature-card .memory-card-button { grid-template-columns: 1fr; gap: 0; }
+  html.memory-preview .memory-feature-card .memory-card-copy { padding: 17px 7px 8px; }
+  html.memory-preview .memory-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 24px); border-radius: 18px; }
+  html.memory-preview .memory-detail-panel { max-height: calc(100dvh - 26px); padding: 18px 18px 30px; }
+  html.memory-preview .memory-dialog-top { flex-wrap: wrap; }
+  html.memory-preview .memory-detail-figure .memory-image { min-height: 150px; }
+  html.memory-preview .memory-image-controls { gap: 5px; }
+  html.memory-preview .memory-image-controls button { font-size: 12px; padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { html.memory-preview .memory-book *, html.memory-preview .memory-dialog * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+@media (max-width: 600px) {
+  html.memory-preview .memory-intro h3 span { display: block; }
+  html.memory-preview .memory-empty { min-height: 210px; padding: 24px 16px; display: grid; grid-template-columns: 85px 1fr; align-items: center; text-align: left; gap: 6px 14px; }
+  html.memory-preview .memory-empty-papers { width: 80px; height: 100px; grid-row: 1 / span 2; }
+  html.memory-preview .memory-empty-papers span, html.memory-preview .memory-empty-papers i { width: 75px; height: 94px; left: 0; }
+  html.memory-preview .memory-empty-papers i { font-size: 10px; }
+  html.memory-preview .memory-empty h4 { font-size: 16px; line-height: 1.6; margin: 0; }
+  html.memory-preview .memory-empty p { font-size: 12px; }
+  html.memory-preview .memory-empty button { grid-column: 1 / -1; }
+}
+
+/* Keep the parsed direct Moments navigation at its final four-column geometry. */
+@media(max-width:860px) { html.memory-preview:is([data-pre-section="moments"], :has(#moments.active)) .mobile-nav { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+
+/* A direct section anchor must include the existing header above the album.
+   Scroll margin changes the anchor target, not layout height or clipping. */
+html.memory-preview #moments { scroll-margin-block-start: 100svh; }

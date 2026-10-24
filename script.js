@@ -446,6 +446,7 @@
      ============================================================ */
   const TITLES = { about: '主页', blog: '博客 / 随笔', projects: '项目', moments: '碎碎念' };
   const LAB_PREVIEW = new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1';
+  const MEMORY_PREVIEW = new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('memory') === '1';
   const WIDTHS = { about: 25, blog: 50, projects: 75, moments: 100 };
 
   /* 四套转场 preset：不是所有页面都用同一个 fade */
@@ -504,6 +505,7 @@
   function navigateTo(page, opts) {
     const o = { ...(opts || {}) };
     if (!TITLES[page]) page = 'about';
+    window.RinsoraMemory?.pageChanged(page, o);
     const labReturn = LAB_PREVIEW && !o.labDetail && window.RinsoraLab?.hide();
     if (labReturn && labReturn.page === page && o.scrollY == null) o.scrollY = labReturn.y;
     /* 切分栏 = 退出音乐博物馆浮层。放在最前面（比「已经在目标分栏」的
@@ -531,6 +533,7 @@
     // Do not animate the never-visible #about as an outgoing page: on a slow
     // load its text can flash over the gallery and become a false LCP surface.
     const initialLabProjects = LAB_PREVIEW && page === 'projects' && html.dataset.preSection === 'projects';
+    const initialMemoryMoments = MEMORY_PREVIEW && page === 'moments' && html.dataset.preSection === 'moments';
 
     hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
     html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
@@ -539,7 +542,7 @@
     AppState.currentPage = page;
     state.section = page;
 
-    if (initialLabProjects) {
+    if (initialLabProjects || initialMemoryMoments) {
       $$('.page-section').forEach(section => {
         section.classList.remove('leaving', ...TR_CLASSES);
         section.classList.toggle('active', section.id === page);
@@ -624,6 +627,7 @@
      #/post/xxx.html 直达某一篇文章（站内打开的地址形式），
      #admin / #write / #editor / #project 跳后台页 */
   function openLab(id) {
+    window.RinsoraMemory?.hide();
     const lab = window.RinsoraLab;
     if (!LAB_PREVIEW || !lab?.enabled || !lab.isReady() || !window.RinsoraLabModel.validId(id)) return false;
     const replace = lab.isOpen(), origin = lab.captureReturn();
@@ -969,6 +973,7 @@
   }
 
   function enterMuseum(opts) {
+    window.RinsoraMemory?.hide();
     if (window.RinsoraLab?.enabled && window.RinsoraLab.isOpen()) closeLab('list');
     const o = opts || {};
     if (museumEntry) return museumEntry;
@@ -1093,6 +1098,7 @@
   }
 
   function openPost(url, push) {
+    window.RinsoraMemory?.hide();
     if (!spaPost || !spaPostBody) return false;
     if (url === postUrl) return true;
 
@@ -1160,6 +1166,7 @@
      initSettings —— 外观 / 特效 / 关于
      ============================================================ */
   function openSettings() {
+    window.RinsoraMemory?.hide();
     if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
     if (settingsPanel) { settingsPanel.inert = false; settingsPanel.setAttribute('aria-hidden', 'false'); }
     settingsPanel && settingsPanel.classList.add('open');
@@ -1581,10 +1588,12 @@
     }
 
     const vh = innerHeight || 800;
-    $$('.reveal:not(.in)').forEach((el) => {
-      if (el.dataset.rv) return;
+    // Read the whole batch before changing classes. Alternating a geometry read
+    // and .in writes forced a fresh style/layout pass for each timeline card.
+    const pending = $$('.reveal:not(.in)').filter(el => !el.dataset.rv)
+      .map(el => ({ el, rect: el.getBoundingClientRect() }));
+    pending.forEach(({ el, rect: r }) => {
       el.dataset.rv = '1';
-      const r = el.getBoundingClientRect();
       /* 首屏（含一点余量）内的不藏，直接算「已进场」 */
       if (r.top < vh * 1.15 && r.bottom > -40) {
         el.classList.add('in');
@@ -1755,6 +1764,7 @@
         exitMuseum();
         return;
       }
+      if (window.RinsoraMemory?.isOpen()) { e.preventDefault(); window.RinsoraMemory.close(); return; }
       if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) { e.preventDefault(); closeLab('back'); return; }
       if (postUrl) { closePost(); return; }
       closeSettings();
@@ -1981,7 +1991,10 @@
     window.addEventListener('resize', () => layoutRadialNav(), { passive: true });
 
     /* 6) 深链兜底 */
-    if (location.hash) setTimeout(routeHash, 50);
+    if (location.hash) {
+      if (MEMORY_PREVIEW && html.dataset.preSection === 'moments') routeHash();
+      else setTimeout(routeHash, 50);
+    }
   }
 
   initApp();
