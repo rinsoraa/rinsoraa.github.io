@@ -2,23 +2,31 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert/strict');
 const source = fs.readFileSync('room-drawer.js', 'utf8');
 function harness(mobile = true, search = '') {
-  let now = 0, timers = [], modules = 0, paused = true;
-  const observers = [];
-  const elements = new Map();
+  let now = 0, timers = [], paused = true, document;
+  const observers = [], elements = new Map(), handlers = {}, scripts = [];
   function element() {
-    const classes = new Set(), properties = new Map();
-    return { children: [], style: { setProperty(k, v) { properties.set(k, v); }, getPropertyValue(k) { return properties.get(k) || ''; } }, classList: {
-      add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x),
-      toggle(x, on) { if (on) classes.add(x); else classes.delete(x); }
-    }, setAttribute() {}, addEventListener() {}, focus() {}, appendChild(e) { this.children.push(e); return e; } };
+    const classes = new Set(), properties = new Map(), events = {};
+    return { children: [], dataset: {}, isConnected: true, disabled: false, hidden: false,
+      style: { setProperty(k, v) { properties.set(k, v); }, getPropertyValue(k) { return properties.get(k) || ''; } },
+      classList: { add: x => classes.add(x), remove: x => classes.delete(x), contains: x => classes.has(x),
+        toggle(x, on) { if (on) classes.add(x); else classes.delete(x); } },
+      setAttribute(k,v) { this[k] = v; }, addEventListener(t, fn) { (events[t] ||= []).push(fn); },
+      emit(t,e={}) { (events[t]||[]).forEach(fn=>fn(e)); },
+      focus() { document.activeElement=this; }, blur() { document.activeElement=document.body; },
+      closest() { return null; }, getClientRects() { return this.hidden ? [] : [{}]; },
+      appendChild(e) { this.children.push(e); e.parentNode=this; return e; },
+      removeChild(e) { this.children=this.children.filter(x=>x!==e); e.parentNode=null; }
+    };
   }
-  const body = element(), activeElement = element(), handlers = {};
-  const document = { body, activeElement, head: { appendChild() { modules++; } },
+  const body = element(), activeElement = element(), head=element();
+  document = { body, activeElement, documentElement:element(), head,
     createElement: element, getElementById: id => elements.get(id) || body.children.find(e => e.id === id) || null,
     addEventListener() {}, querySelector() { return null; } };
+  elements.set('sectionTitle', element());
+  const app=element(); app.inert=false; elements.set('app',app);
   const sandbox = { document, navigator: { userAgent: mobile ? 'iPhone' : 'Desktop' }, URLSearchParams, location: { search, hash: '#about' },
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
-    Date: { now: () => now }, Promise, getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
+    Date: { now: () => now }, Promise, getComputedStyle: el => ({ display: el.hidden?'none':'block', visibility: 'visible', opacity: '1' }),
     setTimeout(fn, ms) { const item = { fn, at: now + ms }; timers.push(item); return item; },
     clearTimeout(item) { timers = timers.filter(x => x !== item); },
     setInterval() { return 1; }, clearInterval() {},
@@ -26,19 +34,26 @@ function harness(mobile = true, search = '') {
     scrollTo(options) { sandbox.scrollY = options.top; },
     addEventListener(type, fn) { (handlers[type] ||= []).push(fn); }
   };
+  function emit(type,event={}) { (handlers[type]||[]).forEach(fn=>fn(event)); }
+  function complete(node=scripts.at(-1)) {
+    if(!node)return;
+    emit('rinsora:room-evaluating',{detail:node.src});
+    emit('rinsora:room-ready',{detail:node.src}); node.emit('load');
+  }
+  head.appendChild=function(e) { this.children.push(e); e.parentNode=this; scripts.push(e); if(sandbox.__room)complete(e); return e; };
   sandbox.window = sandbox;
   vm.runInNewContext(source, sandbox);
-  return { sandbox, body, elements, handlers, get modules() { return modules; }, get paused() { return paused; },
+  return { sandbox, body, document, scripts, elements, handlers, emit, get modules() { return scripts.length; }, get paused() { return paused; },
     element, flushOwnership() { observers.forEach(fn => fn()); },
     wheel(deltaY = -120, extra = {}) {
       const event = { deltaY, deltaX: 0, cancelable: true, defaultPrevented: false, target: body,
         preventDefault() { this.defaultPrevented = true; }, ...extra };
-      (handlers.wheel || []).forEach(fn => fn(event)); return event;
+      emit('wheel',event); return event;
     },
     touch(type, y) { const e = { touches: [{ clientY: y }], defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
-      (handlers[type] || []).forEach(fn => fn(e)); return e; },
+      emit(type,e); return e; },
     progress() { return Number(body.style.getPropertyValue('--p')); },
-    ready() { sandbox.__room = { character: { children: [{}] }, pause() { paused = true; }, resume() { paused = false; } }; },
+    ready() { sandbox.__room = { character: { children: [{}] }, pause() { paused = true; }, resume() { paused = false; } }; complete(); },
     advance(ms) {
       const end = now + ms;
       for (;;) {
@@ -153,7 +168,7 @@ function harness(mobile = true, search = '') {
   for(let i=0;i<20;i++) adopt.wheel();
   const adopted=adopt.sandbox.RinsoraRoom.enter();
   adopt.body.classList.add('lab-detail-open'); adopt.flushOwnership();
-  adopt.ready(); adopt.advance(100); assert.equal(await adopted,true,'explicit action adopts pending gesture');
+  adopt.ready(); adopt.advance(100); assert.equal(await adopted,false,'new overlay cancels even an adopted explicit request');
   adopt.sandbox.RinsoraRoom.leave();
   for(const [query,blocked]of [['?memory=1',false],['?ui02=1',false],['?ui02=1&memory=1',true],['?ui02=1&lab=1&memory=1',true]]) {
     const memory=harness(false,query);memory.sandbox.scrollY=0;memory.sandbox.location.hash='#moments';
@@ -171,6 +186,72 @@ function harness(mobile = true, search = '') {
     assert.equal(memory.wheel().defaultPrevented,false);assert.equal(memory.wheel(120).defaultPrevented,false);
     assert.equal(await memory.sandbox.RinsoraRoom.enter(),true,'explicit room entry remains independent');
   }
+
+  // Capture the initial trigger even if disabling it has already blurred it.
+  for(const method of ['keyboard','mouse']) {
+    const f=harness(false), trigger=f.element(); f.elements.set('heroRoom',trigger);
+    trigger.focus(); trigger.disabled=true; f.document.activeElement=f.body;
+    const loading=f.sandbox.RinsoraRoom.enter({trigger});
+    assert.equal(f.sandbox.RinsoraRoom.enter(),loading,'duplicate request preserves the original trigger');
+    f.ready(); f.advance(100); assert.equal(await loading,true);
+    assert.equal(f.document.activeElement.id,'roomUp'); assert.equal(f.sandbox.scrollY,0); assert.equal(f.elements.get('app').inert,true); trigger.disabled=false;
+    f.sandbox.RinsoraRoom.leave(); assert.equal(f.document.activeElement,trigger,method);
+    assert.equal(f.paused,true); assert.equal(f.sandbox.scrollY,250); assert.equal(f.elements.get('app').inert,false);
+  }
+  for(const unavailable of ['removed','hidden','disabled']) {
+    const f=harness(false), trigger=f.element(); const loading=f.sandbox.RinsoraRoom.enter({trigger}); f.ready(); f.advance(100); await loading;
+    if(unavailable==='removed')trigger.isConnected=false;
+    if(unavailable==='hidden')trigger.hidden=true;
+    if(unavailable==='disabled')trigger.disabled=true;
+    f.sandbox.RinsoraRoom.leave(); assert.equal(f.document.activeElement,f.elements.get('sectionTitle'));
+  }
+  {
+    const f=harness(false); f.sandbox.scrollY=0; const old=f.element();old.focus();
+    for(let i=0;i<20;i++)f.wheel(); f.ready(); f.advance(100);f.sandbox.RinsoraRoom.leave();
+    assert.equal(f.document.activeElement,f.elements.get('sectionTitle'),'wheel never inherits stale button focus');
+  }
+  for(const action of ['cancel','route','Lab','Memory']) {
+    const f=harness(false), trigger=f.element(), other=f.element(); const waiting=f.sandbox.RinsoraRoom.enter({trigger});
+    if(action==='cancel')f.sandbox.RinsoraRoom.leave();
+    if(action==='route'){f.sandbox.location.hash='#blog';f.emit('hashchange');}
+    if(action==='Lab')f.body.classList.add('lab-detail-open');
+    if(action==='Memory')f.body.classList.add('memory-detail-open');
+    f.flushOwnership(); other.focus(); f.ready(); f.advance(500);
+    assert.equal(await waiting,false);assert.equal(f.document.activeElement,other);assert(!f.sandbox.RinsoraRoom.isOpen());assert(f.paused);
+  }
+  for(const failure of ['network','parse','runtime','unverified']) {
+    const f=harness(false),api=f.sandbox.RinsoraRoom,waiting=api.enter(),old=f.scripts[0];
+    if(failure==='network')old.emit('error');
+    if(failure==='parse'){f.emit('error',{filename:old.src,error:{name:'SyntaxError'}});old.emit('load');}
+    if(failure==='runtime'){f.emit('rinsora:room-evaluating',{detail:old.src});f.emit('error',{filename:old.src,error:new Error('fixture')});old.emit('load');}
+    if(failure==='unverified')old.emit('load');
+    assert.equal(await waiting,false);assert(!api.isOpen());assert(!api.getState().pending);
+    const retry=api.enter();
+    if(['network','parse'].includes(failure)) {
+      assert.equal(f.modules,2);assert.notEqual(old.src,f.scripts[1].src);
+      old.emit('error'); old.emit('load'); assert(api.getState().pending,'stale callbacks cannot settle new request');
+      f.ready();f.advance(100);assert.equal(await retry,true);api.leave();
+      assert.equal(await api.enter(),true);assert.equal(f.modules,2,'initialized module reused');
+    } else {assert.equal(await retry,false);assert.equal(f.modules,1,'execution cannot be blindly reinjected');}
+  }
+  for(const kind of ['hanging-fetch','executed-unready']) {
+    const f=harness(false),api=f.sandbox.RinsoraRoom;
+    const first=api.enter(); if(kind==='executed-unready'){f.sandbox.__room={character:{},pause(){},resume(){}};f.emit('rinsora:room-evaluating',{detail:f.scripts[0].src});f.scripts[0].emit('load');}
+    f.advance(20000);assert.equal(await first,false);assert(!api.getState().pending);
+    assert.equal(api.getState().lastOutcome,kind==='hanging-fetch'?'resource-timeout':'scene-timeout');
+    const retry=api.enter();assert.equal(f.modules,1,'timeout keeps one uncertain module');
+    f.ready();f.advance(100);assert.equal(await retry,true);assert.equal(f.modules,1);
+  }
+  {
+    const f=harness(false), trigger=f.element(); f.elements.get('app').inert=true;
+    const entering=f.sandbox.RinsoraRoom.enter({trigger});f.ready();f.advance(100);await entering;
+    f.sandbox.RinsoraRoom.leave();assert.equal(f.elements.get('app').inert,true,'existing inert ownership preserved');
+    f.elements.get('app').inert=false;
+    await f.sandbox.RinsoraRoom.enter({trigger});const nextOwner=f.element();nextOwner.focus();
+    f.body.classList.add('museum-open');f.flushOwnership();assert(!f.sandbox.RinsoraRoom.isOpen());assert.equal(f.document.activeElement,nextOwner);
+    assert.equal(f.elements.get('app').inert,false);
+  }
+  console.log('PASS RH-01: trigger capture, focus fallback, gesture origin, cancellation, resource/parse retry, execution refusal, timeout reuse and stale result guards');
   console.log('PASS dispatched wheel/touch: Lab list/detail/lightbox/media isolation, overlay ownership, legacy columns, cancellation and explicit entry');
   console.log('PASS room controller: desktop/mobile lazy load, deduplication, readiness, pause/resume, scroll restore, cancellation, timeout/retry, welcome guard');
 })().catch(error => { console.error(error); process.exitCode = 1; });

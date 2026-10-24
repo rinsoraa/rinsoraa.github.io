@@ -1,3 +1,4 @@
+window.dispatchEvent(new CustomEvent('rinsora:room-evaluating', { detail: import.meta.url }));
 var e = 1e3, t = 1001, n = 1002, r = 1003, i = 1004, a = 1005, o = 1006, s = 1007, c = 1008, l = 1009, u = 1012, d = 1014, f = 1015, p = 1016, m = 1017, h = 1018, g = 1020, _ = 1023, v = 1026, y = 1027, b = 1028, x = 1029, S = 1030, C = 1031, w = 1033, T = 2200, E = 2300, D = 2301, O = 2302, ee = 2303, k = 2400, A = 2401, j = 2402, te = 2500, M = "srgb", N = "srgb-linear", ne = "linear", P = "srgb", re = 7680, F = 35044, ie = 2e3;
 function ae(e) {
 	for (let t = e.length - 1; t >= 0; --t) if (e[t] >= 65535) return !0;
@@ -18240,7 +18241,9 @@ Md.domElement.addEventListener("pointermove", (e) => {
 }), document.addEventListener("mouseleave", () => {
 	cf(), Kp = 0;
 }), document.addEventListener("visibilitychange", () => {
-	fm = document.hidden, fm || (lm = performance.now(), requestAnimationFrame(mm)), document.hidden && cf();
+	fm = document.hidden;
+	if (fm) { cancelAnimationFrame(roomFrame); roomFrame = null; cf(); }
+	else if (!dm) { lm = performance.now(); scheduleRoomFrame(); }
 }), window.addEventListener("blur", cf), window.addEventListener("pagehide", cf);
 var nm = /* @__PURE__ */ new Map(), rm = 0, im = 0;
 function am() {
@@ -18282,14 +18285,21 @@ function cm() {
 	Pd.setSize(e, t), Nd.setSize(e, t);
 }
 new ResizeObserver(cm).observe(_d), cm(), Md.domElement.style.cursor = "default", xd.classList.add("is-hidden");
-var lm = performance.now(), um = 0, dm = !1, fm = !1, pm = 0;
-window.__room = window.__room || {}, window.__room.pause = () => (dm = !0, !0), window.__room.resume = () => {
+var lm = performance.now(), um = 0, dm = vd, fm = document.hidden, pm = 0, roomFrame = null;
+function scheduleRoomFrame() {
+	if (!dm && !fm && roomFrame === null) roomFrame = requestAnimationFrame(mm);
+}
+window.__room = window.__room || {}, window.__room.pause = () => {
+	dm = !0; cancelAnimationFrame(roomFrame); roomFrame = null; return !0;
+}, window.__room.resume = () => {
 	let e = dm;
-	return dm = !1, e && !fm && (lm = performance.now(), requestAnimationFrame(mm)), e;
+	dm = !1; if (e && !fm) { lm = performance.now(); scheduleRoomFrame(); }
+	return e;
 }, window.__room.isPaused = () => dm || fm, window.__room.frames = () => pm;
 function mm() {
+	roomFrame = null;
 	if (dm || fm) return;
-	requestAnimationFrame(mm), pm++;
+	scheduleRoomFrame(); pm++;
 	let e = performance.now(), t = Math.min((e - lm) / 1e3, Wd);
 	lm = e, um += t;
 	let n = um;
@@ -18371,3 +18381,5 @@ mm(), window.__roomDebug = { camera() {
 	].join(", ") + "]");
 });
 //#endregion
+
+window.dispatchEvent(new CustomEvent('rinsora:room-ready', { detail: import.meta.url }));

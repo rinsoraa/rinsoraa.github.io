@@ -27,17 +27,90 @@
   // 不再把 <html> 内联成固定深色：页面底色交给主题变量 / .scene，
   // 房间自己的 #roomSection 已有独立深色背景，离开房间时不会留下黑边。
   window.__ROOM_OPTIONS__ = { embed: true, root: '#roomDrawerMount', embedClass: false };
-  var mod = document.createElement('script');
-  mod.type = 'module';
-  mod.src = '/room/room.js';
-  mod.addEventListener('load', syncRoomLifecycle);
-  // Mobile keeps the existing scene unloaded until the explicit Hero action.
-  var moduleStarted = false, pendingEntry = null, entryGeneration = 0;
+  var moduleAttempt = null, moduleNumber = 0, moduleState = 'idle';
+  var pendingEntry = null, entryGeneration = 0, lastOutcome = 'idle';
+  var messages = {
+    waiting: '正在准备房间…',
+    'resource-failed': '房间资源加载失败，可再次点击进入重试。',
+    'parse-failed': '房间脚本无法执行，可再次点击进入重试。',
+    'execution-failed': '房间初始化异常，当前页面不能安全重建，请手动刷新后再试。',
+    'unverified-module': '房间脚本状态异常，请手动刷新后再试。',
+    'resource-timeout': '房间资源仍在加载，本次进入已超时；稍后可再次尝试。',
+    'scene-timeout': '场景尚未就绪，本次进入已超时；稍后可再次尝试。',
+    available: '房间已准备好，可以再次进入。'
+  };
+  function publish(outcome) {
+    if (outcome) lastOutcome = outcome;
+    var root = document.documentElement;
+    if (root && root.dataset) {
+      root.dataset.roomModule = moduleState;
+      root.dataset.roomEntry = pendingEntry ? 'waiting' : open ? 'open' : 'idle';
+    }
+    if (outcome) {
+      var status = document.getElementById('heroRoomStatus');
+      if (status) status.textContent = messages[lastOutcome] || '';
+    }
+  }
+  function sceneReady() {
+    return !!(window.__room && typeof window.__room.resume === 'function' && window.__room.character && window.__room.character.children && window.__room.character.children.length);
+  }
+  function stopModulePoll(attempt) {
+    clearInterval(attempt.poll); clearTimeout(attempt.pollLimit);
+  }
+  function failModule(attempt, kind, retryable) {
+    if (attempt !== moduleAttempt || attempt.failed) return;
+    attempt.failed = true; attempt.failure = kind; attempt.retryable = retryable;
+    moduleState = retryable ? 'failed-before-execution' : 'execution-failed';
+    stopModulePoll(attempt); syncRoomLifecycle();
+    if (retryable && attempt.node.parentNode) attempt.node.parentNode.removeChild(attempt.node);
+    if (pendingEntry) finishEntry(pendingEntry, false, kind);
+    else publish();
+  }
+  // A fresh URL is used only after a confirmed pre-execution failure; failed
+  // ES-module fetches can remain cached in the browser module map.
   function startModule() {
-    if (moduleStarted) return;
-    moduleStarted = true;
+    if (moduleAttempt && !moduleAttempt.retryable) return;
+    var mod = document.createElement('script');
+    var attempt = { id: ++moduleNumber, node: mod, executed: false, loaded: false, failed: false, retryable: false };
+    mod.type = 'module'; mod.src = '/room/room.js?v=rh01-1&attempt=' + attempt.id;
+    moduleAttempt = attempt; moduleState = 'loading';
+    mod.addEventListener('error', function () {
+      failModule(attempt, attempt.executed ? 'execution-failed' : 'resource-failed', !attempt.executed);
+    });
+    mod.addEventListener('load', function () {
+      if (attempt !== moduleAttempt || attempt.failed) return;
+      attempt.loaded = true;
+      if (attempt.parseFailed && !attempt.executed) { failModule(attempt, 'parse-failed', true); return; }
+      if (!attempt.executed) { failModule(attempt, 'unverified-module', false); return; }
+      moduleState = sceneReady() ? 'initialized' : 'waiting-ready';
+      if (pendingEntry && pendingEntry.check) pendingEntry.check();
+      syncRoomLifecycle(); publish();
+      if (!pendingEntry && /timeout$/.test(lastOutcome) && sceneReady()) publish('available');
+    });
+    attempt.poll = setInterval(function () {
+      if (attempt !== moduleAttempt || attempt.failed || syncRoomLifecycle()) stopModulePoll(attempt);
+    }, 250);
+    attempt.pollLimit = setTimeout(function () { stopModulePoll(attempt); }, 20000);
+    publish();
     document.head.appendChild(mod);
   }
+  window.addEventListener('rinsora:room-evaluating', function (e) {
+    var attempt = moduleAttempt;
+    if (!attempt || attempt.failed || e.detail !== attempt.node.src) return;
+    attempt.executed = true; moduleState = 'initializing'; publish();
+  });
+  window.addEventListener('rinsora:room-ready', function (e) {
+    var attempt = moduleAttempt;
+    if (!attempt || attempt.failed || e.detail !== attempt.node.src) return;
+    syncRoomLifecycle();
+    if (attempt.loaded && pendingEntry && pendingEntry.check) pendingEntry.check();
+  });
+  window.addEventListener('error', function (e) {
+    var attempt = moduleAttempt;
+    if (!attempt || attempt.failed || attempt.loaded || e.filename !== attempt.node.src) return;
+    if (!attempt.executed && e.error && e.error.name === 'SyntaxError') attempt.parseFailed = true;
+    else if (attempt.executed) failModule(attempt, 'execution-failed', false);
+  });
   // The scene is invisible until entry. Both desktop and mobile use the same
   // existing readiness/retry path, avoiding its startup parse and texture cost.
 
@@ -55,7 +128,8 @@
   up.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5V12M8 12l-4-4M8 12l4-4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   document.body.appendChild(up);
 
-  var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false, returnFocus = null, returnScrollY = 0;
+  var progress = 0, idleTimer = null, open = false, hintSeen = false, ready = false, returnFocus = null, returnScope = null, returnScrollY = 0;
+  var background = document.getElementById('app'), backgroundWasInert = false;
   var STEP = 0.055, IDLE_MS = 1000;
   var hintTimer = null, hintResetTimer = null;
 
@@ -67,10 +141,6 @@
     else window.__room.pause();
     return true;
   }
-  var lifecyclePoll = setInterval(function () {
-    if (syncRoomLifecycle()) clearInterval(lifecyclePoll);
-  }, 250);
-  setTimeout(function () { clearInterval(lifecyclePoll); }, 15000);
 
   // 开屏 / 欢迎页期间：既不允许进入房间，也不显示进度
   function welcomeVisible() {
@@ -122,12 +192,29 @@
   function gestureUnavailable(event) {
     return coverOwnsPull || mobile || otherInputOwner(event) || welcomeVisible();
   }
-  function finishEntry(entry, result) {
+  function scope() {
+    var state = window.RinsoraHome && window.RinsoraHome.AppState;
+    var ids = ['labDetail', 'labLightbox', 'memoryDetail', 'settingsPanel'];
+    return { page: state && state.currentPage, hash: location.hash,
+      owners: ['museum-open', 'spa-post-open', 'lab-detail-open', 'memory-detail-open'].map(function (c) { return document.body.classList.contains(c); }).join(',') +
+        ids.map(function (id) { var el = document.getElementById(id); return !!(el && (el.open || el.classList.contains('open'))); }).join(',') };
+  }
+  function sameScope(saved) {
+    var current = scope();
+    return !!saved && saved.page === current.page && saved.hash === current.hash && saved.owners === current.owners;
+  }
+  function focusableTarget(el) {
+    if (!el || !el.isConnected || el.disabled || el.hidden || !el.focus || el.closest('[inert], [hidden], [aria-hidden="true"]')) return false;
+    var css = getComputedStyle(el);
+    return css.display !== 'none' && css.visibility !== 'hidden' && el.getClientRects().length > 0;
+  }
+  function finishEntry(entry, result, outcome) {
     if (entry.done) return;
     entry.done = true; clearTimeout(entry.timer);
     if (pendingEntry === entry) {
       pendingEntry = null;
       if (!result && entry.source === 'gesture') reset();
+      publish(outcome || (result ? 'entered' : 'cancelled'));
     }
     entry.resolve(result);
   }
@@ -140,6 +227,12 @@
     reset();
   }
   function syncGestureOwnership() {
+    if (open && !sameScope(returnScope)) {
+      leaveRoom({ restoreFocus: false, restoreScroll: false });
+    }
+    if (pendingEntry && !sameScope(pendingEntry.scope)) {
+      entryGeneration++; finishEntry(pendingEntry, false, 'cancelled'); reset();
+    }
     if (!open && gestureUnavailable()) relinquishGesture();
   }
 
@@ -150,62 +243,96 @@
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () { reset(); hintSeen = true; }, IDLE_MS);
   }
-  function revealRoom() {
+  function revealRoom(entry) {
     clearTimeout(idleTimer);
-    returnFocus = document.activeElement;
+    returnFocus = entry.trigger;
+    returnScope = entry.scope;
     returnScrollY = window.scrollY;
+    // Tab can scroll the Hero into view. Start the viewport-sized drawer at the
+    // top, then restore this reading position on exit, so the sheet clears it.
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (background) { backgroundWasInert = background.inert; background.inert = true; }
     open = true; hintSeen = true; progress = 0;
     document.body.classList.add('room-open');
     syncRoomLifecycle();
     render();
     up.focus({ preventScroll: true });
   }
-  function leaveRoom() {
+  function leaveRoom(options) {
+    options = options || {};
     entryGeneration++;
     if (pendingEntry) finishEntry(pendingEntry, false);
     clearTimeout(idleTimer); idleTimer = null;
     var wasOpen = open;
     open = false;
+    if (wasOpen && background) background.inert = backgroundWasInert;
     document.body.classList.remove('room-open');
     syncRoomLifecycle();
     progress = 0;
-    if (wasOpen && returnFocus && returnFocus.focus) returnFocus.focus({ preventScroll: true });
     render();
-    if (wasOpen) window.scrollTo({ top: returnScrollY, behavior: 'instant' });
+    if (wasOpen && options.restoreScroll !== false && sameScope(returnScope)) window.scrollTo({ top: returnScrollY, behavior: 'instant' });
+    if (wasOpen && options.restoreFocus !== false && !otherInputOwner()) {
+      var target = sameScope(returnScope) && focusableTarget(returnFocus) ? returnFocus : document.getElementById('sectionTitle');
+      if (focusableTarget(target)) {
+        if (target !== returnFocus) target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+      } else if (document.activeElement === up) up.blur();
+    } else if (wasOpen && document.activeElement === up) up.blur();
+    returnFocus = returnScope = null;
+    publish('closed');
   }
-  function enterRoom(source) {
+  function enterRoom(source, options) {
+    options = options || {};
     if (welcomeVisible() || document.body.classList.contains('museum-open')) return Promise.resolve(false);
     if (source === 'gesture' && gestureUnavailable()) { relinquishGesture(); return Promise.resolve(false); }
     if (open) return Promise.resolve(true);
     if (pendingEntry) {
       // A real button click can intentionally adopt an already-loading gesture.
-      if (source !== 'gesture') pendingEntry.source = 'explicit';
+      if (source !== 'gesture' && pendingEntry.source === 'gesture') {
+        pendingEntry.source = 'explicit'; pendingEntry.trigger = options.trigger || document.activeElement;
+        pendingEntry.scope = scope();
+      }
       return pendingEntry.promise;
     }
+    if (moduleAttempt && moduleAttempt.failed && (!moduleAttempt.retryable || source === 'gesture')) {
+      reset(); publish(moduleAttempt.failure); return Promise.resolve(false);
+    }
     clearTimeout(idleTimer); idleTimer = null;
-    var entry = { source: source === 'gesture' ? 'gesture' : 'explicit', generation: entryGeneration, timer: null, done: false };
+    var entry = { source: source === 'gesture' ? 'gesture' : 'explicit', generation: entryGeneration, timer: null, done: false,
+      trigger: source === 'gesture' ? null : options.trigger || document.activeElement, scope: scope() };
     entry.promise = new Promise(function (resolve) { entry.resolve = resolve; });
     pendingEntry = entry;
+    publish('waiting');
     startModule();
     var started = Date.now();
     function check() {
       if (entry.done) return;
-      if (entry !== pendingEntry || entry.generation !== entryGeneration || welcomeVisible() || document.body.classList.contains('museum-open') || (entry.source === 'gesture' && gestureUnavailable())) {
+      clearTimeout(entry.timer);
+      if (entry !== pendingEntry || entry.generation !== entryGeneration || !sameScope(entry.scope) || welcomeVisible() || document.body.classList.contains('museum-open') || (entry.source === 'gesture' && gestureUnavailable())) {
         finishEntry(entry, false); return;
       }
-      if (window.__room && typeof window.__room.resume === 'function' && window.__room.character && window.__room.character.children.length) {
+      if (moduleAttempt && moduleAttempt.failed) { finishEntry(entry, false, moduleAttempt.failure); return; }
+      if (moduleAttempt && moduleAttempt.loaded && sceneReady()) {
+        moduleState = 'initialized'; stopModulePoll(moduleAttempt);
         section.classList.add('room-ready');
-        revealRoom(); finishEntry(entry, true); return;
+        revealRoom(entry); finishEntry(entry, true); return;
       }
-      if (Date.now() - started > 20000) { finishEntry(entry, false); return; }
+      if (Date.now() - started >= 20000) { finishEntry(entry, false, moduleAttempt && moduleAttempt.loaded ? 'scene-timeout' : 'resource-timeout'); return; }
       entry.timer = setTimeout(check, 100);
     }
-    check();
+    entry.check = check; check();
     return entry.promise;
   }
-  window.RinsoraRoom = { enter: function () { return enterRoom('explicit'); }, leave: leaveRoom, isOpen: function () { return open; } };
+  window.RinsoraRoom = {
+    enter: function (options) { return enterRoom('explicit', options); }, leave: leaveRoom, isOpen: function () { return open; },
+    getState: function () { return { moduleState: moduleState, attempt: moduleNumber,
+      executed: !!(moduleAttempt && moduleAttempt.executed), loaded: !!(moduleAttempt && moduleAttempt.loaded),
+      pending: !!pendingEntry, source: pendingEntry && pendingEntry.source, lastOutcome: lastOutcome,
+      failure: moduleAttempt && moduleAttempt.failure || null, canRetryModule: !!(moduleAttempt && moduleAttempt.retryable),
+      message: messages[lastOutcome] || '' }; }
+  };
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape' || /^[1-4]$/.test(e.key)) leaveRoom(); });
-  window.addEventListener('hashchange', leaveRoom);
+  window.addEventListener('hashchange', function () { leaveRoom({ restoreFocus: false, restoreScroll: false }); });
 
   // 手势：页面顶端（scrollY<=2）+ 向上滚 → 累积进度环 → 满则主页整体下滑露出房间
   window.addEventListener('wheel', function (e) {
@@ -238,7 +365,7 @@
   // not the whole animated DOM, and cancel gesture requests before late readiness.
   if (typeof MutationObserver === 'function') {
     var ownershipObserver = new MutationObserver(syncGestureOwnership);
-    [document.body, document.getElementById('projects'), document.getElementById('moments'), document.getElementById('settingsPanel')].forEach(function (el) {
+    [document.body, document.getElementById('about'), document.getElementById('blog'), document.getElementById('projects'), document.getElementById('moments'), document.getElementById('settingsPanel')].forEach(function (el) {
       if (el) ownershipObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
     });
   }
@@ -248,7 +375,7 @@
   document.addEventListener('click', function (e) {
     var t = e.target;
     while (t && t !== document.body) {
-      if (t.getAttribute && (t.getAttribute('data-target') || t.getAttribute('data-museum'))) { leaveRoom(); return; }
+      if (t.getAttribute && (t.getAttribute('data-target') || t.getAttribute('data-museum'))) { leaveRoom({ restoreFocus: false, restoreScroll: false }); return; }
       t = t.parentNode;
     }
   }, true);

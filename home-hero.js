@@ -19,18 +19,22 @@
       window.RinsoraHome.navigateTo('projects');
     }
   });
+  let roomRequest = 0;
   room.addEventListener('click', async () => {
+    const request = ++roomRequest;
     room.disabled = true;
     room.setAttribute('aria-busy', 'true');
     status.textContent = '正在准备房间…';
     try {
-      const entered = await window.RinsoraRoom.enter();
-      status.textContent = entered ? '' : '房间暂未准备好，请稍后重试。';
+      const entered = await window.RinsoraRoom.enter({ trigger: room });
+      if (request === roomRequest) status.textContent = entered ? '' : (window.RinsoraRoom.getState?.().message || '');
     } catch (error) {
-      status.textContent = '房间加载失败，请稍后重试。';
+      if (request === roomRequest) status.textContent = '房间加载失败，请稍后重试。';
     } finally {
-      room.disabled = false;
-      room.removeAttribute('aria-busy');
+      if (request === roomRequest) {
+        room.disabled = false;
+        room.removeAttribute('aria-busy');
+      }
     }
   });
   // Welcome stays light: promote only when its exit begins, or on a direct route.

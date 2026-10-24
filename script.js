@@ -503,6 +503,7 @@
   }
 
   function navigateTo(page, opts) {
+    window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     const o = { ...(opts || {}) };
     if (!TITLES[page]) page = 'about';
     window.RinsoraMemory?.pageChanged(page, o);
@@ -973,6 +974,7 @@
   }
 
   function enterMuseum(opts) {
+    window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (window.RinsoraLab?.enabled && window.RinsoraLab.isOpen()) closeLab('list');
     const o = opts || {};
@@ -1098,6 +1100,7 @@
   }
 
   function openPost(url, push) {
+    window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (!spaPost || !spaPostBody) return false;
     if (url === postUrl) return true;
@@ -1166,6 +1169,7 @@
      initSettings —— 外观 / 特效 / 关于
      ============================================================ */
   function openSettings() {
+    window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
     if (settingsPanel) { settingsPanel.inert = false; settingsPanel.setAttribute('aria-hidden', 'false'); }
