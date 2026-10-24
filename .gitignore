@@ -28,3 +28,8 @@ docs/**/*.log
 docs/**/originals/*.webm
 docs/**/originals/*.mp4
 node_modules/
+# Local-only Memory importer backups/recovery; never publish private drafts.
+.memory-import-backups/
+.memory-import.lock
+.memory-import-journal.json
+memory-gallery-data.*.tmp
