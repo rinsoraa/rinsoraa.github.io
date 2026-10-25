@@ -68,7 +68,7 @@
       home().navigateTo('moments', { scrollY: y, silent: true });
       origin = { focus: focus?.closest?.('#memoryGalleryMount') ? focus : null, y };
     }
-    home().closeSettings(); w.RinsoraRoom?.leave();
+    home().closeSettings({ restoreFocus: false }); w.RinsoraRoom?.leave();
     current = item; currentImages = M.detailMedia(item); currentIndex = 0;
     panel.replaceChildren();
     const top = node('div', 'memory-dialog-top'); top.append(node('span', 'memory-eyebrow', 'A LITTLE MEMORY / 一页收藏'), button('关闭 ×', () => hide({ restore: true }), 'memory-close'));

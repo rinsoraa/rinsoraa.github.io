@@ -23,7 +23,7 @@
     const value = await r.text(); if (new TextEncoder().encode(value).length > 2097152) throw new Error('Memory data too large'); const doc = JSON.parse(value); mark('json-ready'); return doc;
   });
   data.catch(() => {});
-  const scripts = load('memory-gallery-model.js?v=ui04b2-1').then(() => load('memory-gallery.js?v=ui04b2-1')).then(() => mark('scripts-ready'));
+  const scripts = load('memory-gallery-model.js?v=ui04b2-1').then(() => load('memory-gallery.js?v=rh02fu1-1')).then(() => mark('scripts-ready'));
   const dom = d.readyState === 'loading' ? new Promise(resolve => d.addEventListener('DOMContentLoaded', resolve, { once: true })) : Promise.resolve();
   // The album can render its validated content at its parser mount, before the
   // unrelated site startup finishes. Interaction waits for the existing router.

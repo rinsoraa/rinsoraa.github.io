@@ -285,6 +285,7 @@
     options = options || {};
     if (welcomeVisible() || document.body.classList.contains('museum-open')) return Promise.resolve(false);
     if (source === 'gesture' && gestureUnavailable()) { relinquishGesture(); return Promise.resolve(false); }
+    if (source !== 'gesture' && window.RinsoraHome && window.RinsoraHome.closeSettings) window.RinsoraHome.closeSettings({ restoreFocus: false });
     if (open) return Promise.resolve(true);
     if (pendingEntry) {
       // A real button click can intentionally adopt an already-loading gesture.

@@ -506,6 +506,7 @@
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     const o = { ...(opts || {}) };
     if (!TITLES[page]) page = 'about';
+    if (settingsFocus.isOpen() && (page !== settingsFocus.page() || settingsFocus.owner() || o.labDetail || o.force)) closeSettings({ restoreFocus: false });
     window.RinsoraMemory?.pageChanged(page, o);
     const labReturn = LAB_PREVIEW && !o.labDetail && window.RinsoraLab?.hide();
     if (labReturn && labReturn.page === page && o.scrollY == null) o.scrollY = labReturn.y;
@@ -631,6 +632,7 @@
     window.RinsoraMemory?.hide();
     const lab = window.RinsoraLab;
     if (!LAB_PREVIEW || !lab?.enabled || !lab.isReady() || !window.RinsoraLabModel.validId(id)) return false;
+    closeSettings({ restoreFocus: false });
     const replace = lab.isOpen(), origin = lab.captureReturn();
     history[replace ? 'replaceState' : 'pushState']({ rinsoraLab: { origin } }, '', window.RinsoraLabModel.href(id));
     return routeHash();
@@ -974,6 +976,7 @@
   }
 
   function enterMuseum(opts) {
+    closeSettings({ restoreFocus: false });
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (window.RinsoraLab?.enabled && window.RinsoraLab.isOpen()) closeLab('list');
@@ -989,7 +992,7 @@
 
       closeNav(true);
       hidePost();
-      closeSettings();
+      closeSettings({ restoreFocus: false });
 
       AppState.museumOpen = true;
       state.museumOpen = true;
@@ -1105,7 +1108,7 @@
     if (!spaPost || !spaPostBody) return false;
     if (url === postUrl) return true;
 
-    closeSettings();                          /* 设置抽屉别压在文章上面 */
+    closeSettings({ restoreFocus: false });    /* 文章接管时不争抢旧焦点 */
     hidePost();
     postUrl = url;
     postPushed = push !== false;
@@ -1168,30 +1171,171 @@
   /* ============================================================
      initSettings —— 外观 / 特效 / 关于
      ============================================================ */
-  function openSettings() {
+  /* settings-focus-controller:start -- tested from this exact implementation */
+  function createSettingsFocusController(w, d, panel, mask, context) {
+    let session = null, epoch = 0, retry = null, moving = false, focusCheck = null, stopOwnerWatch = null;
+    const selector = 'a[href],button,input,select,textarea,[tabindex]';
+    const isOpen = () => !!session && panel.classList.contains('open');
+    function available(el) {
+      return !!(el && el.nodeType === 1 && el.isConnected && !el.disabled && !el.hidden &&
+        !el.closest('[inert],[hidden]') && el.getClientRects().length &&
+        w.getComputedStyle(el).visibility !== 'hidden');
+    }
+    function focusPanelTarget(target) {
+      target.focus({ preventScroll: true });
+      if (!panel.contains(d.activeElement) || d.activeElement === panel) return;
+      const rect = d.activeElement.getBoundingClientRect(), box = panel.getBoundingClientRect();
+      const delta = rect.top < box.top + 8 ? rect.top - box.top - 8 :
+        rect.bottom > box.bottom - 8 ? rect.bottom - box.bottom + 8 : 0;
+      if (delta) panel.scrollTop = Math.max(0, panel.scrollTop + delta);
+    }
+    function focusInside() {
+      if (!isOpen() || moving || panel.contains(d.activeElement)) return;
+      moving = true;
+      const target = panel.querySelector('.set-tab.active') || panel.querySelector('button') || panel;
+      focusPanelTarget(target);
+      if (!panel.contains(d.activeElement)) panel.focus({ preventScroll: true });
+      moving = false;
+    }
+    function close(options) {
+      if (!session) return false;
+      const saved = session, restore = options?.restoreFocus !== false;
+      session = null; epoch++; focusCheck = null;
+      if (retry !== null) w.cancelAnimationFrame(retry);
+      retry = null;
+      stopOwnerWatch?.(); stopOwnerWatch = null;
+      panel.classList.remove('open'); mask?.classList.remove('open');
+      d.body.style.overflow = saved.overflow;
+      if (restore && saved.owner === context.owner()) {
+        const target = saved.origin.page === context.page() && saved.origin.owner === context.owner() && available(saved.trigger) && (!context.accept || context.accept(saved.trigger)) ? saved.trigger :
+          context.fallback().find(available);
+        if (target) {
+          if (target !== saved.trigger && !target.matches(selector)) target.setAttribute('tabindex', '-1');
+          target.focus({ preventScroll: true });
+        }
+      }
+      if (panel.contains(d.activeElement)) d.activeElement.blur();
+      panel.inert = true; panel.setAttribute('aria-hidden', 'true');
+      return true;
+    }
+    function open(trigger, origin) {
+      if (!panel) return false;
+      if (isOpen()) { focusInside(); return true; }
+      const token = ++epoch;
+      session = { trigger: trigger && !['BODY','HTML'].includes(trigger.tagName) && !panel.contains(trigger) ? trigger : null,
+        page: context.page(), owner: context.owner(), origin: origin || { page: context.page(), owner: context.owner() }, overflow: d.body.style.overflow };
+      stopOwnerWatch = context.watch?.(() => {
+        if (session && epoch === token && session.owner !== context.owner()) close({ restoreFocus: false });
+      });
+      moving = true;
+      panel.inert = false; panel.setAttribute('aria-hidden', 'false');
+      panel.classList.add('open'); mask?.classList.add('open');
+      d.body.style.overflow = 'hidden';
+      moving = false;
+      focusInside();
+      // Only a failed synchronous attempt gets one cancellable paint retry.
+      // Neither correctness nor return-focus ownership depends on an animation.
+      if (!panel.contains(d.activeElement)) retry = w.requestAnimationFrame(() => {
+        retry = null;
+        if (session && epoch === token && session.page === context.page() && session.owner === context.owner()) focusInside();
+      });
+      return true;
+    }
+    d.addEventListener('keydown', e => {
+      if (!isOpen()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault(); e.stopImmediatePropagation(); close(); return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault(); e.stopImmediatePropagation(); focusInside(); return;
+      }
+      if (e.key !== 'Tab') return;
+      const targets = Array.from(panel.querySelectorAll(selector)).filter(el => el.tabIndex >= 0 && available(el));
+      e.preventDefault(); e.stopImmediatePropagation();
+      const at = targets.indexOf(d.activeElement);
+      const next = at < 0 ? (e.shiftKey ? targets.length - 1 : 0) :
+        (at + (e.shiftKey ? -1 : 1) + targets.length) % targets.length;
+      focusPanelTarget(targets[next] || panel);
+    }, true);
+    // The existing full-viewport mask blocks pointers; this capture guard also
+    // rejects controls above it. Tab/focus guards and the scroll lock complete
+    // the modal contract without restyling every background descendant as inert.
+    d.addEventListener('click', e => {
+      if (isOpen() && e.target !== mask && !panel.contains(e.target)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+      }
+    }, true);
+    d.addEventListener('focusin', e => {
+      if (isOpen() && !moving && !panel.contains(e.target)) {
+        if (session.owner !== context.owner() || e.target.closest?.('[role="dialog"][aria-modal="true"]')) close({ restoreFocus: false });
+        else focusInside();
+      }
+    }, true);
+    // The browser may clear focus during its initial fragment commit without
+    // dispatching a new focusin. Recheck ownership after that focusout task.
+    panel.addEventListener('focusout', () => {
+      if (!isOpen() || focusCheck === epoch) return;
+      const token = epoch; focusCheck = token;
+      w.queueMicrotask(() => {
+        if (focusCheck === token) focusCheck = null;
+        if (!session || epoch !== token || d.visibilityState === 'hidden') return;
+        if (session.page !== context.page() || session.owner !== context.owner()) close({ restoreFocus: false });
+        else focusInside();
+      });
+    });
+    d.addEventListener('beforetoggle', e => {
+      if (isOpen() && e.target.tagName === 'DIALOG' && e.newState === 'open') close({ restoreFocus: false });
+    }, true);
+    w.addEventListener('pagehide', () => close({ restoreFocus: false }));
+    return { open, close, isOpen, page: () => session?.page, owner: () => session?.owner };
+  }
+  /* settings-focus-controller:end */
+  const settingsContext = {
+    page: () => html.dataset.preSection || AppState.currentPage,
+    owner: () => document.querySelector('dialog[open]')?.id || $('#musicModal.open')?.id ||
+      (body.classList.contains('room-open') ? 'room' : AppState.museumOpen ? 'museum' : postUrl || ''),
+    watch: notify => {
+      if (!window.MutationObserver) return null;
+      let live = true;
+      const watchPopup = () => {
+        const popup = $('#musicModal');
+        if (popup) observer.observe(popup, { attributes: true, attributeFilter: ['class'] });
+      };
+      const observer = new MutationObserver(() => {
+        if (!live) return;
+        watchPopup(); notify();
+      });
+      observer.observe(body, { childList: true }); watchPopup();
+      return () => { live = false; observer.disconnect(); };
+    },
+    accept: el => {
+      const owner = settingsContext.owner();
+      const root = document.getElementById(owner) || (owner === 'museum' ? $('#mmScene') : owner === postUrl ? spaPost : null);
+      return !owner || !!root?.contains(el);
+    },
+    fallback: () => {
+      const owner = settingsContext.owner();
+      const root = document.getElementById(owner) || (owner === 'museum' ? $('#mmScene') : owner === postUrl ? spaPost : null);
+      return owner ? Array.from(root?.querySelectorAll('button,a[href],[tabindex]') || []) :
+        [$('#sectionTitle'), sectionEl(AppState.currentPage)?.querySelector('h2,h3'), enterBtn];
+    }
+  };
+  const settingsFocus = createSettingsFocusController(window, document, settingsPanel, settingsMask, settingsContext);
+  function openSettings(event) {
+    // Welcome has no settings entry; never lock it behind an invisible drawer.
+    if (!app?.classList.contains('visible') && !html.hasAttribute('data-pre-section')) return false;
+    if (settingsFocus.isOpen()) return settingsFocus.open();
+    // These foreground owners cover #app; never focus settings behind them.
+    if (AppState.museumOpen || postUrl || $('#musicModal.open') || document.querySelector('dialog[open]:not(#labDetail):not(#labLightbox):not(#memoryDetail)')) return false;
+    const trigger = event?.currentTarget?.nodeType === 1 ? event.currentTarget : document.activeElement;
+    const origin = { page: settingsContext.page(), owner: settingsContext.owner() };
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
-    if (settingsPanel) { settingsPanel.inert = false; settingsPanel.setAttribute('aria-hidden', 'false'); }
-    settingsPanel && settingsPanel.classList.add('open');
-    settingsMask && settingsMask.classList.add('open');
-    /* 遮罩是铺满整屏且吃指针事件的，底下那页还能滚就是明显的错位感
-       （手机上尤其明显：手指在遮罩上划，背景内容在动）。
-       锁在 <body> 上 —— 滚动容器是 body，锁 <html> 不管用。 */
-    body.style.overflow = 'hidden';
-    const tab = $('.set-tab.active');
-    if (tab && tab.focus) tab.focus({ preventScroll: true });
+    if (museumEntry && !AppState.museumOpen) exitMuseum();
+    return settingsFocus.open(trigger, origin);
   }
-  function closeSettings() {
-    const wasOpen = !!(settingsPanel && settingsPanel.classList.contains('open'));
-    settingsPanel && settingsPanel.classList.remove('open');
-    settingsMask && settingsMask.classList.remove('open');
-    body.style.overflow = '';
-    /* 焦点要还回去，否则键盘用户的焦点会掉在一个已经收起来的面板里 */
-    const opener = $('.settings-open');
-    if (wasOpen && opener && opener.focus) opener.focus({ preventScroll: true });
-    if (settingsPanel) { settingsPanel.inert = true; settingsPanel.setAttribute('aria-hidden', 'true'); }
-  }
+  function closeSettings(options) { return settingsFocus.close(options); }
   $$('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
   $('#settingsClose') && $('#settingsClose').addEventListener('click', closeSettings);
   settingsMask && settingsMask.addEventListener('click', closeSettings);
@@ -1758,7 +1902,8 @@
   document.addEventListener('keydown', (e) => {
     const tag = (e.target.tagName || '').toLowerCase();
     const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSettings(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openSettings(e); return; }
+    if (settingsFocus.isOpen()) return; // The modal owns keyboard input until close or navigation.
     if (e.key === 'Escape') {
       /* Escape 的收口顺序：
          音乐博物馆 → 文章浮层 → 设置抽屉 → 导航 → 添加音乐弹窗。
@@ -1782,21 +1927,6 @@
     if (e.key === '3') navigateTo('projects');
     if (e.key === '4') navigateTo('moments');
   });
-
-  /* 设置抽屉打开时把焦点送进去，关上时还回来 —— 键盘用户不用盲找 */
-  let lastFocus = null;
-  function focusTrapGuard() {
-    const on = settingsPanel && settingsPanel.classList.contains('open');
-    if (on && !lastFocus) {
-      lastFocus = document.activeElement;
-      const close = $('#settingsClose');
-      close && close.focus && close.focus();
-    } else if (!on && lastFocus) {
-      lastFocus.focus && lastFocus.focus();
-      lastFocus = null;
-    }
-  }
-  document.addEventListener('transitionend', focusTrapGuard, true);
 
   /* ============================================================
      initPageTransitions —— 跨文档转场
