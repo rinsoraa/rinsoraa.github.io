@@ -436,6 +436,12 @@ body:not(.no-tilt) .tilt-card:hover{
 .skip-link:focus{left:0}
 /* 键盘焦点一定要看得见（鼠标点击不显示，避免「点到哪都发光」） */
 :focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px;border-radius:8px}
+/* RH-03: measured small-text contrast; keep paper, glass and theme artwork. */
+.section-heading small,.blog-end-cap,.moments-head .section-kicker,
+.moments-head .section-display>span,.moments-head .section-sub,.moments-stat,
+.mobile-nav button:not(.active),.recent-card .rc-kind,.recent-card .rc-desc,
+.recent-card .rc-foot span,.recent-sub{color:var(--ink)}
+.read-more{display:inline-flex;align-items:center;min-height:24px}
 .radial-item:focus-visible,.mobile-nav button:focus-visible,.bf-chip:focus-visible,
 .theme-grid button:focus-visible,.set-tab:focus-visible,.mm-btn:focus-visible{
   outline:2px solid var(--accent-primary);outline-offset:2px;

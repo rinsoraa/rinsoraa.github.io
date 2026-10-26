@@ -23,8 +23,8 @@
 
 /* ------------------------------------------------------ 设置面板 ---- */
 .editor-setup{padding:22px 24px;border-radius:24px}
-.editor-setup h3{margin:0 0 8px;font-size:16px;color:#5a465f;display:flex;align-items:center;gap:8px}
-.editor-setup h3 span{color:#ee86ad}
+.editor-setup :is(h2,h3){margin:0 0 8px;font-size:16px;color:#5a465f;display:flex;align-items:center;gap:8px}
+.editor-setup :is(h2,h3) span{color:#ee86ad}
 .editor-setup .hint{font-size:12px;line-height:1.95;color:var(--muted);margin:0 0 18px;max-width:74ch}
 .editor-setup .hint a{color:#df75a5;font-weight:800}
 .editor-setup .hint code{
@@ -196,7 +196,7 @@
 /* ----------------------------------------------------- 夜间模式 ---- */
 body.night .editor-back{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16);color:#f3a6c5}
 body.night .editor-back:hover{background:rgba(255,255,255,.2)}
-body.night .editor-title,body.night .editor-setup h3{color:#f4eaf3}
+body.night .editor-title,body.night .editor-setup :is(h2,h3){color:#f4eaf3}
 body.night .field input,body.night .field textarea,body.night .field select{
   background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);color:#f4eaf3;
 }
@@ -283,3 +283,9 @@ body.night .pe-sub{color:#f3a6c5}
 body.night .pe-preview-title{color:#f3a6c5}
 .pe-preview .pt-head{cursor:default}
 .pe-preview .pt-group:hover{box-shadow:none}
+/* RH-03: readable supporting text without changing editor geometry. */
+html:not(.night) .editor-page{--muted:#786078;--lab-muted:#786078}
+html.night .editor-page{--muted:#d0bed2;--lab-muted:#d0bed2}
+.editor-page .editor-title{margin:0}
+.editor-page .side-head>span,.editor-page .pe-tip,.editor-page .field>span,
+.editor-page #btnProbe,.editor-page #btnReset,.editor-page .pe-preview-title{color:var(--ink)}

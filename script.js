@@ -194,10 +194,11 @@
     if (themeLabel) themeLabel.textContent = state.night ? '日间模式' : '夜间模式';
     if (themeBtn) themeBtn.title = state.night ? '切换日间模式' : '切换夜间模式';
     const ns = $('#nightSwitch');
-    if (ns) ns.classList.toggle('on', state.night);
+    if (ns) { ns.classList.toggle('on', state.night); ns.setAttribute('aria-pressed', String(state.night)); }
     /* 设置面板里 5 个主题按钮的高亮 + 「当前主题」文字 */
     $$('.theme-grid button').forEach((b) => {
       b.classList.toggle('active', (b.dataset.theme || b.dataset.palette) === name);
+      b.setAttribute('aria-pressed', String((b.dataset.theme || b.dataset.palette) === name));
     });
     const nowLabel = $('#themeNow');
     if (nowLabel) nowLabel.textContent = name;
@@ -283,7 +284,7 @@
     body.classList.toggle('cursor-on', fx.cursor && !reduceMotion());
     /* 只同步「特效开关」，夜间那个 .switch 没有 data-setting，不归这里管 */
     $$('.switch').forEach((b) => {
-      if (b.dataset.setting) b.classList.toggle('on', !!fx[b.dataset.setting]);
+      if (b.dataset.setting) { b.classList.toggle('on', !!fx[b.dataset.setting]); b.setAttribute('aria-pressed', String(!!fx[b.dataset.setting])); }
     });
     if (starfield) starfield.sync();
   }
@@ -503,8 +504,11 @@
   }
 
   function navigateTo(page, opts) {
+    const focusLeavesSection = document.activeElement?.closest('.page-section');
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     const o = { ...(opts || {}) };
+    const articleReturn = hidePost();
+    if (articleReturn?.origin.page === page && o.scrollY == null) o.scrollY = articleReturn.origin.y;
     if (!TITLES[page]) page = 'about';
     if (settingsFocus.isOpen() && (page !== settingsFocus.page() || settingsFocus.owner() || o.labDetail || o.force)) closeSettings({ restoreFocus: false });
     window.RinsoraMemory?.pageChanged(page, o);
@@ -520,13 +524,13 @@
          否则 #about 这类「目标就是初始分栏」的直达链接会被
          html[data-pre-section] 一直按着（欢迎页被 display:none）。 */
       html.removeAttribute('data-pre-section');
-      hidePost();
       if (!o.silent) closeNav(true);
       syncA11y(page);
       if (o.scrollY != null) window.scrollTo({ top: o.scrollY, behavior: 'instant' });
-      if (labReturn) document.title = TITLES[page] + ' · 空凛 · Rinsora 的小窝';
+      document.title = TITLES[page] + ' · 空凛 · Rinsora 的小窝';
       if (labReturn && o.push !== false && history.replaceState) history.replaceState(null, '', '#' + page);
       if (labReturn) window.RinsoraLab.restoreFocus(page);
+      if (articleReturn && !labReturn && !o.labDetail) restorePostFocus(articleReturn, page);
       return true;
     }
 
@@ -537,7 +541,7 @@
     const initialLabProjects = LAB_PREVIEW && page === 'projects' && html.dataset.preSection === 'projects';
     const initialMemoryMoments = MEMORY_PREVIEW && page === 'moments' && html.dataset.preSection === 'moments';
 
-    hidePost();                                   /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
+    /* Article already released above. */          /* 切分栏 = 退出文章浮层（浏览器后退也走这里） */
     html.removeAttribute('data-pre-section');     /* 首帧那层 CSS 兜底到此交班 */
 
     AppState.previousPage = from;
@@ -568,6 +572,13 @@
       behavior: labReturn && back != null ? 'instant' : (back == null && !reduceMotion()) ? 'smooth' : 'auto'
     });
     if (labReturn) window.RinsoraLab.restoreFocus(page);
+    if (articleReturn && !labReturn && !o.labDetail) restorePostFocus(articleReturn, page);
+
+    // A link in the outgoing section must not leave keyboard focus on body.
+    // Navigation controls outside that section retain their existing focus.
+    if (focusLeavesSection && focusLeavesSection.id !== page && !labReturn && !o.labDetail && title) {
+      title.setAttribute('tabindex', '-1'); title.focus({ preventScroll: true });
+    }
 
     /* 进入某个分栏时按需重新扫一遍滚动进场的目标 */
     observeReveal();
@@ -595,7 +606,7 @@
       /* 音乐博物馆那一项进的是 overlay 场景，不是分栏 ——
          它带 data-museum 而不是 data-target，所以不能走 navigateTo。
          （走 navigateTo 会被 TITLES 兜底成「主页」，正好是最糟的结果。） */
-      if (btn.dataset.museum) { enterMuseum(); return; }
+      if (btn.dataset.museum) { enterMuseum({ trigger: btn }); return; }
       if (!btn.dataset.target) return;
       navigateTo(btn.dataset.target);
       closeNav(true);
@@ -606,13 +617,17 @@
     if (!navWrap) return;
     navWrap.classList.toggle('open', on);
     navWrap.classList.remove('nav-closed');   /* 主动展开时清掉「已被显式收起」的抑制类 */
+    avatarButton?.setAttribute('aria-expanded', String(on));
   }
   function closeNav(soft) {
     if (!navWrap) return;
     navWrap.classList.remove('open');
     /* soft=true：点空白收起，顺手压住 :hover 的自动展开；鼠标离开就复位 */
     navWrap.classList.toggle('nav-closed', !!soft);
+    avatarButton?.setAttribute('aria-expanded', 'false');
+    if (document.activeElement?.closest('.radial-nav')) avatarButton?.focus({ preventScroll: true });
   }
+  navWrap?.addEventListener('focusin', e => { if (e.target.closest('.radial-item')) openNav(true); });
   avatarButton && avatarButton.addEventListener('click', (e) => {
     e.stopPropagation();
     if (navWrap.classList.contains('open')) closeNav(true);
@@ -668,19 +683,22 @@
     /* 文章：先落回博客分栏（首帧 CSS 已经把欢迎页按住了），再盖上浮层 */
     const pm = /^\/post\/([^/?#]+\.html)$/i.exec(raw);
     if (pm) {
-      skipBoot(); enterApp(true); navigateTo('blog', { push: false, silent: true });
+      skipBoot(); enterApp(true);
+      if (!postUrl) navigateTo('blog', { push: false, silent: true });
       openPost('posts/' + pm[1], false);
       return true;
     }
     if (TITLES[h]) { skipBoot(); enterApp(true); navigateTo(h, { push: false, silent: true }); return true; }
     return false;
   }
+  window.addEventListener('pageshow', e => { if (e.persisted && /^#\/post\//i.test(location.hash)) routeHash(); });
   window.addEventListener('hashchange', () => {
     /* 没命中任何路由也要把浮层收掉：从「主页」的最近发布点进文章时，
        进站时的 hash 本来就是空的，后退回来只会把 hash 清掉，
        不在这里收就永远卡在文章上。 */
     if (!routeHash()) {
-      hidePost();
+      const returned = hidePost();
+      if (returned) { navigateTo(returned.origin.page, { push: false, silent: true, scrollY: returned.origin.y }); restorePostFocus(returned, returned.origin.page); }
       if (LAB_PREVIEW) window.RinsoraLab?.hide({ restoreFocus: true });
       /* hash 被清掉（浏览器后退）时，博物馆也该跟着退场 —— 否则
          地址已经不是 #museum 了，展厅还盖在上面，进退两难。 */
@@ -921,6 +939,7 @@
      ============================================================ */
   let museumLoading = null;
   let museumEntry = null;
+  let museumReturnFocus = null, museumReturnPage = null, museumAppAria = null, museumAriaOwned = false;
   let museumEntryToken = 0;
   const museumAssets = new Map();
 
@@ -976,11 +995,12 @@
   }
 
   function enterMuseum(opts) {
+    const o = opts || {};
+    if (!museumEntry && !AppState.museumOpen) { museumReturnFocus = o.trigger || document.activeElement; museumReturnPage = AppState.currentPage; }
     closeSettings({ restoreFocus: false });
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
     if (window.RinsoraLab?.enabled && window.RinsoraLab.isOpen()) closeLab('list');
-    const o = opts || {};
     if (museumEntry) return museumEntry;
     if (window.RinsoraMuseum && window.RinsoraMuseum.isOpen() && !o.force) {
       return Promise.resolve(window.RinsoraMuseum.records());
@@ -998,6 +1018,8 @@
       state.museumOpen = true;
       /* 小窝淡出只作用于侧栏与内容；不改变 .app 的包含块。 */
       body.classList.add('museum-open');
+      museumAppAria = app.getAttribute('aria-hidden'); museumAriaOwned = true;
+      app.setAttribute('aria-hidden', 'true');
       if (history.replaceState) history.replaceState(null, '', '#museum');
 
       return Promise.resolve(M.enter(o)).then((list) => {
@@ -1019,27 +1041,58 @@
     return attempt;
   }
 
-  function exitMuseum() {
-    const pending = !!museumEntry;
-    ++museumEntryToken;
-    museumEntry = null;             /* Esc / navigation also cancel an asset wait. */
+  function museumFocusUsable(el) {
+    if (!el?.isConnected || ['BODY','HTML'].includes(el.tagName) || el.disabled ||
+        el.closest('[hidden],[inert],[aria-hidden="true"]') || !el.getClientRects().length) return false;
+    const css = getComputedStyle(el), r = el.getBoundingClientRect();
+    return css.visibility !== 'hidden' && css.display !== 'none' && Number(css.opacity) !== 0 &&
+      r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  }
+  function exitMuseum(options) {
     const M = window.RinsoraMuseum;
-    const was = !!(pending || AppState.museumOpen || (M && (M.isOpen() || M.isEntering())));
-    if (M) M.exit();
-    AppState.museumOpen = false;
-    state.museumOpen = false;
+    const was = !!(museumEntry || AppState.museumOpen || (M && (M.isOpen() || M.isEntering())));
+    if (!was) return false;
+    const token = ++museumEntryToken, original = museumReturnFocus, originPage = museumReturnPage;
+    museumEntry = null; // Cancel pending assets and never revive an old entry.
+    const restore = () => {
+      if (options?.restoreFocus === false || token !== museumEntryToken || AppState.museumOpen ||
+          body.classList.contains('room-open') || body.classList.contains('spa-post-open') ||
+          document.querySelector('dialog[open],#musicModal.open,#settingsPanel.open')) return;
+      // Do not take a newly acquired valid focus away from the active page.
+      if (museumFocusUsable(document.activeElement)) return;
+      const source = originPage === AppState.currentPage ? original : null;
+      const candidates = [source, $('#sectionTitle'), sectionEl(AppState.currentPage)?.querySelector('h2,h3'),
+        $('#heroRoom'), $('#settingsBtn')];
+      let target = candidates.find(museumFocusUsable);
+      if (!target) { window.scrollTo({ top: 0, behavior: 'instant' }); target = candidates.slice(1).find(museumFocusUsable); }
+      if (target) {
+        if (target.tabIndex < 0) target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+      }
+    };
+    AppState.museumOpen = false; state.museumOpen = false;
     body.classList.remove('museum-open');
-    if (was && location.hash === '#museum' && history.replaceState) {
+    if (museumAriaOwned && app) {
+      if (app.getAttribute('aria-hidden') === 'true') {
+        if (museumAppAria === null) app.removeAttribute('aria-hidden');
+        else app.setAttribute('aria-hidden', museumAppAria);
+      }
+      museumAriaOwned = false; museumAppAria = null;
+    }
+    museumReturnFocus = null; museumReturnPage = null;
+    if (/^#(?:museum|musicmuseum)$/i.test(location.hash) && history.replaceState) {
       history.replaceState(null, '', '#' + (AppState.currentPage || 'about'));
     }
-    return was;
+    // The existing Museum curtain owns its finish timer; focus only after it is gone.
+    if (!M || !M.exit({ onClosed: restore })) restore();
+    return true;
   }
 
   /* 移动端底栏那一项也走同一个入口（上面的委托已经覆盖，这里只是兜底：
      万一将来节点结构变了，`data-museum` 仍然认得出来）。 */
   $$('[data-museum]').forEach((b) => {
     if (b.classList.contains('radial-item') || b.closest('.mobile-nav')) return;
-    b.addEventListener('click', (e) => { e.stopPropagation(); enterMuseum(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); enterMuseum({ trigger: b }); });
   });
 
   /* ============================================================
@@ -1070,102 +1123,266 @@
      全都还是 posts/xxx.html 那个真页面。
      ============================================================ */
   const POST_HREF = /^posts\/[^/?#]+\.html$/i;
-  let postUrl = '';          // 浮层里当前这篇（站内相对路径）
-  let postPushed = false;    // 这条历史是自己 push 的（false = 直接开链接进来的）
-  let postScrollY = 0;       // 进文章前列表滚到哪了
-  let backScrollY = null;    // 退回列表时要把滚动位置还回去
+  let postUrl = '';
 
-  function postOf(a) {
-    if (!a || !a.getAttribute) return '';
-    const href = a.getAttribute('href') || '';
-    return POST_HREF.test(href) ? href : '';
-  }
-
-  /* 只收起浮层，不碰路由 —— 给 navigateTo 用，避免两边互相调用 */
-  function hidePost() {
-    if (!postUrl) return;
-    postUrl = '';
-    postPushed = false;
-    spaPost && spaPost.classList.remove('on');
-    body.classList.remove('spa-post-open');
-    /* 把滚动位置还给列表：navigateTo 会先把页面滚到顶，所以这里推到
-       下一个 tick 再盖回去（behavior:auto 会顶掉那边还在跑的 smooth）。 */
-    if (backScrollY != null) {
-      const to = backScrollY;
-      backScrollY = null;
-      setTimeout(() => window.scrollTo({ top: to, behavior: 'auto' }), 0);
+  /* article-modal-controller:start -- exercised from this exact factory */
+  function createArticleModalController(w, d, modal, view, content, context) {
+    let session = null, epoch = 0, request = null, observer = null, shields = [];
+    let returnJob = null, returnFrame = 0;
+    function cancelReturn() {
+      returnJob = null;
+      if (returnFrame) w.cancelAnimationFrame?.(returnFrame);
+      returnFrame = 0;
     }
-    setTimeout(() => {
-      if (postUrl || !spaPost) return;        /* 这中间又打开了别的文章 */
-      spaPost.hidden = true;
-      if (spaPostBody) spaPostBody.textContent = '';
-    }, 320);
+    const documentKey = w.crypto?.randomUUID?.() || 'doc-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const selector = 'a[href],button,input,select,textarea,[tabindex]';
+    const closeButton = modal?.querySelector('[data-post-close]');
+    const label = modal?.querySelector('#spaPostTitle'), status = modal?.querySelector('#spaPostStatus');
+    function usable(el, viewport) {
+      if (!el?.isConnected || el.disabled || el === d.body || el === d.documentElement ||
+          el.closest('[hidden],[inert],[aria-hidden="true"]') || !el.getClientRects().length) return false;
+      const css = w.getComputedStyle(el), r = el.getBoundingClientRect();
+      return css.display !== 'none' && css.visibility !== 'hidden' &&
+        (!viewport || (r.bottom > 0 && r.top < w.innerHeight && r.right > 0 && r.left < w.innerWidth));
+    }
+    function focusInside() { (closeButton || modal)?.focus({ preventScroll: true }); }
+    function shield() {
+      // Hide sibling branches, never #app or any ancestor of the article.
+      // Keyboard/pointer guards provide modality without whole-app inert/layout work.
+      for (let branch = modal; branch?.parentElement; branch = branch.parentElement) {
+        for (const node of branch.parentElement.children) {
+          if (node === branch || /^(SCRIPT|STYLE|LINK|AUDIO|DIALOG)$/.test(node.tagName)) continue;
+          shields.push({ node, value: node.getAttribute('aria-hidden') });
+          node.setAttribute('aria-hidden', 'true');
+        }
+        if (branch.parentElement === d.body) break;
+      }
+    }
+    function unshield() {
+      for (const { node, value } of shields) {
+        if (node.getAttribute('aria-hidden') !== 'true') continue; // a new owner changed it
+        if (value === null) node.removeAttribute('aria-hidden'); else node.setAttribute('aria-hidden', value);
+      }
+      shields = [];
+    }
+    function validOrigin(raw) {
+      return raw && ['about','blog','projects','moments'].includes(raw.page) &&
+        Number.isFinite(raw.y) && raw.y >= 0 && raw.y <= 1e7 && typeof raw.hash === 'string' &&
+        /^(?:#(?:about|blog|projects|moments)?)?$/.test(raw.hash);
+    }
+    function hide() {
+      cancelReturn();
+      if (!session) return null;
+      const ticket = { origin: session.origin, epoch: ++epoch };
+      session = null; request?.abort(); request = null; observer?.disconnect(); observer = null;
+      modal.inert = true; modal.hidden = true; modal.classList.remove('on');
+      modal.setAttribute('aria-hidden', 'true'); content.setAttribute('aria-busy', 'false');
+      d.body.classList.remove('spa-post-open'); unshield(); content.replaceChildren(); context.state('');
+      return ticket;
+    }
+    function restore(ticket, page) {
+      if (!ticket) return;
+      cancelReturn();
+      const job = { ticket, page, hash: w.location.hash, target: null, y: null, frame: 0 };
+      returnJob = job;
+      const valid = () => returnJob === job && !session && epoch === ticket.epoch &&
+        !context.owner() && context.page() === page && w.location.hash === job.hash;
+      function settle(initial) {
+        if (!valid()) { if (returnJob === job) cancelReturn(); return false; }
+        // A real input or a newer owner wins; never reclaim a different control.
+        if (!initial && d.activeElement !== job.target && d.activeElement !== d.body &&
+            d.activeElement !== d.documentElement && usable(d.activeElement, true)) { cancelReturn(); return false; }
+        const origin = ticket.origin;
+        if (initial && origin.page === page) job.y = origin.y;
+        if (job.y != null && Math.abs(w.scrollY - job.y) > 1) w.scrollTo({ top: job.y, behavior: 'instant' });
+        let target = origin.page === page && usable(origin.trigger, true) ? origin.trigger : null;
+        if (!target && origin.page === page && origin.href) {
+          target = context.links(page).find(el => el.getAttribute('href') === origin.href && usable(el, true));
+        }
+        if (!target) {
+          target = context.fallback(page).find(el => usable(el, true));
+          if (!target) { job.y = 0; w.scrollTo({ top: 0, behavior: 'instant' }); target = context.fallback(page).find(el => usable(el, true)); }
+          // A fallback heading must be fully visible, not a clipped strip.
+          if (target) {
+            const r = target.getBoundingClientRect();
+            if (r.top < 0 || r.bottom > w.innerHeight) {
+              job.y = Math.max(0, w.scrollY + (r.top < 0 ? r.top - 16 : r.bottom - w.innerHeight + 16));
+              w.scrollTo({ top: job.y, behavior: 'instant' });
+            }
+          }
+        }
+        job.target = target;
+        if (target && d.activeElement !== target) {
+          if (target.tabIndex < 0) target.setAttribute('tabindex', '-1');
+          target.focus({ preventScroll: true });
+        }
+        return true;
+      }
+      w.queueMicrotask(() => {
+        if (!settle(true)) return;
+        // Native fragment/history scrolling may commit after the return microtask.
+        // Reconcile at two bounded paint boundaries, not on subsequent scrolling.
+        function frame() {
+          returnFrame = 0;
+          if (!settle(false)) return;
+          if (++job.frame < 2 && w.requestAnimationFrame) returnFrame = w.requestAnimationFrame(frame);
+          else cancelReturn();
+        }
+        if (w.requestAnimationFrame) returnFrame = w.requestAnimationFrame(frame); else cancelReturn();
+      });
+    }
+    function takeover() {
+      const ticket = hide();
+      if (ticket && /^#\/post\//i.test(w.location.hash)) { w.history.replaceState(null, '', '#' + context.page()); context.title?.(context.page()); }
+      return ticket;
+    }
+    function current(token) {
+      if (!session || token !== epoch) return false;
+      if (context.owner()) { takeover(); return false; }
+      return true;
+    }
+    function load() {
+      const token = ++epoch, url = session.url;
+      request?.abort(); request = w.AbortController ? new w.AbortController() : null;
+      if (content.contains(d.activeElement)) focusInside();
+      content.replaceChildren(); content.setAttribute('aria-busy', 'true');
+      label.textContent = '阅读文章'; status.textContent = '正在打开文章…';
+      const options = { credentials: 'same-origin' }; if (request) options.signal = request.signal;
+      return w.fetch(url, options).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).then(text => {
+        if (!current(token)) return false;
+        const doc = new w.DOMParser().parseFromString(text, 'text/html'), wrap = doc.querySelector('.post-wrap');
+        if (!wrap) throw new Error('missing post-wrap');
+        content.replaceChildren(d.importNode(wrap, true)); content.setAttribute('aria-busy', 'false');
+        label.textContent = wrap.querySelector('h1')?.textContent || '阅读文章';
+        status.textContent = '文章已打开。按 Escape 或返回按钮关闭。';
+        if (doc.title) d.title = doc.title;
+        return true; // Async completion never moves focus.
+      }).catch(error => {
+        if (!current(token) || error.name === 'AbortError') return false;
+        content.replaceChildren(); content.setAttribute('aria-busy', 'false');
+        label.textContent = '文章暂时没有打开'; status.textContent = '加载失败，可重试或返回博客。';
+        const message = d.createElement('p'); message.textContent = '文章暂时无法读取，请检查网络后重试。';
+        const retry = d.createElement('button'); retry.type = 'button'; retry.className = 'soft-btn'; retry.textContent = '重试读取'; retry.addEventListener('click', load);
+        const original = d.createElement('a'); original.href = url; original.target = '_blank'; original.rel = 'noopener noreferrer'; original.textContent = '在新标签页打开原文';
+        const errorBox = d.createElement('div'); errorBox.className = 'spa-post-error'; errorBox.append(message, retry, original); content.append(errorBox);
+        return false; // No implicit document navigation, including stale failures.
+      });
+    }
+    function open(url, options) {
+      options = options || {};
+      if (!modal || !/^posts\/[^\s/?#\\%<>"']+\.html$/u.test(url)) return false;
+      if (session?.closing) return false;
+      if (session?.url === url) return true;
+      cancelReturn();
+      const previous = session, stored = w.history.state?.rinsoraPost;
+      const trusted = stored?.version === 1 && stored.documentKey === documentKey && typeof stored.key === 'string' && validOrigin(stored.origin);
+      const origin = previous?.origin || (options.push !== false ? {
+        page: context.page(), y: w.scrollY, hash: w.location.hash,
+        trigger: options.trigger || d.activeElement, href: (options.trigger || d.activeElement)?.getAttribute?.('href') || ''
+      } : trusted ? { ...stored.origin, trigger: null } : { page: 'blog', y: 0, hash: '#blog', trigger: null, href: '' });
+      const key = previous?.key || (trusted ? stored.key : 'post-' + Date.now() + '-' + (++epoch));
+      const back = options.push !== false ? (previous ? previous.back : true) : !!(trusted && stored.back);
+      session = { url, origin, key, back, closing: false }; context.state(url);
+      if (options.push !== false) {
+        const meta = { version: 1, documentKey, key, back, origin: { page: origin.page, y: origin.y, hash: origin.hash, href: origin.href } };
+        w.history[previous ? 'replaceState' : 'pushState']({ rinsoraPost: meta }, '', '#/post/' + url.slice(6));
+      }
+      if (!previous) {
+        modal.hidden = false; modal.inert = false; modal.setAttribute('aria-hidden', 'false');
+        void modal.offsetHeight; // Preserve the existing local opening fade, not a startup scan.
+        modal.classList.add('on'); d.body.classList.add('spa-post-open');
+        focusInside(); shield();
+        if (w.MutationObserver) {
+          observer = new w.MutationObserver(() => { if (session && context.owner()) takeover(); });
+          observer.observe(d.body, { attributes: true, attributeFilter: ['class'], childList: true });
+          for (const dialog of d.querySelectorAll('dialog')) observer.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+        }
+      }
+      view.scrollTop = 0; load(); return true;
+    }
+    function close() {
+      if (!session || session.closing) return false;
+      if (session.back && w.history.state?.rinsoraPost?.key === session.key) {
+        session.closing = true; ++epoch; request?.abort(); request = null; w.history.back(); return true;
+      }
+      const ticket = hide(); w.history.replaceState(null, '', '#blog');
+      context.navigate('blog', { push: false, scrollY: ticket.origin.page === 'blog' ? ticket.origin.y : 0 });
+      restore(ticket, 'blog'); return true;
+    }
+    d.addEventListener('keydown', e => {
+      if (!session || context.owner()) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; }
+      if (e.key !== 'Tab') return;
+      const controls = Array.from(modal.querySelectorAll(selector)).filter(el => el.tabIndex >= 0 && usable(el, false));
+      e.preventDefault(); e.stopImmediatePropagation();
+      const index = controls.indexOf(d.activeElement), next = index < 0 ? (e.shiftKey ? controls.length - 1 : 0) : (index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      (controls[next] || closeButton || modal).focus();
+    }, true);
+    d.addEventListener('focusin', e => {
+      if (!session || modal.contains(e.target)) return;
+      if (context.owner()) takeover(); else focusInside();
+    }, true);
+    for (const name of ['pointerdown','click']) d.addEventListener(name, e => {
+      if (!session || modal.contains(e.target)) return;
+      if (context.owner()) { takeover(); return; }
+      e.preventDefault(); e.stopImmediatePropagation();
+    }, true);
+    d.addEventListener('beforetoggle', e => { if (session && e.target.tagName === 'DIALOG' && e.newState === 'open') takeover(); }, true);
+    for (const name of ['wheel','touchstart','pointerdown','keydown']) d.addEventListener(name, () => { if (returnJob?.target) cancelReturn(); }, { capture: true, passive: true });
+    w.addEventListener('pagehide', hide); closeButton?.addEventListener('click', close);
+    return { open, close, hide, restore, takeover, isOpen: () => !!session };
   }
-
-  function openPost(url, push) {
+  /* article-modal-controller:end */
+  const postModal = createArticleModalController(window, document, spaPost, spaPostView, spaPostBody, {
+    page: () => AppState.currentPage,
+    owner: () => body.matches('.room-open,.museum-open') || settingsPanel?.classList.contains('open') ||
+      document.querySelector('dialog[open],#musicModal.open'),
+    state: url => { postUrl = url; }, navigate: navigateTo,
+    title: page => { document.title = TITLES[page] + ' · 空凛 · Rinsora 的小窝'; },
+    links: page => $$('a[href]', sectionEl(page)),
+    fallback: page => [$('#sectionTitle'), sectionEl(page)?.querySelector('h2,h3')]
+  });
+  function hidePost() { return postModal.hide(); }
+  function restorePostFocus(ticket, page) { postModal.restore(ticket, page); }
+  function cancelPostForOwner() { postModal.takeover(); }
+  function postOf(a) {
+    const href = a?.getAttribute?.('href') || '';
+    if (POST_HREF.test(href)) return href;
+    if (postUrl && spaPost?.contains(a)) {
+      try {
+        const u = new URL(href, new URL(postUrl, location.href)), dir = new URL('posts/', location.href);
+        const name = u.pathname.slice(dir.pathname.length);
+        if (u.origin === dir.origin && u.pathname.startsWith(dir.pathname) && !u.search && !u.hash && /^[^/?#]+\.html$/i.test(name)) return 'posts/' + name;
+      } catch (_) {}
+    }
+    return '';
+  }
+  function preparePostLinks(root) {
+    if (!root) return;
+    for (const link of root.querySelectorAll('a[href]')) {
+      if (POST_HREF.test(link.getAttribute('href') || '') && !link.hasAttribute('tabindex')) link.tabIndex = 0;
+    }
+  }
+  function openPost(url, push, trigger) {
+    if (!/^posts\/[^\s/?#\\%<>"']+\.html$/u.test(url)) return false;
+    const source = trigger || document.activeElement;
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
-    if (!spaPost || !spaPostBody) return false;
-    if (url === postUrl) return true;
-
-    closeSettings({ restoreFocus: false });    /* 文章接管时不争抢旧焦点 */
-    hidePost();
-    postUrl = url;
-    postPushed = push !== false;
-    postScrollY = window.pageYOffset || 0;
-
-    spaPost.hidden = false;
-    void spaPost.offsetHeight;                /* 先让 hidden 那帧提交过，transition 才会跑 */
-    spaPost.classList.add('on');
-    body.classList.add('spa-post-open');
-    if (spaPostView) spaPostView.scrollTop = 0;
-    if (postPushed && history.pushState) {
-      history.pushState({ rsp: url }, '', '#/post/' + url.replace(/^posts\//i, ''));
-    }
-
-    fetch(url, { credentials: 'same-origin' })
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then((text) => {
-        if (postUrl !== url) return;           /* fetch 期间切走了 */
-        const doc = new DOMParser().parseFromString(text, 'text/html');
-        const wrap = doc.querySelector('.post-wrap');
-        if (!wrap) throw new Error('没有 .post-wrap');
-        spaPostBody.textContent = '';
-        spaPostBody.appendChild(document.importNode(wrap, true));
-        const t = doc.querySelector('title');
-        if (t && t.textContent) document.title = t.textContent;
-      })
-      .catch(() => { location.href = url; });  /* 取不到就老老实实走真链接 */
-    return true;
+    if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
+    if (AppState.museumOpen || museumEntry) exitMuseum({ restoreFocus: false });
+    closeSettings({ restoreFocus: false, preserveArticle: true });
+    return postModal.open(url, { push: push !== false, trigger: source });
   }
-
-  /* 浮层里的「回到博客列表」：能退就退回上一条历史（连滚动位置一起还原），
-     直接开链接进来的没有上一条，就换成博客分栏。 */
-  function closePost() {
-    if (!postUrl) return;
-    if (postPushed && history.length > 1) {
-      backScrollY = postScrollY;
-      history.back();
-      return;
-    }
-    hidePost();
-    navigateTo('blog', { push: false });
-  }
-
-  /* 站内链接接管：文章卡片、浮层里的返回按钮都走这里 */
-  document.addEventListener('click', (e) => {
+  function closePost() { return postModal.close(); }
+  document.addEventListener('click', e => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const a = e.target && e.target.closest ? e.target.closest('a') : null;
-    if (!a) return;
-    /* 浮层内部的「回到博客列表 / 看更多文章」= 收起浮层，不要换文档 */
-    if (postUrl && spaPost && spaPost.contains(a)) {
-      if (/index\.html(#blog)?$/i.test(a.getAttribute('href') || '')) { e.preventDefault(); closePost(); }
-      return;
+    const a = e.target.closest?.('a');
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    if (postUrl && spaPost?.contains(a) && /(?:^|\/)index\.html#blog$/i.test(a.getAttribute('href') || '')) {
+      e.preventDefault(); closePost(); return;
     }
-    const url = postOf(a);
-    if (!url) return;
-    e.preventDefault();
-    openPost(url, true);
+    const url = postOf(a); if (!url) return;
+    e.preventDefault(); openPost(url, true, a);
   });
 
   /* ============================================================
@@ -1173,13 +1390,37 @@
      ============================================================ */
   /* settings-focus-controller:start -- tested from this exact implementation */
   function createSettingsFocusController(w, d, panel, mask, context) {
-    let session = null, epoch = 0, retry = null, moving = false, focusCheck = null, stopOwnerWatch = null;
+    let session = null, epoch = 0, retry = null, moving = false, focusCheck = null, stopOwnerWatch = null, background = [], returnRetry = null;
     const selector = 'a[href],button,input,select,textarea,[tabindex]';
     const isOpen = () => !!session && panel.classList.contains('open');
     function available(el) {
       return !!(el && el.nodeType === 1 && el.isConnected && !el.disabled && !el.hidden &&
-        !el.closest('[inert],[hidden]') && el.getClientRects().length &&
+        !el.closest('[inert],[hidden],[aria-hidden="true"]') && el.getClientRects().length &&
         w.getComputedStyle(el).visibility !== 'hidden');
+    }
+    function shieldBackground() {
+      // Walk sibling branches on the ancestry path; never hide/inert an ancestor.
+      for (let branch = panel; branch?.parentElement; branch = branch.parentElement) {
+        for (const node of branch.parentElement.children) {
+          if (node === branch || node === mask || /^(SCRIPT|STYLE|LINK|AUDIO)$/.test(node.tagName)) continue;
+          background.push({ node, aria: node.getAttribute('aria-hidden') });
+          node.setAttribute('aria-hidden', 'true');
+        }
+        if (branch.parentElement === d.body) break;
+      }
+    }
+    function releaseBackground() {
+      for (const { node, aria } of background) {
+        if (node.getAttribute('aria-hidden') !== 'true') continue;
+        if (aria === null) node.removeAttribute('aria-hidden'); else node.setAttribute('aria-hidden', aria);
+      }
+      background = [];
+    }
+    function returnTarget(el) {
+      if (!available(el) || ['BODY','HTML'].includes(el.tagName)) return false;
+      if (!w.innerHeight || !w.innerWidth) return true;
+      const r = el.getBoundingClientRect();
+      return r.bottom > 0 && r.top < w.innerHeight && r.right > 0 && r.left < w.innerWidth;
     }
     function focusPanelTarget(target) {
       target.focus({ preventScroll: true });
@@ -1198,7 +1439,10 @@
       moving = false;
     }
     function close(options) {
-      if (!session) return false;
+      if (!session) {
+        if (options?.restoreFocus === false && returnRetry !== null) { w.cancelAnimationFrame(returnRetry); returnRetry = null; ++epoch; }
+        return false;
+      }
       const saved = session, restore = options?.restoreFocus !== false;
       session = null; epoch++; focusCheck = null;
       if (retry !== null) w.cancelAnimationFrame(retry);
@@ -1206,21 +1450,32 @@
       stopOwnerWatch?.(); stopOwnerWatch = null;
       panel.classList.remove('open'); mask?.classList.remove('open');
       d.body.style.overflow = saved.overflow;
-      if (restore && saved.owner === context.owner()) {
-        const target = saved.origin.page === context.page() && saved.origin.owner === context.owner() && available(saved.trigger) && (!context.accept || context.accept(saved.trigger)) ? saved.trigger :
-          context.fallback().find(available);
+      releaseBackground();
+      const token = epoch, closePage = context.page();
+      const returnFocus = () => {
+        if (!restore || token !== epoch || closePage !== context.page() || saved.owner !== context.owner()) return;
+        const active = d.activeElement;
+        if (!panel.contains(active) && returnTarget(active) && (!context.accept || context.accept(active))) return;
+        const target = saved.origin.page === context.page() && saved.origin.owner === context.owner() && returnTarget(saved.trigger) && (!context.accept || context.accept(saved.trigger)) ? saved.trigger :
+          context.fallback().find(returnTarget);
         if (target) {
           if (target !== saved.trigger && !target.matches(selector)) target.setAttribute('tabindex', '-1');
           target.focus({ preventScroll: true });
         }
-      }
+      };
+      returnFocus();
       if (panel.contains(d.activeElement)) d.activeElement.blur();
       panel.inert = true; panel.setAttribute('aria-hidden', 'true');
+      // One cancellable paint-boundary check handles native fragment focus clearing.
+      if (returnRetry !== null) w.cancelAnimationFrame(returnRetry);
+      returnRetry = restore ? w.requestAnimationFrame(() => { returnRetry = null; returnFocus(); }) : null;
       return true;
     }
     function open(trigger, origin) {
       if (!panel) return false;
       if (isOpen()) { focusInside(); return true; }
+      if (returnRetry !== null) w.cancelAnimationFrame(returnRetry);
+      returnRetry = null;
       const token = ++epoch;
       session = { trigger: trigger && !['BODY','HTML'].includes(trigger.tagName) && !panel.contains(trigger) ? trigger : null,
         page: context.page(), owner: context.owner(), origin: origin || { page: context.page(), owner: context.owner() }, overflow: d.body.style.overflow };
@@ -1229,10 +1484,13 @@
       });
       moving = true;
       panel.inert = false; panel.setAttribute('aria-hidden', 'false');
+      // Modal focus must not wait outside the viewport for a compositor transition.
+      panel.classList.add('focus-direct');
       panel.classList.add('open'); mask?.classList.add('open');
       d.body.style.overflow = 'hidden';
       moving = false;
       focusInside();
+      shieldBackground();
       // Only a failed synchronous attempt gets one cancellable paint retry.
       // Neither correctness nor return-focus ownership depends on an animation.
       if (!panel.contains(d.activeElement)) retry = w.requestAnimationFrame(() => {
@@ -1260,7 +1518,7 @@
     // The existing full-viewport mask blocks pointers; this capture guard also
     // rejects controls above it. Tab/focus guards and the scroll lock complete
     // the modal contract without restyling every background descendant as inert.
-    d.addEventListener('click', e => {
+    for (const type of ['pointerdown','click']) d.addEventListener(type, e => {
       if (isOpen() && e.target !== mask && !panel.contains(e.target)) {
         e.preventDefault(); e.stopImmediatePropagation();
       }
@@ -1317,7 +1575,8 @@
       const owner = settingsContext.owner();
       const root = document.getElementById(owner) || (owner === 'museum' ? $('#mmScene') : owner === postUrl ? spaPost : null);
       return owner ? Array.from(root?.querySelectorAll('button,a[href],[tabindex]') || []) :
-        [$('#sectionTitle'), sectionEl(AppState.currentPage)?.querySelector('h2,h3'), enterBtn];
+        [$('.mobile-nav [data-target="' + AppState.currentPage + '"]'), $('#sectionTitle'), sectionEl(AppState.currentPage)?.querySelector('h2,h3'),
+          ...$$('a[href],button,[tabindex]', sectionEl(AppState.currentPage)), enterBtn];
     }
   };
   const settingsFocus = createSettingsFocusController(window, document, settingsPanel, settingsMask, settingsContext);
@@ -1326,16 +1585,20 @@
     if (!app?.classList.contains('visible') && !html.hasAttribute('data-pre-section')) return false;
     if (settingsFocus.isOpen()) return settingsFocus.open();
     // These foreground owners cover #app; never focus settings behind them.
-    if (AppState.museumOpen || postUrl || $('#musicModal.open') || document.querySelector('dialog[open]:not(#labDetail):not(#labLightbox):not(#memoryDetail)')) return false;
+    if (AppState.museumOpen || $('#musicModal.open') || document.querySelector('dialog[open]:not(#labDetail):not(#labLightbox):not(#memoryDetail)')) return false;
     const trigger = event?.currentTarget?.nodeType === 1 ? event.currentTarget : document.activeElement;
     const origin = { page: settingsContext.page(), owner: settingsContext.owner() };
     window.RinsoraRoom?.leave({ restoreFocus: false, restoreScroll: false });
     window.RinsoraMemory?.hide();
+    cancelPostForOwner();
     if (LAB_PREVIEW && window.RinsoraLab?.isOpen()) closeLab('list');
     if (museumEntry && !AppState.museumOpen) exitMuseum();
     return settingsFocus.open(trigger, origin);
   }
-  function closeSettings(options) { return settingsFocus.close(options); }
+  function closeSettings(options) {
+    if (postUrl && options?.restoreFocus === false && !options.preserveArticle) cancelPostForOwner();
+    return settingsFocus.close(options);
+  }
   $$('.settings-open').forEach((b) => b.addEventListener('click', openSettings));
   $('#settingsClose') && $('#settingsClose').addEventListener('click', closeSettings);
   settingsMask && settingsMask.addEventListener('click', closeSettings);
@@ -1647,6 +1910,7 @@
     const projects = readRecentProjects(3);
     if (window.RinsoraUI02) {
       host.innerHTML = window.RinsoraUI02.renderRecent(posts, projects);
+      preparePostLinks(host);
       return;
     }
     if (!posts.length && !projects.length) { host.innerHTML = ''; return; }
@@ -1680,6 +1944,7 @@
         }).join('') + '</div></div>';
     }
     host.innerHTML = out;
+    preparePostLinks(host);
   }
 
   function blogCards() { return $$('#blog .blog-grid .blog-card'); }
@@ -1694,6 +1959,7 @@
     if (empty) empty.hidden = visible > 0;
   }
   function buildBlogFilter() {
+    preparePostLinks($('#blog'));
     const host = $('#blogFilter');
     if (!host) return;
     const cats = Array.from(new Set(blogCards().map((c) => (c.dataset.cat || '').trim()).filter(Boolean)));
@@ -1843,6 +2109,7 @@
     for (let i = 0; i < 6; i++) {
       const sp = document.createElement('span');
       sp.className = 'cursor-burst';
+      sp.setAttribute('aria-hidden', 'true');
       sp.textContent = i % 2 ? '♡' : '✦';
       const ang = (i / 6) * Math.PI * 2 + Math.random() * .5;
       const dist = 22 + Math.random() * 16;
@@ -1921,7 +2188,7 @@
       if (window.RinsoraMusicUpload && window.RinsoraMusicUpload.close) window.RinsoraMusicUpload.close();
       return;
     }
-    if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (postUrl || typing || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '1') navigateTo('about');
     if (e.key === '2') navigateTo('blog');
     if (e.key === '3') navigateTo('projects');
@@ -2037,6 +2304,8 @@
     routeHash,
     openLab,
     closeLab,
+    openPost,
+    closePost,
     initPage,
     initApp,
     observeReveal,

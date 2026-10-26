@@ -361,12 +361,10 @@ html[data-pre-section="moments"] #moments{display:block}
    销毁 —— 音乐必停。这里把站内点击接管下来，只把文章内容搬进这层浮层，
    文档不动，播放器自然一直播下去。真链接仍然保留：新标签页、中键、
    无脚本访问、SEO 全都走原路。
-   层级（都在 .app 这个 z-index:5 的层叠上下文里）：
-     .side-rail 18 / .top-actions 24 < #spaPost 40 < 播放器 45 / 歌词栏 46
-   播放器/歌词栏只在浮层打开时抬到 40 之上，平时不动 —— 否则会盖住
-   移动端底部导航(40)。 */
+   RH-03 FU1: article z-index:60 covers background controls.
+   Shared audio remains outside this modal and continues playing. */
 .spa-post{
-  position:fixed;inset:0;z-index:40;overflow:hidden;
+  position:fixed;inset:0;z-index:60;overflow:hidden;
   background:var(--bg);
   opacity:0;transition:opacity .3s var(--ease);
 }
@@ -375,7 +373,14 @@ html[data-pre-section="moments"] #moments{display:block}
 /* 装饰层跟着浮层走，别再用 fixed 逃到视口上去 */
 .spa-post .bg-decor{position:absolute}
 /* 滚动交给内层：这样 .bg-decor 不会跟着内容滚走 */
-.spa-post-view{position:absolute;inset:0;z-index:1;overflow-y:auto;overscroll-behavior:contain}
+.spa-post-view{position:absolute;inset:64px 0 0;z-index:1;overflow-y:auto;overscroll-behavior:contain}
+/* RH-03 FU1: scoped article chrome; audio keeps playing behind the modal. */
+.spa-post-bar{position:absolute;inset:0 0 auto;z-index:2;min-height:64px;padding:8px max(16px,env(safe-area-inset-right));display:flex;gap:16px;align-items:center;justify-content:space-between;background:var(--bg);border-bottom:1px solid var(--ring)}
+.spa-post-bar h2{font-size:15px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spa-post-bar button{flex-shrink:0;min-height:44px;padding:8px 16px;border:1px solid var(--ring);border-radius:14px;background:var(--glass-solid);color:var(--ink);font:inherit;cursor:pointer}
+.spa-post-status{font-size:12px;color:var(--ink);max-width:880px;margin:12px auto;padding:0 20px}
+.spa-post-error{max-width:880px;margin:24px auto;padding:0 20px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.spa-post-error p{flex-basis:100%}
 body.spa-post-open{overflow:hidden}
 body.spa-post-open #floatingPlayer{z-index:45}
 body.spa-post-open .lyricbar{z-index:46}
@@ -1143,6 +1148,8 @@ body.night .card-tool:hover{background:rgba(72,54,84,.97);color:#f7b8d4}
 body.night .settings-mask{background:rgba(6,3,10,.5)}
 .settings-panel{position:fixed;right:20px;top:20px;bottom:20px;width:min(400px,calc(100vw - 40px));z-index:61;border-radius:30px;padding:23px;transform:translateX(112%);transition:transform .52s var(--ease);overflow:auto}
 .settings-panel.open{transform:none}
+/* Keep modal focus in its final viewport; the backdrop still fades. */
+.settings-panel.open.focus-direct{transition-property:none}
 .settings-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .settings-head p{margin:0;color:#c184a1;font-size:11px;font-weight:900;letter-spacing:.18em}
 .settings-head h3{margin:5px 0 0;font-size:26px;letter-spacing:-.04em}

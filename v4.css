@@ -197,7 +197,7 @@ html.v4 .topbar::after {
 html.v4 .topbar h2 {
   text-shadow: 0 4px 24px rgba(233, 137, 176, .13);
 }
-html.v4 .crumb .eyebrow { color: #b35f82; letter-spacing: .2em; }
+html.v4 .crumb .eyebrow { color: var(--ink); letter-spacing: .2em; }
 html.v4 body.night .crumb .eyebrow { color: #e8a7c5; }
 html.v4 .page-progress {
   height: 3px;

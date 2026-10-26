@@ -6,7 +6,7 @@ function harness(){
  const listeners=new Map(),frames=new Map(),observers=[],microtasks=[],watches=[];let next=0,page='about',owner='',failFocus=false;
  const events=()=>({addEventListener(type,fn){const list=listeners.get(this)||{};(list[type]||=[]).push(fn);listeners.set(this,list);},emit(type,e={}){for(const fn of listeners.get(this)?.[type]||[])fn(e);}});
  const d={...events(),activeElement:null},w={...events(),queueMicrotask:fn=>microtasks.push(fn),getComputedStyle:()=>({visibility:'visible'}),requestAnimationFrame(fn){const id=++next;frames.set(id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);},MutationObserver:class{constructor(fn){this.fn=fn;this.roots=[];observers.push(this);}observe(el){this.roots.push(el);}disconnect(){this.roots=[];}}};
- function node(tag='BUTTON',parent=null){const cls=new Set();const e={...events(),nodeType:1,tagName:tag,isConnected:true,parentElement:parent,children:[],inert:false,hidden:false,disabled:false,tabIndex:tag==='BUTTON'?0:-1,style:{overflow:''},scrollTop:0,attrs:{},classList:{add:c=>cls.add(c),remove:c=>cls.delete(c),contains:c=>cls.has(c)},setAttribute(k,v){this.attrs[k]=v;if(k==='tabindex')this.tabIndex=Number(v);},contains(other){for(let n=other;n;n=n.parentElement)if(n===this)return true;return false;},closest(selector=''){if(selector.includes('[role=')){for(let n=this;n;n=n.parentElement)if(n.attrs.role==='dialog'&&n.attrs['aria-modal']==='true')return n;return null;}for(let n=this;n;n=n.parentElement)if(n.inert||n.hidden)return n;return null;},matches(){return this.tagName==='BUTTON'||this.attrs.tabindex!==undefined;},getBoundingClientRect(){return this.rect||(this.tagName==='ASIDE'?{top:0,bottom:600}:{top:10,bottom:40});},getClientRects(){return this.hidden||!this.isConnected?[]:[{}];},focus(){if(failFocus||this.closest()||this.disabled||!this.isConnected)return;d.activeElement=this;d.emit('focusin',{target:this});},blur(){d.activeElement=body;}};parent?.children.push(e);return e;}
+ function node(tag='BUTTON',parent=null){const cls=new Set();const e={...events(),nodeType:1,tagName:tag,isConnected:true,parentElement:parent,children:[],inert:false,hidden:false,disabled:false,tabIndex:tag==='BUTTON'?0:-1,style:{overflow:''},scrollTop:0,attrs:{},classList:{add:c=>cls.add(c),remove:c=>cls.delete(c),contains:c=>cls.has(c)},getAttribute(k){return this.attrs[k]??null;},removeAttribute(k){delete this.attrs[k];},setAttribute(k,v){this.attrs[k]=v;if(k==='tabindex')this.tabIndex=Number(v);},contains(other){for(let n=other;n;n=n.parentElement)if(n===this)return true;return false;},closest(selector=''){if(selector.includes('[role=')){for(let n=this;n;n=n.parentElement)if(n.attrs.role==='dialog'&&n.attrs['aria-modal']==='true')return n;return null;}for(let n=this;n;n=n.parentElement)if(n.inert||n.hidden||(selector.includes('aria-hidden')&&n.attrs['aria-hidden']==='true'))return n;return null;},matches(){return this.tagName==='BUTTON'||this.attrs.tabindex!==undefined;},getBoundingClientRect(){return this.rect||(this.tagName==='ASIDE'?{top:0,bottom:600}:{top:10,bottom:40});},getClientRects(){return this.hidden||!this.isConnected?[]:[{}];},focus(){if(failFocus||this.closest()||this.disabled||!this.isConnected)return;d.activeElement=this;d.emit('focusin',{target:this});},blur(){d.activeElement=body;}};parent?.children.push(e);return e;}
  const body=node('BODY');d.body=body;const app=node('MAIN',body),background=node('SECTION',app),trigger=node('BUTTON',background),fallback=node('H2',background),alreadyInert=node('DIV',body);alreadyInert.inert=true;
  const panel=node('ASIDE',app),mask=node('DIV',app),close=node('BUTTON',panel),tab=node('BUTTON',panel),last=node('BUTTON',panel);panel.inert=true;tab.classList.add('active');
  panel.querySelector=s=>s.includes('set-tab')?tab:close;panel.querySelectorAll=()=>[close,tab,last];d.activeElement=trigger;
@@ -15,8 +15,8 @@ function harness(){
  return{api,w,d,app,background,node,observers,watches,flushMicrotasks(){while(microtasks.length)microtasks.shift()();},panel,mask,trigger,fallback,tab,last,close,alreadyInert,frames,key,setPage:x=>page=x,setOwner:x=>owner=x,fail:x=>failFocus=x,flush(){const list=[...frames.values()];frames.clear();list.forEach(fn=>fn());}};
 }
 {
- const h=harness();h.d.body.style.overflow='clip';h.api.open(h.trigger);assert.equal(h.d.activeElement,h.tab);assert(!h.app.inert&&!h.background.inert&&!h.panel.inert);assert(!h.panel.closest());assert.equal(h.panel.attrs['aria-hidden'],'false');assert.equal(h.d.body.style.overflow,'hidden');assert.equal(h.frames.size,0);
- h.last.focus();h.api.open(h.last);assert.equal(h.d.activeElement,h.last,'repeat open keeps current panel focus');h.api.close();assert.equal(h.d.activeElement,h.trigger,'original source survives repeat open');assert(!h.app.inert&&!h.background.inert&&h.alreadyInert.inert);assert(h.panel.inert);assert.equal(h.d.body.style.overflow,'clip');assert.equal(h.panel.attrs['aria-hidden'],'true');assert.equal(h.api.close(),false);
+ const h=harness();h.d.body.style.overflow='clip';h.api.open(h.trigger);assert.equal(h.d.activeElement,h.tab);assert(!h.app.inert&&!h.background.inert&&!h.panel.inert);assert.equal(h.background.getAttribute('aria-hidden'),'true');assert.equal(h.app.getAttribute('aria-hidden'),null);assert(h.panel.classList.contains('focus-direct'));assert(!h.panel.closest());assert.equal(h.panel.attrs['aria-hidden'],'false');assert.equal(h.d.body.style.overflow,'hidden');assert.equal(h.frames.size,0);
+ h.last.focus();h.api.open(h.last);assert.equal(h.d.activeElement,h.last,'repeat open keeps current panel focus');h.api.close();assert.equal(h.d.activeElement,h.trigger,'original source survives repeat open');assert(!h.app.inert&&!h.background.inert&&h.alreadyInert.inert);assert(h.panel.inert);assert.equal(h.background.getAttribute('aria-hidden'),null);assert.equal(h.d.body.style.overflow,'clip');assert.equal(h.panel.attrs['aria-hidden'],'true');assert.equal(h.api.close(),false);
 }
 {
  const h=harness();h.api.open(h.trigger);h.close.focus();const tab=h.key('Tab',{shiftKey:true});assert(tab.prevented&&tab.stopped);assert.equal(h.d.activeElement,h.last);h.key('Tab');assert.equal(h.d.activeElement,h.close);h.key('k',{ctrlKey:true});h.key('Escape');assert.equal(h.d.activeElement,h.trigger);assert(!h.api.isOpen());
@@ -58,5 +58,23 @@ assert(source.includes("!app?.classList.contains('visible') && !html.hasAttribut
 }
 assert(!source.includes("addEventListener('transitionend', focusTrapGuard"));
 assert(source.includes('closeSettings({ restoreFocus: false })'));
+{
+ const h=harness();h.w.innerHeight=800;h.w.innerWidth=1200;
+ h.trigger.rect={top:10,bottom:40,left:10,right:80};h.fallback.rect={top:80,bottom:110,left:10,right:300};
+ h.api.open(h.trigger);h.trigger.rect={top:-120,bottom:-90,left:10,right:80};
+ h.api.close();assert.equal(h.d.activeElement,h.fallback,'fragment/scroll changes cannot restore focus to a wholly offscreen trigger');
+}
 assert(/id="settingsPanel"[^>]*role="dialog"[^>]*aria-modal="true"/.test(fs.readFileSync('index.html','utf8')));
 console.log('PASS settings focus: immediate source/context capture, modal mask/click/Tab containment, original-source return, invalid-source fallback, navigation/overlay cancellation, failed-focus one-frame retry, no transition dependency or late focus');
+
+{
+ const h=harness();h.background.setAttribute('aria-hidden','false');h.alreadyInert.setAttribute('aria-hidden','true');h.api.open(h.trigger);assert(h.panel.classList.contains('focus-direct'),'all modal entries keep focus in the viewport');h.api.close();assert.equal(h.background.getAttribute('aria-hidden'),'false');assert.equal(h.alreadyInert.getAttribute('aria-hidden'),'true');
+ h.api.open(h.trigger);h.setOwner('labDetail');h.watches.at(-1).fn();assert.equal(h.background.getAttribute('aria-hidden'),'false','handoff releases semantic shields');assert(!h.api.isOpen());
+}
+
+{
+ const h=harness();h.api.open(h.trigger);h.api.close();h.d.activeElement=h.d.body;h.flush();assert.equal(h.d.activeElement,h.trigger,'one paint-boundary check repairs native post-close focus clearing');assert.equal(h.frames.size,0);
+ h.api.open(h.trigger);h.api.close();h.setPage('blog');h.d.activeElement=h.d.body;h.flush();assert.equal(h.d.activeElement,h.d.body,'new navigation invalidates a pending return');h.setPage('about');h.api.open(h.trigger);h.api.close();h.api.open(h.trigger);assert.equal(h.frames.size,0,'reopen cancels the old return frame');
+}
+
+{ const h=harness();h.api.open(h.trigger);h.api.close();h.d.activeElement=h.d.body;h.api.close({restoreFocus:false});h.flush();assert.equal(h.d.activeElement,h.d.body,'explicit handoff cancels an already queued return');assert.equal(h.frames.size,0); }

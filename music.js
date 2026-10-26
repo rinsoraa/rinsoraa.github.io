@@ -372,7 +372,7 @@
           '</div>' +
         '</div>' +
         '<div class="mp-body">' +
-          '<div class="mp-progress" role="slider" aria-label="播放进度">' +
+          '<div class="mp-progress" role="slider" tabindex="0" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
             '<div class="mp-fill"></div>' +
           '</div>' +
           '<div class="mp-times"><span class="mp-cur">00:00</span><span class="mp-dur">00:00</span></div>' +
@@ -388,7 +388,7 @@
             '<button type="button" class="mp-btn mp-listbtn" data-act="list" ' +
               'title="播放列表" aria-label="播放列表">' + ICON.list + '</button>' +
           '</div>' +
-          '<div class="mp-playlist"><div class="mp-pl"></div></div>' +
+          '<div class="mp-playlist"><div class="mp-pl" tabindex="0" aria-label="播放列表"></div></div>' +
         '</div>' +
       '</div>';
   }
@@ -462,6 +462,16 @@
       var r = p.progress.getBoundingClientRect();
       var ratio = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
       audio.currentTime = ratio * audio.duration;
+    });
+    // Keyboard access to the existing seek action; the shared audio engine and
+    // playback lifecycle are unchanged.
+    p.progress.addEventListener('keydown', function (e) {
+      if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)) return;
+      e.preventDefault(); e.stopPropagation();
+      if (!isFinite(audio.duration) || audio.duration <= 0) return;
+      var next = e.key === 'Home' ? 0 : e.key === 'End' ? audio.duration :
+        audio.currentTime + (e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 5 : -5);
+      audio.currentTime = Math.max(0, Math.min(audio.duration, next));
     });
 
     /* ---- 点唱片：触屏设备没有 hover，用它展开 / 收起（桌面端交给 hover，免得钉住不松） ---- */
@@ -579,6 +589,7 @@
     lb = d.createElement('div');
     lb.className = 'lyricbar';
     lb.id = 'lyricbar';
+    lb.setAttribute('role', 'region'); lb.setAttribute('aria-label', '当前播放歌词');
     lb.innerHTML =
       '<div class="lb-inner">' +
         '<div class="lb-side">' +
@@ -796,6 +807,8 @@
       var pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
       players.forEach(function (p) {
         p.fill.style.width = pct + '%';
+        p.progress.setAttribute('aria-valuenow', String(Math.round(pct)));
+        p.progress.setAttribute('aria-valuetext', fmt(audio.currentTime) + ' / ' + fmt(audio.duration));
         p.cur.textContent = fmt(audio.currentTime);
       });
       if (state.started) syncLyrics();

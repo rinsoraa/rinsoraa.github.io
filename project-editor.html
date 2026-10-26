@@ -25,7 +25,7 @@
 
     <header class="editor-top glass">
       <a class="editor-back" href="index.html#projects">← 返回项目展示</a>
-      <div class="editor-title"><span>★</span> Rinsora 项目编辑台</div>
+      <h1 class="editor-title"><span>★</span> Rinsora 项目编辑台</h1>
       <div class="editor-actions">
         <a class="soft-btn" href="project-media-editor.html">管理作品素材</a>
         <a class="soft-btn" href="memory-editor.html">管理回忆照片</a>
@@ -36,7 +36,7 @@
 
     <!-- 连接设置 -->
     <section class="editor-setup glass" id="setupPanel" hidden>
-      <h3><span>⚙</span> 连接你的 GitHub 仓库</h3>
+      <h2><span>⚙</span> 连接你的 GitHub 仓库</h2>
       <p class="hint">
         网页要往仓库里写文件，得借你的 Token。建议去
         <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained token 页面</a>
@@ -96,7 +96,7 @@
           <div class="field">
             <span>图标（一个字符）</span>
             <div class="inline-row">
-              <input id="fIcon" maxlength="4" value="✦" spellcheck="false">
+              <input aria-label="项目图标" id="fIcon" maxlength="4" value="✦" spellcheck="false">
               <span class="icon-picks" id="iconPicks"></span>
             </div>
           </div>

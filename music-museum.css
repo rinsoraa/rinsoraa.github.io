@@ -1408,3 +1408,6 @@ body.reduce-motion .mm-lyr-track{transition:none}
 body.reduce-motion .mm-lyrics,
 body.reduce-motion .mm-archive-art,
 body.reduce-motion .mm-archive-progress{transition:none}
+
+/* RH-03: readable small labels on both light and night museum surfaces. */
+.mm-exit .mm-exit-txt,.mm-lyrics-kicker,.mm-lyr-empty-s{color:var(--ink)}

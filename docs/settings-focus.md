@@ -25,8 +25,9 @@ overlay handoff release settings without restoring old focus. A small observer
 watches body child additions and the known legacy music popup's class only while
 settings is open; it disconnects on close, with stale callbacks rejected.
 
-Escape closes settings first. Normal close restores a valid trigger in the same
-context, otherwise a safe current heading/control. Navigation and explicit Lab,
+Escape closes settings first. Normal close restores a visible, valid trigger in the same
+context, otherwise a visible current heading/control. A fragment or scroll change
+can make an otherwise connected trigger offscreen; return focus never lands there. Navigation and explicit Lab,
 Memory, Museum, Room or article handoff use `restoreFocus: false`. Previous body
 overflow is restored. No transform/filter is added to fixed-element ancestors.
 
@@ -40,3 +41,49 @@ Reveal scheduler, font ordering or global initialization change is included.
 internal scrolling, queued callback cancellation and ownership watch cleanup.
 Real browser cold starts, trusted pointer input and overlay checks are recorded
 separately. Node tests are not browser acceptance.
+
+
+## RH-03 FU2A: visible focus and background semantics
+
+All settings entries place the drawer at its final on-screen position before
+focusing a control. A translated root is not an acceptable place to hold modal
+focus while a compositor transition is still pending. The backdrop fade and the
+closing transition remain; this is a local interaction decision, not a shared
+initialization or animation-system replacement.
+
+The controller hides sibling branches along the drawer's ancestry path with
+aria-hidden, saving each previous value. The drawer is inside #app: neither
+#app nor any other ancestor is hidden or made inert. Closing/handoff restores
+only values still owned by the controller. Pointer, Tab and focus guards remain;
+aria-hidden alone does not prevent DOM interaction. No full-page inert mutation,
+continuous frame loop or new global observer is introduced.
+
+Closing makes the ordinary synchronous return attempt, then allows one
+cancellable paint-boundary check for native fragment focus clearing. Reopen,
+page/owner changes, explicit no-return handoff and pagehide invalidate it. This
+is not a timed multi-second focus retry. A visible fixed mobile current-section
+button precedes scrolling headings in the fallback list; a valid original source
+still has priority. It prevents startup scroll anchoring from carrying a fallback
+heading outside the viewport.
+
+Museum entry controls pass their actual trigger explicitly, including browsers
+that do not focus a clicked button. Direct-entry BODY/HTML, hidden, inert and
+offscreen sources are rejected. Return focus runs from the existing Museum
+curtain completion callback (including its finite opacity fade), guarded by the host entry token and current overlay
+ownership. No new exit delay, timer or separate router is added. A stale callback
+cannot reclaim focus after a new entry or another foreground owner.
+
+The sibling isolation follows the [WAI-ARIA modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/):
+modal interaction stays inside, and the dialog must remain outside hidden
+background branches. Browser AX-tree and keyboard tests provide bounded evidence;
+they do not replace real screen-reader browsing/virtual-cursor acceptance.
+Screen readers and physical devices require separately recorded testing.
+
+Optional portable browser gates:
+
+```text
+node tests/browser/focus-isolation.cjs --browser firefox --url http://127.0.0.1:8910/ --fixture http://127.0.0.1:8911/ --out docs/local/focus-firefox --cold-rounds 20
+```
+
+Run the same cases with Edge and WebKit. Playwright WebKit is not real Safari.
+Existing shared-startup and Lab performance uncertainty remains open.

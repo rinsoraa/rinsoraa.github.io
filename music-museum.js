@@ -1353,6 +1353,13 @@
     const mode = computeMode();
     state.mode = mode;
     if (detailEl) detailEl.dataset.mode = mode;
+    // Faded BROWSE controls must leave both the Tab order and accessibility tree.
+    if (progBar) {
+      const hidden = mode !== 'live' && mode !== 'paused';
+      const restoreExit = hidden && progBar.contains(d.activeElement);
+      progBar.inert = hidden; progBar.setAttribute('aria-hidden', String(hidden));
+      if (restoreExit && state.open) exitBtn?.focus({ preventScroll: true });
+    }
     syncProgress();
   }
 
@@ -1582,7 +1589,7 @@
     const n = state.records.length;
     if (!n) {
       state.selected = null;
-      if (detailEl) { detailEl.classList.remove('on'); detailEl.setAttribute('aria-hidden', 'true'); }
+      if (detailEl) { detailEl.classList.remove('on'); detailEl.setAttribute('aria-hidden', 'true'); detailEl.inert = true; }
       return;
     }
     /* 焦点跟**目标**走：扇形还在滑的时候，逻辑焦点就已经是新那张了 ——
@@ -1602,6 +1609,7 @@
     if (detailEl) {
       detailEl.classList.toggle('on', !!state.selected);
       detailEl.setAttribute('aria-hidden', state.selected ? 'false' : 'true');
+      detailEl.inert = !state.selected;
     }
     /* ⚠️ 内容切换动画的触发判据：焦点**真的换了位置**、而且不是第一次铺。
        第一次铺（进厅那一次）由面板自身的入场过渡负责 —— 那时再让内容也动一次，
@@ -1662,11 +1670,13 @@
   }
 
   function deselect() {
+    const restoreDisc = detailEl?.contains(d.activeElement);
     /* ⚠️ 判据不能只看 state.detailOpen：重建 / 外部收尾之后，面板可能还开着
        而 detailOpen 已经是 false —— 那时原来那个早退会让它**永远关不掉**。 */
     const open = !!state.detailOpen || !!(detailEl && detailEl.classList.contains('on'));
     state.detailOpen = false;
     if (open) syncSelected();
+    if (restoreDisc && state.open) (Object.values(state.pool).find(el => Number(el.dataset.at) === state.selectedIndex) || exitBtn)?.focus({ preventScroll: true });
     return open;
   }
 
@@ -2032,7 +2042,8 @@
       sceneEl.classList.add('on');
       sceneEl.setAttribute('aria-hidden', 'false');
     }
-    if (exitBtn && !reduceMotion()) exitBtn.focus && exitBtn.focus({ preventScroll: true });
+    if (sceneEl) sceneEl.inert = false;
+    if (exitBtn) exitBtn.focus && exitBtn.focus({ preventScroll: true });
     startFollow();
     measureViewport();
     layoutRail();
@@ -2081,6 +2092,7 @@
       sceneEl.classList.remove('on');
       sceneEl.classList.add('closing');
       sceneEl.setAttribute('aria-hidden', 'true');
+      sceneEl.inert = true;
     }
 
     /* —— 退场帷幕（用户反馈 4 的另一半）——
@@ -2114,6 +2126,20 @@
       if (tk !== state.token) return;        /* 中途又进去 / 又退出过了 */
       if (scene) scene.classList.remove('open', 'closing');
       if (loadEl) loadEl.classList.remove('on', 'done', 'leaving');
+      if (typeof o.onClosed === 'function') {
+        const done = () => { if (tk === state.token && !state.open) o.onClosed(); };
+        // Class removal starts the existing curtain fade; it is not yet invisible.
+        if (loadEl && typeof loadEl.getAnimations === 'function') {
+          const fades = loadEl.getAnimations().filter(a => a.effect?.getComputedTiming().endTime < Infinity);
+          Promise.allSettled(fades.map(a => a.finished)).then(done);
+        } else if (loadEl && getComputedStyle(loadEl).display !== 'none' && Number(getComputedStyle(loadEl).opacity) > .01) {
+          const finish = event => {
+            if (event.target !== loadEl || event.propertyName !== 'opacity') return;
+            loadEl.removeEventListener('transitionend', finish); loadEl.removeEventListener('transitioncancel', finish); done();
+          };
+          loadEl.addEventListener('transitionend', finish); loadEl.addEventListener('transitioncancel', finish);
+        } else done();
+      }
     }, instant ? 0 : 340 + 420);
     return true;
   }
@@ -2153,6 +2179,17 @@
      ============================================================ */
   function onKeydown(e) {
     if (!state.open) return;
+    if (e.key === 'Tab') {
+      const controls = Array.from(sceneEl.querySelectorAll('button,a[href],input,select,textarea,[tabindex]')).filter(el => {
+        if (el.tabIndex < 0 || el.disabled || el.closest('[inert],[hidden],[aria-hidden="true"]')) return false;
+        const r = el.getBoundingClientRect(), css = getComputedStyle(el);
+        return r.width && r.height && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && css.visibility !== 'hidden';
+      });
+      e.preventDefault(); e.stopPropagation();
+      const at = controls.indexOf(d.activeElement), next = at < 0 ? (e.shiftKey ? controls.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      (controls[next] || exitBtn).focus({ preventScroll: true });
+      return;
+    }
     if (e.key === 'Escape' || e.key === 'Esc') {
       /* 没开面板 → 不拦，让 script.js 的 exitMuseum 去退展厅 */
       if (!state.detailOpen) return;
