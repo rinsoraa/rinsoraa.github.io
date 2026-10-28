@@ -20,6 +20,7 @@ for(let n=0;n<=3;n++) {
   const html=render(posts.slice(0,n),projects.slice(0,n));
   assert.equal((html.match(/class="u2-post(?: |")/g)||[]).length,n);
   assert.equal((html.match(/class="u2-project(?: |")/g)||[]).length,n);
+  assert.equal((html.match(/home-content-group/g)||[]).length,n?2:0);
   if(n) assert(html.includes('data-count="'+n+'"')); else assert.equal(html,'');
   assert(!html.includes('<test>'));
 }

@@ -32,7 +32,28 @@
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
     let progress = 0, settleTimer = 0, contentMax = 260, sidebarMax = 190, origin = 0, artHeight = 720;
     let awaitingDirectHome = location.hash.toLowerCase() === '#about' && !app.classList.contains('visible');
-    let panel, output;
+    let panel, output, frameId = 0, queuedProgress = null, queuedDirection = 0, alive = true;
+    const titlebar = document.querySelector('.topbar'), pageBar = document.querySelector('.page-progress');
+    const stars = document.getElementById('starCanvas');
+    const ownedStyles = new Map();
+    function paint(node, key, value) {
+      if (!node) return;
+      if (!ownedStyles.has(node)) ownedStyles.set(node, new Map());
+      const saved = ownedStyles.get(node);
+      if (!saved.has(key)) saved.set(key, [node.style.getPropertyValue(key), node.style.getPropertyPriority(key)]);
+      if (node.style.getPropertyValue(key) !== value) node.style.setProperty(key, value);
+    }
+    function restoreVisuals() {
+      for (const [node, saved] of ownedStyles) for (const [key, [value, priority]] of saved) {
+        if (value) node.style.setProperty(key, value, priority); else node.style.removeProperty(key);
+      }
+      ownedStyles.clear();
+    }
+    function cancelInput() {
+      clearTimeout(settleTimer); settleTimer = 0;
+      if (frameId) cancelAnimationFrame(frameId);
+      frameId = 0; queuedProgress = null; queuedDirection = 0;
+    }
 
     // The ambient image can paint during parsing. Reuse that single visual
     // surface; waiting for the full app must not delay a downloaded LCP image.
@@ -44,16 +65,13 @@
     const prepareImage = highPriority => art.prepare(highPriority);
     if (debug) stage.addEventListener('coverartchange', updateReport);
     document.getElementById('enterBtn')?.addEventListener('pointerdown', () => prepareImage(true), { once: true });
-    const controls = document.createElement('div');
-    controls.id = 'coverControls';
-    controls.innerHTML = '<button type="button" id="coverToggle" aria-controls="coverStage" aria-expanded="false">展开封面 ↑</button><span id="coverStatus" role="status" aria-live="polite"></span>';
-    about.before(controls);
-    const toggle = document.getElementById('coverToggle');
-    const status = document.getElementById('coverStatus');
-    toggle.addEventListener('pointerenter', () => prepareImage(true), { once: true });
+    const status = document.createElement('span');
+    status.id = 'coverStatus'; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    about.before(status);
+    const softness = stage.querySelector('.cover-art');
 
     function homeVisible() {
-      return about.classList.contains('active') && app.classList.contains('visible') &&
+      return alive && about.classList.contains('active') && app.classList.contains('visible') &&
         !document.body.matches('.museum-open, .room-open, .spa-post-open') &&
         !document.getElementById('bootScreen')?.matches(':not(.done):not(.hidden)') &&
         (document.getElementById('welcomeScreen')?.classList.contains('hidden') || root.hasAttribute('data-pre-section'));
@@ -61,8 +79,11 @@
     function homeAvailable() {
       return homeVisible() && !document.getElementById('settingsPanel')?.classList.contains('open');
     }
-    // Only resize/initialization reads layout in normal mode. Wheel writes visual variables.
+    // Measure geometry on initialization/resize; sample an interrupted transform once per queued frame.
     function measure() {
+      if (!alive) return;
+      cancelInput(); root.classList.remove('cover-settling');
+      if (mobile.matches) progress = 0;
       const h = innerHeight;
       contentMax = Math.max(0, Math.min(config.contentOffset, innerWidth <= 860 ? 260 : Infinity, h * .38, h - 300));
       const railHeight = rail.getBoundingClientRect().height;
@@ -82,69 +103,84 @@
       render();
     }
     function render() {
-      root.style.setProperty('--cover-content-shift', (progress * contentMax).toFixed(2) + 'px');
-      root.style.setProperty('--cover-rail-shift', (progress * sidebarMax).toFixed(2) + 'px');
+      const shift = (progress * contentMax).toFixed(2) + 'px';
       const blend = (closed, open) => (closed + (open - closed) * progress).toFixed(3);
-      root.style.setProperty('--cover-haze', blend(config.hazeClosed, config.hazeOpen));
-      root.style.setProperty('--cover-softness', (1 - progress).toFixed(3));
-      root.style.setProperty('--cover-particles', blend(config.particlesClosed, config.particlesOpen));
-      root.dataset.coverState = progress === 0 ? 'CLOSED' : progress === 1 ? 'REVEALED' : 'PEEKING';
+      if (root.classList.contains('cover-home')) {
+        // Local compositor properties avoid invalidating inherited root variables
+        // across unrelated pages on every wheel event.
+        for (const node of [about, titlebar, pageBar]) paint(node, 'transform', 'translateY(' + shift + ')');
+        paint(about, 'scroll-margin-top', (origin + progress * contentMax).toFixed(2) + 'px');
+        paint(rail, 'transform', 'translateY(' + (progress * sidebarMax).toFixed(2) + 'px)');
+        paint(stage, '--cover-haze', blend(config.hazeClosed, config.hazeOpen));
+        paint(softness, '--cover-softness', (1 - progress).toFixed(3));
+        paint(stars, 'opacity', blend(config.particlesClosed, config.particlesOpen));
+      } else restoreVisuals();
+      const state = progress === 0 ? 'CLOSED' : progress === 1 ? 'REVEALED' : 'PEEKING';
+      if (root.dataset.coverState !== state) root.dataset.coverState = state;
       root.classList.toggle('cover-exposed', progress > 0);
-      toggle.setAttribute('aria-expanded', String(progress > 0));
-      toggle.textContent = progress > 0 ? '收起封面 · 继续阅读 ↓' : '展开封面 ↑';
-      if (debug) updateReport();
+      if (debug) { root.style.setProperty('--cover-content-shift', shift); updateReport(); }
     }
     function setProgress(value, animate = false) {
-      clearTimeout(settleTimer);
-      root.classList.toggle('cover-settling', animate);
+      cancelInput();
+      root.classList.toggle('cover-settling', animate && !reduced.matches);
       progress = Math.max(0, Math.min(1, value));
       if (progress > 0) prepareImage(true);
       render();
-      if (animate) status.textContent = progress === 0 ? '封面已收起，可以继续阅读。' : progress === 1 ? '封面已展开，向下滚动或使用收起按钮继续阅读。' : `封面展开 ${Math.round(progress * 100)}%。`;
+      if (animate) status.textContent = progress === 0 ? '封面已收起，可以继续阅读。' : progress === 1 ? '封面已展开，向下滚动或按 Escape 继续阅读。' : `封面展开 ${Math.round(progress * 100)}%。`;
     }
     function close() { setProgress(0, false); }
     function interruptSettle() {
-      if (!root.classList.contains('cover-settling')) return;
-      // Read the current composited position once on a new input burst, so a
-      // reversal continues from the visible position rather than the old target.
+      if (!root.classList.contains('cover-settling')) return progress;
+      // Sample only the first accepted input of an interrupted transition.
+      // Keep the current transition until the queued frame commits its new target.
       const matrix = new DOMMatrixReadOnly(getComputedStyle(about).transform);
-      progress = Math.max(0, Math.min(1, matrix.m42 / Math.max(1, contentMax)));
-      root.classList.remove('cover-settling');
+      return Math.max(0, Math.min(1, matrix.m42 / Math.max(1, contentMax)));
     }
-    toggle.addEventListener('click', () => {
-      if (!homeAvailable()) return;
-      // Cancel a route/fragment smooth scroll even before its first movement.
-      if (progress === 0) window.scrollTo({ top: 0, behavior: 'instant' });
-      setProgress(progress > 0 ? 0 : 1, true);
+    about.addEventListener('transitionend', event => {
+      if (event.target !== about || event.propertyName !== 'transform' || frameId) return;
+      const active = about.getAnimations?.().some(a => a.effect?.target === about && (a.playState === 'running' || a.pending));
+      if (!active) root.classList.remove('cover-settling');
     });
     function nestedScroll(target) {
-      for (let el = target instanceof Element ? target : target.parentElement; el && el !== document.body; el = el.parentElement) {
-        if (el.closest('#coverDebugPanel, #floatingPlayer, .lyricbar, .mobile-nav, .radial-nav, .settings-panel, .spa-post, #mmScene')) return true;
+      const start = target instanceof Element ? target : target?.parentElement;
+      if (start?.closest('#coverDebugPanel, #floatingPlayer, .lyricbar, .mobile-nav, .radial-nav, .settings-panel, .spa-post, #mmScene, input, textarea, select, [contenteditable="true"]')) return true;
+      for (let el = start; el && el !== document.body; el = el.parentElement) {
         const style = getComputedStyle(el);
         if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 1) return true;
-        if (el.matches('input, textarea, select, [contenteditable="true"]')) return true;
       }
       return false;
     }
-    window.addEventListener('wheel', event => {
-      if (mobile.matches || event.ctrlKey || !homeAvailable() || nestedScroll(event.target) || !event.cancelable || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-      interruptSettle();
-      if (!event.deltaY || (progress === 0 && (scrollY > 2 || event.deltaY > 0))) return;
-      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
-      const next = Math.max(0, Math.min(1, progress - pixels / Math.max(300, contentMax * 1.8)));
-      // At the fully revealed limit there is no further progress to consume.
-      if (next === progress) return;
-      if (progress === 0) window.scrollTo({ top: 0, behavior: 'instant' });
-      event.preventDefault();
-      setProgress(next);
+    function commitWheel() {
+      frameId = 0;
+      const value = queuedProgress, direction = queuedDirection;
+      if (value === null) return;
+      if (!homeAvailable() || mobile.matches || scrollY > 2) { close(); return; }
+      setProgress(value);
       settleTimer = setTimeout(() => {
-        if (pixels > 0) setProgress(0, true);
+        if (!homeAvailable()) { close(); return; }
+        if (direction > 0) setProgress(0, true);
         else if (progress >= config.snapThreshold) setProgress(1, true);
         else status.textContent = '封面部分展开。继续向上滚动展开，向下滚动收起。';
       }, 170);
+    }
+    window.addEventListener('wheel', event => {
+      if (mobile.matches || event.ctrlKey || !homeAvailable() || nestedScroll(event.target) || !event.cancelable || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      if (!event.deltaY) return;
+      const current = queuedProgress === null ? interruptSettle() : queuedProgress;
+      if (current === 0 && (scrollY > 2 || event.deltaY > 0)) return;
+      const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
+      const next = Math.max(0, Math.min(1, current - pixels / Math.max(300, contentMax * 1.8)));
+      if (next === current) return;
+      // Consume synchronously only when Cover owns this input. Preserve clamp
+      // ordering for rapid reversals; never let a cancelled frame reopen Cover.
+      event.preventDefault();
+      if (current === 0) window.scrollTo({ top: 0, behavior: 'instant' });
+      queuedProgress = next; queuedDirection = Math.sign(pixels);
+      clearTimeout(settleTimer);
+      if (!frameId) frameId = requestAnimationFrame(commitWheel);
     }, { passive: false });
     window.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && progress > 0 && homeAvailable()) { setProgress(0, true); toggle.focus({ preventScroll: true }); }
+      if (e.key === 'Escape' && (progress > 0 || queuedProgress !== null) && homeAvailable()) { setProgress(0, true); }
     });
     // Close synchronously before existing explicit route/room/overlay handlers run.
     document.addEventListener('click', e => {
@@ -160,7 +196,8 @@
       const wasAvailable = root.classList.contains('cover-home');
       // Settings own input while open, but don't replace the room behind them.
       root.classList.toggle('cover-home', visible);
-      if (!available && progress > 0) close();
+      if (!available && (progress > 0 || queuedProgress !== null)) close();
+      if (!visible) restoreVisuals();
       if (visible) prepareImage(true);
       if (visible && (!wasAvailable || awaitingDirectHome)) measure();
       awaitingDirectHome = false;
@@ -169,6 +206,8 @@
     [about, app, document.body, document.getElementById('settingsPanel'), document.getElementById('welcomeScreen'), document.getElementById('bootScreen')].filter(Boolean)
       .forEach(el => observer.observe(el, { attributes: true, attributeFilter: ['class'] }));
     window.addEventListener('resize', measure);
+    mobile.addEventListener('change', measure);
+    window.addEventListener('rinsora-cover-error', () => { alive = false; cancelInput(); observer.disconnect(); restoreVisuals(); root.classList.remove('cover-settling', 'cover-exposed'); }, { once: true });
     reduced.addEventListener('change', measure);
 
     function report() {
@@ -182,7 +221,7 @@
       const scaled = (x, y, w, h) => ({ x: +(imageX + x * scale).toFixed(1), y: +(imageY + y * scale).toFixed(1), width: +(w * scale).toFixed(1), height: +(h * scale).toFixed(1) });
       return { config: { ...config }, viewport: { width: innerWidth, height: innerHeight }, coverAspectRatio: innerWidth / innerHeight,
         state: root.dataset.coverState, progress, visibleRegion: { x: 0, y: 0, width: innerWidth, height: innerHeight },
-        foreground: { title: bounds(document.querySelector('.topbar')), controls: bounds(controls), hero: bounds(about.querySelector('.home-hero')) },
+        foreground: { title: bounds(titlebar), hero: bounds(about.querySelector('.home-hero')) },
         atmosphere: { haze: +(config.hazeClosed + (config.hazeOpen - config.hazeClosed) * progress).toFixed(3), fixedBlurLayers: [config.blurOpen, config.blurClosed], softLayerOpacity: +(1 - progress).toFixed(3), particles: +(config.particlesClosed + (config.particlesOpen - config.particlesClosed) * progress).toFixed(3) },
         image: { sourceSize: [1672, 941], selectedSourceSize: [sourceWidth, 941], cropLeft: sourceLeft, box, scale, imageX, imageY, currentSrc: image.currentSrc, decoded: stage.classList.contains('art-ready'), failed: art.failed },
         headSafeBounds: scaled(642, 84, 408, 320), faceSafeBounds: scaled(752, 226, 228, 184), faceCenter: scaled(850, 315, 0, 0), upperBodySafeBounds: scaled(580, 370, 450, 190), catBounds: scaled(1140, 550, 430, 180),
@@ -222,7 +261,7 @@
     // Report is measured only on explicit debug updates; no animation/render loop.
     sync(); measure();
     // The site's direct-about route starts at the top; keep style insertion from
-    // preserving the old about anchor after the prototype adds its control row.
+    // preserving the old about anchor after the composition styles arrive.
     if (location.hash === '#about' && scrollY <= origin + 2) window.scrollTo({ top: 0, behavior: 'instant' });
     function finishInitialAnchor() {
       // One frame after native fragment positioning, never a running rAF loop.

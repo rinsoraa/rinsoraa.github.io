@@ -5,7 +5,7 @@
   document.documentElement.classList.add('ui02-preview');
   const css = document.createElement('link');
   css.rel = 'stylesheet';
-  css.href = 'ui02.css?v=ui03e-3';
+  css.href = 'ui02.css?v=rh-ui-hotfix-01';
   document.head.appendChild(css);
 
   const esc = (value) => String(value == null ? '' : value)
@@ -28,7 +28,7 @@
     generic: '<span class="u2-generic-mark">&lt; / &gt;</span>'
   };
   function section(title, label, content, kind, count) {
-    return '<section class="u2-recent-section u2-' + kind + '" aria-label="' + title + '">' +
+    return '<section class="home-content-group u2-recent-section u2-' + kind + '" aria-label="' + title + '">' +
       '<div class="u2-section-head"><div><span>' + label + '</span><h3>' + title + '</h3></div>' +
       '<span class="u2-section-count">' + String(count).padStart(2, '0') + ' SELECTED</span></div>' + content + '</section>';
   }

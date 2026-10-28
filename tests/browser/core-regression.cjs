@@ -69,7 +69,7 @@ async function snap(){return p.evaluate(()=>{
   await p.keyboard.press('Escape');await p.waitForFunction(()=>!document.body.classList.contains('spa-post-open'));await settle();
   await p.evaluate(()=>RinsoraHome.navigateTo('about'));await settle();
   for(let round=1;round<=3;round++){
-   await p.locator('#coverToggle').press('Enter');await p.waitForFunction(()=>document.documentElement.dataset.coverState==='REVEALED');
+   assert.equal(await p.locator('#coverToggle,#coverControls').count(),0);await p.evaluate(()=>scrollTo({top:0,behavior:'instant'}));await p.mouse.move(850,450);await p.mouse.wheel(0,-900);await p.waitForFunction(()=>document.documentElement.dataset.coverState==='REVEALED');
    await p.evaluate(()=>RinsoraHome.enterMuseum());await p.locator('#mmScene.open.on').waitFor();assert.equal(await p.evaluate(()=>document.documentElement.dataset.coverState),'CLOSED');
    await p.locator('#mmExit').click();await p.waitForFunction(()=>!document.body.classList.contains('museum-open')&&getComputedStyle(document.getElementById('mmScene')).display==='none'&&getComputedStyle(document.getElementById('mmLoad')).visibility==='hidden');
   }

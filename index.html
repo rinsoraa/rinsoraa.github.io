@@ -35,7 +35,7 @@
   document.head.appendChild(guard);
   const critical = (location.hash || '').toLowerCase() === '#moments';
   // Only the active direct album competes for the startup network queue.
-  if (critical) for (const [href, as] of [['ui02.css?v=ui03e-3', 'style'], ['memory-gallery-model.js?v=ui04b2-1', 'script'], ['memory-gallery.js?v=rh02fu1-1', 'script']]) {
+  if (critical) for (const [href, as] of [['ui02.css?v=rh-ui-hotfix-01', 'style'], ['memory-gallery-model.js?v=ui04b2-1', 'script'], ['memory-gallery.js?v=rh02fu1-1', 'script']]) {
     const hint = document.createElement('link'); hint.rel = 'preload'; hint.as = as; hint.href = href; document.head.appendChild(hint);
   }
   const loader = document.createElement('script'); loader.src = 'memory-gallery-loader.js?v=rh02fu1-1'; loader.fetchPriority = critical ? 'high' : 'low';
@@ -57,7 +57,7 @@
         hint.href = 'assets/illustrations/' + href; hint.fetchPriority = 'high';
         document.head.appendChild(hint);
       }
-      for (const [href, as] of [['ui02.css?v=ui03e-3', 'style'], ['cover-stage.css?v=ui03f-1', 'style'], ['cover-stage.js?v=ui03f-1', 'script']]) {
+      for (const [href, as] of [['ui02.css?v=rh-ui-hotfix-01', 'style'], ['cover-stage.css?v=rh-ui-hotfix-01', 'style'], ['cover-stage.js?v=rh-ui-hotfix-01', 'script']]) {
         const hint = document.createElement('link'); hint.rel = 'preload'; hint.as = as; hint.href = href;
         document.head.appendChild(hint);
       }
@@ -141,7 +141,7 @@
 <link rel="stylesheet" href="v4.css">
 <link rel="stylesheet" href="home-hero.css">
 <!-- UI-02 is opt-in; this file only activates presentation for ?ui02=1. -->
-<script src="ui02.js?v=ui03e-3"></script>
+<script src="ui02.js?v=rh-ui-hotfix-01"></script>
 <script>
 // Strict Lab opt-in: no gallery assets or detail data on ordinary visits.
 if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchParams(location.search).get('lab') === '1') {
@@ -220,7 +220,7 @@ if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchPar
     document.querySelector('link[rel="stylesheet"][href^="ui02.css"]')?.setAttribute('blocking', 'render');
     const coverStyle = document.createElement('link');
     coverStyle.rel = 'stylesheet';
-    coverStyle.href = 'cover-stage.css?v=ui03f-1';
+    coverStyle.href = 'cover-stage.css?v=rh-ui-hotfix-01';
     coverStyle.dataset.coverStageStyles = '1';
     coverStyle.dataset.coverStageState = 'loading';
     coverStyle._rinsoraCoverReady = new Promise(resolve => {
@@ -239,7 +239,7 @@ if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchPar
     coverStyle.setAttribute('blocking', 'render');
     document.head.appendChild(coverStyle);
     const coverScript = document.createElement('script');
-    coverScript.src = 'cover-stage.js?v=ui03f-1';
+    coverScript.src = 'cover-stage.js?v=rh-ui-hotfix-01';
     coverScript.defer = true;
     const scriptDeadline = setTimeout(coverFallback, 12000);
     coverScript.addEventListener('load', () => clearTimeout(scriptDeadline), { once: true });
@@ -497,8 +497,9 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
 
         <div id="recentFeed"></div>
 
+        <section class="home-content-group home-now-group" aria-labelledby="homeNowTitle">
         <div class="section-heading fancy-heading">
-          <span>✦</span><h3>最近在做什么</h3><small>NOW / STATUS</small><span class="line"></span>
+          <span>✦</span><h3 id="homeNowTitle">最近在做什么</h3><small>NOW / STATUS</small><span class="line"></span>
         </div>
         <div class="now-panel card tilt-card">
           <div class="now-head">
@@ -515,6 +516,8 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
             <li class="is-blank"><span class="now-label">下一件想做</span><span class="now-val">？？？</span><i>✦</i></li>
           </ul>
         </div>
+
+        </section>
 
         <div class="about-lower">
           <article class="quote-card card tilt-card">
@@ -539,12 +542,14 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
           </article>
         </div>
 
+        <section class="home-content-group home-moments-group" aria-labelledby="homeMomentsTitle">
         <div class="section-heading fancy-heading">
-          <span>☁</span><h3>一点碎碎念</h3><small>MOMENTS</small><span class="line"></span>
+          <span>☁</span><h3 id="homeMomentsTitle">一点碎碎念</h3><small>MOMENTS</small><span class="line"></span>
           <a class="soft-btn" href="#moments" style="margin-left:10px">看全部 →</a>
         </div>
         <!-- 主页只放最新的三条（脚本按日期排序后 slice 3），完整时间线在 #moments -->
         <div class="moments-grid" id="momentsTeaser"></div>
+        </section>
       </section>
 
       <!-- MOMENTS -->

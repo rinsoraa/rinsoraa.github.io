@@ -9,9 +9,7 @@ html.cover-preview {
 }
 /* Direct links keep the site's real initialization boundary; no timed hiding. */
 html.cover-preview[data-pre-section="about"] #app:not(.visible) { visibility: hidden; }
-/* Reserve only the actual 36px control row before its DOM arrives. */
-html.cover-preview.cover-home .section-stack:not(:has(#coverControls))::before { content: ''; display: block; min-height: 36px; margin: -13px 0 12px; }
-#coverStage, #coverControls, #coverDebugPanel { display: none; }
+#coverStage, #coverDebugPanel { display: none; }
 html.cover-preview.cover-home #coverStage {
   display: block; position: fixed; inset: 0; z-index: 3; pointer-events: none;
   background: radial-gradient(ellipse at 20% 16%, #c39580, transparent 65%), linear-gradient(115deg, #714c53, #caa395 34%, #efccd5);
@@ -33,6 +31,7 @@ html.cover-preview.cover-home #about {
 /* Transform only these local modules; .app / #mainContent and the fixed
    player's containing block stay untouched. Top actions are in-flow here. */
 html.cover-preview.cover-home .topbar {
+  position: relative; z-index: 12;
   transform: translateY(var(--cover-content-shift)); padding: 12px 18px 18px;
   border: 1px solid var(--border); border-radius: 22px;
   background: color-mix(in srgb, var(--glass-solid) 88%, transparent);
@@ -46,11 +45,6 @@ html.cover-preview.cover-home .page-progress {
   transform: translateY(var(--cover-content-shift)); position: relative;
   width: calc(100% - 36px); max-width: 1244px; margin: -21px auto 28px; opacity: 1;
 }
-html.cover-preview.cover-home #coverControls {
-  display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: -13px 0 12px; position: relative; z-index: 1; min-height: 36px;
-  transform: translateY(var(--cover-content-shift));
-}
-html.cover-preview #coverToggle { font: inherit; font-size: 12px; line-height: 1.5; padding: 8px 14px; min-height: 36px; border: 1px solid var(--border); border-radius: 99px; background: var(--glass-solid); color: var(--ink); cursor: pointer; }
 html.cover-preview #coverStatus { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 html.cover-preview.cover-home .side-rail {
   left: 16px; top: 24px; bottom: auto; width: calc(var(--rail) - 32px); padding: 16px 10px;
@@ -76,7 +70,7 @@ html.cover-preview.cover-home #about .home-hero-art picture { border-radius: 18p
 html.cover-preview.cover-home #about .home-hero-art img { mask-image: none; -webkit-mask-image: none; }
 html.cover-preview.cover-home #about .home-hero-art figcaption { font-size: 8px; padding: 10px 0; letter-spacing: .06em; }
 html.cover-preview.cover-home #roomHint { display: none; }
-html.cover-settling.cover-home :is(#about, .side-rail, .topbar, .page-progress, #coverControls) { transition: transform var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
+html.cover-settling.cover-home :is(#about, .side-rail, .topbar, .page-progress) { transition: transform var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
 html.cover-settling #coverStage::after, html.cover-settling.cover-home #starCanvas { transition: opacity var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
 html.cover-settling .cover-art::after { transition: opacity var(--cover-duration) cubic-bezier(.2,.8,.2,1); }
 /* Keep UI-03C's calibrated image box. The lower edge feathers into the room's
@@ -93,15 +87,10 @@ html.cover-preview.cover-home #about .home-hero {
   border-color: var(--border); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   box-shadow: inset 0 1px 0 var(--hi), 0 18px 44px #3e283b20;
 }
-html.cover-preview.cover-home #about :is(.u2-post, .u2-project, .now-panel, .mini-card) {
+html.cover-preview.cover-home #about .home-content-group {
   background: color-mix(in srgb, var(--u2-paper) 93%, transparent);
   border-color: color-mix(in srgb, var(--border) 75%, var(--u2-line));
   box-shadow: inset 0 1px 0 var(--hi), 0 12px 28px #3e283b12;
-  backdrop-filter: none; -webkit-backdrop-filter: none;
-}
-html.cover-preview.cover-home #about :is(.u2-section-head, .section-heading) {
-  padding: 12px 16px; border-radius: 16px;
-  background: color-mix(in srgb, var(--u2-paper) 88%, transparent);
 }
 .cover-guides { display: none; }
 html.cover-debug .cover-guides { display: block; }
@@ -120,11 +109,10 @@ html.cover-debug:not(.cover-home) #coverDebugPanel { display: none; }
 #coverDebugPanel textarea { width: 100%; font: 10px/1.4 monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
 #coverDebugPanel button { font: inherit; min-height: 32px; padding: 6px 10px; border-radius: 8px; background: var(--glass); color: var(--ink); border: 1px solid var(--border); cursor: pointer; }
 .cover-debug-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-#coverControls button:focus-visible, #coverDebugPanel :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+#coverDebugPanel :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 html.cover-preview body.night #coverStage { background: radial-gradient(ellipse at 65% 20%, #625164, transparent 60%), #332d40; }
 @media (max-width: 860px) {
   html.cover-preview { --cover-art-height: min(620px, 70vh); }
-  html.cover-preview.cover-home #coverToggle { position: static; }
   html.cover-preview.cover-home .topbar { padding: 10px 12px 16px; gap: 8px; border-radius: 18px; }
   html.cover-preview.cover-home .topbar h2 { font-size: 25px; }
   html.cover-preview.cover-home .topbar .eyebrow { font-size: 8px; letter-spacing: .12em; }
@@ -139,5 +127,5 @@ html.cover-preview body.night #coverStage { background: radial-gradient(ellipse 
   html.cover-debug #coverDebugPanel { right: 10px; top: auto; bottom: 180px; width: min(280px, calc(100vw - 20px)); max-height: 40svh; }
 }
 @media (prefers-reduced-motion: reduce) {
-  html.cover-preview.cover-home :is(#about, .side-rail, .topbar, .page-progress, #coverControls, #starCanvas), html.cover-preview #coverStage::after, html.cover-preview .cover-art::after { transition: none; }
+  html.cover-preview.cover-home :is(#about, .side-rail, .topbar, .page-progress, #starCanvas), html.cover-preview #coverStage::after, html.cover-preview .cover-art::after { transition: none; }
 }

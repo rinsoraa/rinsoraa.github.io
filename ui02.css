@@ -131,3 +131,60 @@ html.ui02-preview #about :is(.now-kicker, .now-head p, .now-live, .now-live b, .
 @media (prefers-reduced-motion: reduce) {
   html.ui02-preview #about .u2-post, html.ui02-preview #about .u2-project { transition: none; }
 }
+
+/* RH-UI-HOTFIX-01: one theme, one shared surface. Classic layout is untouched. */
+html.ui02-preview #about .home-content-group {
+  margin-top: 34px; padding: 26px; min-width: 0;
+  border: 1px solid var(--u2-line); border-radius: 26px;
+  background: linear-gradient(135deg, var(--u2-paper), color-mix(in srgb, var(--u2-paper) 94%, var(--u2-lavender)));
+  box-shadow: inset 0 1px 0 var(--hi), var(--u2-shadow);
+}
+html.ui02-preview #about .home-content-group > :is(.u2-section-head, .section-heading) {
+  margin: 0 0 20px; padding: 0 0 18px; gap: 14px;
+  border-bottom: 1px solid var(--u2-line); border-radius: 0;
+  background: none; box-shadow: none;
+}
+html.ui02-preview #about .home-content-group > .section-heading { flex-wrap: wrap; }
+html.ui02-preview #about .home-content-group > .section-heading h3 { font-size: 26px; }
+html.ui02-preview #about .home-content-group > .section-heading .line { display: none; }
+html.ui02-preview #about .home-content-group .u2-section-head > div { min-width: 0; }
+html.ui02-preview #about .home-content-group .u2-section-head > div > span { display: block; line-height: 1.6; overflow-wrap: anywhere; }
+html.ui02-preview #about .home-content-group :is(.u2-post-grid, .u2-project-grid) {
+  gap: 0; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  border: 1px solid var(--u2-line); border-radius: 16px; overflow: hidden;
+}
+html.ui02-preview #about .home-content-group :is(.u2-post, .u2-project) {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+html.ui02-preview #about .home-content-group :is(.u2-post, .u2-project):not(.u2-featured) { border-inline-start: 1px solid var(--u2-line); }
+html.ui02-preview #about .home-content-group :is(.u2-post, .u2-project):nth-child(3) { border-block-start: 1px solid var(--u2-line); }
+html.ui02-preview #about .home-content-group :is(.u2-post, .u2-project).u2-featured { background: color-mix(in srgb, var(--u2-rose) 28%, transparent); }
+html.ui02-preview #about .home-content-group :is(.u2-post, a.u2-project):hover { background: color-mix(in srgb, var(--u2-rose) 48%, transparent); box-shadow: none; }
+html.ui02-preview #about .home-content-group :is(.u2-post, a.u2-project):focus-visible { outline: 3px solid var(--ink); outline-offset: -4px; }
+html.ui02-preview #about .home-content-group :is(.u2-post-grid, .u2-project-grid)[data-count="1"] { grid-template-columns: minmax(0, 1fr); }
+html.ui02-preview #about .home-content-group .now-panel { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none !important; }
+html.cover-preview.cover-home #about .home-content-group .now-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.ui02-preview #about .home-content-group #momentsTeaser { gap: 0; margin: 0; }
+html.ui02-preview #about .home-content-group #momentsTeaser .moment-card {
+  padding: 20px; border: 0; border-radius: 0; background: transparent;
+  box-shadow: none; transform: none !important;
+}
+html.ui02-preview #about .home-content-group #momentsTeaser .moment-card + .moment-card { border-inline-start: 1px solid var(--u2-line); }
+html.ui02-preview #about .home-content-group #momentsTeaser :is(.moment-date, .moment-card p) { color: var(--ink); }
+html.ui02-preview #about .home-moments-group:has(#momentsTeaser:empty) { display: none; }
+@media (min-width: 761px) and (max-width: 1100px) {
+  html.ui02-preview #about .home-content-group .u2-project:not(.u2-featured) { border-inline-start: 0; border-block-start: 1px solid var(--u2-line); }
+  html.ui02-preview #about .home-content-group .u2-project:nth-child(3) { border-inline-start: 1px solid var(--u2-line); }
+  html.ui02-preview #about .home-content-group .u2-project-grid[data-count="2"] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  html.ui02-preview #about .home-content-group { padding: 18px; border-radius: 23px; margin-top: 24px; }
+  html.ui02-preview #about .home-content-group > :is(.u2-section-head, .section-heading) { gap: 10px; padding-bottom: 15px; margin-bottom: 16px; }
+  html.ui02-preview #about .home-content-group > .section-heading h3 { font-size: 23px; flex: 1; }
+  html.ui02-preview #about .home-content-group > .section-heading small { flex-basis: 100%; order: 3; padding-left: 26px; }
+  html.ui02-preview #about .home-content-group > .section-heading a { margin-left: auto !important; }
+  html.ui02-preview #about .home-content-group :is(.u2-post-grid, .u2-project-grid) { grid-template-columns: minmax(0, 1fr); }
+  html.ui02-preview #about .home-content-group :is(.u2-post, .u2-project):not(.u2-featured) { border-inline-start: 0; border-block-start: 1px solid var(--u2-line); }
+  html.ui02-preview #about .home-content-group #momentsTeaser { grid-template-columns: minmax(0, 1fr); }
+  html.ui02-preview #about .home-content-group #momentsTeaser .moment-card + .moment-card { border-inline-start: 0; border-block-start: 1px solid var(--u2-line); }
+}
