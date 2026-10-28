@@ -289,3 +289,9 @@ html.night .editor-page{--muted:#d0bed2;--lab-muted:#d0bed2}
 .editor-page .editor-title{margin:0}
 .editor-page .side-head>span,.editor-page .pe-tip,.editor-page .field>span,
 .editor-page #btnProbe,.editor-page #btnReset,.editor-page .pe-preview-title{color:var(--ink)}
+
+/* RH-03 FU3: scoped shared editor header controls, including Media Desk. */
+html:is(.night,[data-theme="night"]) .editor-page .editor-top :is(.editor-back,.soft-btn){background:#392c43;color:#f8e8f3;border-color:#ba8caf}
+html:is(.night,[data-theme="night"]) .editor-page .editor-top :is(.editor-back,.soft-btn):hover{background:#4d3855;color:#fff2fb}
+html:is(.night,[data-theme="night"]) .editor-page .editor-top :is(.editor-back,.soft-btn):focus-visible{outline:3px solid #edb2da;outline-offset:3px}
+html:not(.night):not([data-theme="night"]) .editor-page .editor-top .editor-back{color:#8e406c}

@@ -2127,18 +2127,30 @@
       if (scene) scene.classList.remove('open', 'closing');
       if (loadEl) loadEl.classList.remove('on', 'done', 'leaving');
       if (typeof o.onClosed === 'function') {
-        const done = () => { if (tk === state.token && !state.open) o.onClosed(); };
-        // Class removal starts the existing curtain fade; it is not yet invisible.
+        // WebKit may leave a finite WAAPI finished promise unresolved although
+        // the curtain has become genuinely non-interactive. Do not make focus
+        // restoration depend on that promise alone or on an arbitrary delay.
+        let restored = false;
+        const doneWhenClear = () => {
+          if (restored || tk !== state.token || state.open) return;
+          const css = loadEl?.isConnected ? getComputedStyle(loadEl) : null;
+          if (css && css.display !== 'none' &&
+              (css.visibility !== 'hidden' || Number(css.opacity) > .01 ||
+               css.pointerEvents !== 'none')) return;
+          restored = true;
+          o.onClosed();
+        };
+        const started = performance.now();
+        const verifyCurtain = () => {
+          if (restored || tk !== state.token || state.open) return;
+          doneWhenClear();
+          if (!restored && performance.now() - started < 1600) requestAnimationFrame(verifyCurtain);
+        };
+        requestAnimationFrame(verifyCurtain);
         if (loadEl && typeof loadEl.getAnimations === 'function') {
           const fades = loadEl.getAnimations().filter(a => a.effect?.getComputedTiming().endTime < Infinity);
-          Promise.allSettled(fades.map(a => a.finished)).then(done);
-        } else if (loadEl && getComputedStyle(loadEl).display !== 'none' && Number(getComputedStyle(loadEl).opacity) > .01) {
-          const finish = event => {
-            if (event.target !== loadEl || event.propertyName !== 'opacity') return;
-            loadEl.removeEventListener('transitionend', finish); loadEl.removeEventListener('transitioncancel', finish); done();
-          };
-          loadEl.addEventListener('transitionend', finish); loadEl.addEventListener('transitioncancel', finish);
-        } else done();
+          Promise.allSettled(fades.map(a => a.finished)).then(doneWhenClear);
+        }
       }
     }, instant ? 0 : 340 + 420);
     return true;

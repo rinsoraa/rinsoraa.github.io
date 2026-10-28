@@ -3,6 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Home 2.0 public rollout. Preview controls remain explicit on local origins.
+     ?classic=1 is the instant classic-mode fallback and is never rewritten. -->
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const publicHost = location.hostname === 'rinsora.dpdns.org' ||
+    location.hostname === 'rinsoraa.github.io';
+  if ((!publicHost && q.get('releasePreview') !== '1') ||
+      q.get('classic') === '1' ||
+      (q.has('ui02') && q.get('ui02') !== '1')) return;
+  let changed = false;
+  for (const key of ['ui02', 'lab', 'memory', 'cover']) {
+    if (q.has(key)) continue;
+    q.set(key, '1'); changed = true;
+  }
+  if (changed) history.replaceState(history.state, '',
+    location.pathname + '?' + q.toString() + location.hash);
+  document.documentElement.dataset.homeRelease = '2';
+})();
+</script>
 <!-- Memory is independently gated; the tiny reservation exists only in preview. -->
 <script>
 (() => {
@@ -154,7 +174,7 @@ if (new URLSearchParams(location.search).get('ui02') === '1' && new URLSearchPar
     if (window.RinsoraLabModel.validateMediaDocument(window.RINSORA_PROJECT_MEDIA, window.RinsoraProjects.read()).length) throw new Error('Invalid media configuration');
     if (!window.RinsoraLab?.init()) throw new Error('Lab initialization unavailable');
     document.documentElement.dataset.labLoadState = 'ready';
-    window.RinsoraHome.routeHash();
+    if (/^#\/lab\//i.test(location.hash)) window.RinsoraHome.routeHash();
     return true;
   }).catch(() => {
     clearTimeout(timer); css.remove();

@@ -249,6 +249,59 @@
     lyricsHidden: false
   };
 
+  /* playback-recovery:start -- exact factory exercised by portable tests */
+  function createPlaybackRecovery(media, ui) {
+    var epoch = 0, requested = false, quiet = false;
+    function clear() { ui.clear(); }
+    function fail(error, token, src) {
+      if (!requested || quiet || token !== epoch || media.src !== src || (error && error.name === 'AbortError')) return false;
+      var code = media.error ? media.error.code : error && error.code;
+      var kind = error && error.name === 'NotAllowedError' ? 'policy' : code === 2 ? 'network' :
+        code === 4 && ui.mime(src) && !media.canPlayType(ui.mime(src)) ? 'unsupported' : 'unavailable';
+      ui.failure(kind); return false;
+    }
+    function play(options) {
+      var token = ++epoch, src = media.src; requested = true; quiet = !!(options && options.quiet); clear();
+      try {
+        var result = media.play();
+        return Promise.resolve(result).then(function () {
+          if (token === epoch && media.src === src) clear(); return true;
+        }, function (error) { return fail(error, token, src); });
+      } catch (error) { fail(error, token, src); return Promise.resolve(false); }
+    }
+    function cancel() { ++epoch; requested = false; clear(); }
+    function error() { if (media.error) fail(media.error, epoch, media.src); }
+    return { play: play, cancel: cancel, error: error };
+  }
+  function playbackMime(src) {
+    var ext = String(src || '').split(/[?#]/)[0].toLowerCase();
+    return /\.mp3$/.test(ext) ? 'audio/mpeg' : /\.ogg$/.test(ext) ? 'audio/ogg' :
+      /\.wav$/.test(ext) ? 'audio/wav' : /\.m4a$/.test(ext) ? 'audio/mp4' : '';
+  }
+  function playableAlternative(list, index, media) {
+    for (var n = 1; n < list.length; n++) {
+      var at = (index + n) % list.length, mime = playbackMime(list[at].src);
+      if (mime && media.canPlayType(mime)) return at;
+    }
+    return -1;
+  }
+  /* playback-recovery:end */
+  var playbackRecovery = null;
+  function clearPlaybackFailure() {
+    players.forEach(function (p) {
+      if (p.failure.contains(d.activeElement) && !p.root.closest('[inert],[hidden],[aria-hidden="true"]')) p.play.focus({ preventScroll: true });
+      p.failure.hidden = true; p.root.removeAttribute('data-playback-error');
+    });
+  }
+  function showPlaybackFailure(kind) {
+    var message = kind === 'policy' ? '浏览器阻止了播放，请再次点击播放。' : kind === 'network' ?
+      '音乐连接中断了，可以重试当前曲目。' : kind === 'unsupported' ?
+      '当前浏览器未能播放这一格式，可以改播其他支持的曲目。' : '这首曲目暂时无法读取，可以重试或换一首。';
+    players.forEach(function (p) {
+      p.failureCopy.textContent = message; p.alternative.hidden = playableAlternative(tracks(), state.index, audio) < 0;
+      p.failure.hidden = false; p.root.setAttribute('data-playback-error', kind);
+    });
+  }
   function tracks() { return state.data.tracks; }
   function current() { return tracks()[state.index] || null; }
 
@@ -353,7 +406,7 @@
     tracked.src = list[i].src;
     tracked.t = Number(s.t) || 0;
     tracked.playing = true;
-    audio.play().catch(function () { /* 被自动播放策略拦下：停在原位置，等用户点 */ });
+    playbackRecovery.play({ quiet: true });
     return true;
   }
 
@@ -388,6 +441,9 @@
             '<button type="button" class="mp-btn mp-listbtn" data-act="list" ' +
               'title="播放列表" aria-label="播放列表">' + ICON.list + '</button>' +
           '</div>' +
+          '<div class="mp-failure" hidden><p class="mp-failure-copy" role="status" aria-live="polite"></p>' +
+            '<button type="button" class="mp-error-action" data-act="retry">重试当前曲目</button> ' +
+            '<button type="button" class="mp-error-action" data-act="alternative">改播支持的曲目</button></div>' +
           '<div class="mp-playlist"><div class="mp-pl" tabindex="0" aria-label="播放列表"></div></div>' +
         '</div>' +
       '</div>';
@@ -413,9 +469,18 @@
       modeBtn: $('.mp-modebtn', root),
       listBtn: $('.mp-listbtn', root),
       playlist: $('.mp-playlist', root),
-      pl: $('.mp-pl', root)
+      pl: $('.mp-pl', root),
+      failure: $('.mp-failure', root), failureCopy: $('.mp-failure-copy', root), alternative: $('[data-act=alternative]', root)
     };
     players.push(p);
+    $('[data-act=retry]', root).addEventListener('click', function (e) {
+      e.stopPropagation(); if (audio.error) audio.load(); playbackRecovery.play();
+    });
+    p.alternative.addEventListener('click', function (e) {
+      e.stopPropagation(); var next = playableAlternative(tracks(), state.index, audio);
+      if (next >= 0) setIndex(next, true);
+    });
+
 
     /* ---- 播放 / 暂停 ---- */
     p.play.addEventListener('click', function (e) { e.stopPropagation(); toggle(); });
@@ -437,7 +502,7 @@
       renderAll();
       updateModeBtn();
       toast('播放模式：' + MODE_LABEL[state.mode]);
-      if (!audio.paused) audio.play().catch(function () {});   // 单曲循环切进去立即生效
+      if (!audio.paused) playbackRecovery.play();   // 单曲循环切进去立即生效
     });
 
     /* ---- 播放列表：开列表时把这个播放器钉住，免得鼠标一移开就收起来 ----
@@ -602,6 +667,26 @@
     return lb;
   }
 
+  // Keep the mobile lyric/player rail above the *actual* navigation footprint.
+  // Some sections cause the fixed nav to grow into a second row.
+  function wireMobileNavReserve() {
+    var nav = d.querySelector('.mobile-nav');
+    if (!nav) return;
+    var sync = function () {
+      var root = d.documentElement;
+      if (w.innerWidth > 820 || getComputedStyle(nav).display === 'none') {
+        root.style.removeProperty('--mobile-nav-reserve'); return;
+      }
+      var box = nav.getBoundingClientRect();
+      if (!box.height) return;
+      var reserve = Math.ceil(box.height + Math.max(0, w.innerHeight - box.bottom) + 12) + "px";
+      if (root.style.getPropertyValue('--mobile-nav-reserve') !== reserve)
+        root.style.setProperty('--mobile-nav-reserve', reserve);
+    };
+    if (w.ResizeObserver) new w.ResizeObserver(sync).observe(nav);
+    w.addEventListener('resize', sync, { passive: true });
+    w.requestAnimationFrame(sync);
+  }
   function buildLines() {
     var t = current();
     state.lines = parseLrc(t && t.lrc);
@@ -702,6 +787,7 @@
      ============================================================ */
 
   function setIndex(i, autoplay) {
+    playbackRecovery.cancel();
     var list = tracks();
     if (!list.length) return;
     state.index = ((i % list.length) + list.length) % list.length;
@@ -715,7 +801,7 @@
     renderAll();
 
     if (autoplay !== false) {
-      audio.play().catch(function () {});
+      playbackRecovery.play();
     }
   }
 
@@ -746,7 +832,7 @@
     if (!tracks().length) return;
     if (state.mode === 'loop') {                            // 单曲循环
       audio.currentTime = 0;
-      audio.play().catch(function () {});
+      playbackRecovery.play();
       return;
     }
     if (state.mode === 'shuffle') setIndex(randomIndex(), true);
@@ -756,8 +842,8 @@
   function toggle() {
     if (!tracks().length) { toast('播放列表还是空的，先加一首吧', 'err'); return; }
     if (!audio.src) { setIndex(state.index, true); return; }
-    if (audio.paused) audio.play().catch(function () {});
-    else audio.pause();
+    if (audio.paused) { if (audio.error) audio.load(); playbackRecovery.play(); }
+    else { playbackRecovery.cancel(); audio.pause(); }
   }
 
   /* ============================================================
@@ -774,6 +860,10 @@
   }
 
   function wireAudio() {
+    audio.addEventListener('error', function () {
+      if (audio.error) { audio.pause(); d.body.classList.remove('mp-playing'); setPlayingUi(false); stopWipe(); }
+      playbackRecovery.error();
+    });
     audio.addEventListener('play', function () {
       d.body.classList.add('mp-playing');
       if (!state.started) { state.started = true; d.body.classList.add('lyrics-on'); }
@@ -848,6 +938,7 @@
   function mount() {
     audio = $('#audio');
     if (!audio) return;
+    playbackRecovery = createPlaybackRecovery(audio, { mime: playbackMime, clear: clearPlaybackFailure, failure: showPlaybackFailure });
 
     var land = mountPlayer($('#landingPlayer'), 'landing');
     var flt = mountPlayer($('#floatingPlayer'), 'float');
@@ -875,6 +966,7 @@
     state.data = read();
 
     mountLyricBar();
+    wireMobileNavReserve();
     wireAudio();
     wireLyricToggle();
 

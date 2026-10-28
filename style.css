@@ -1417,3 +1417,41 @@ body.room-entering .app.visible .page-section.active > *:nth-child(n+7){animatio
   from{opacity:0;transform:translateY(18px) scale(.985);filter:blur(5px)}
   to{opacity:1;transform:none;filter:none}
 }
+
+/* RH-03 FU3: local playback failure feedback; no second audio player. */
+.mp-failure[hidden]{display:none}.mp-failure{padding:10px;margin-top:8px;border:1px solid #c49cb9;border-radius:12px;background:#fff8fd}.mp-failure-copy{margin:0 0 8px;color:#66415d;font-size:12px;line-height:1.6}
+.mp-error-action{min-height:34px;padding:6px 9px;margin:0 2px 5px 0;border:1px solid #a56b95;border-radius:12px;background:#fff6fc;color:#714365;font:inherit;font-size:11px;cursor:pointer}
+.mp-error-action:hover{background:#f6e0f0}.mp-error-action:focus-visible{outline:3px solid #a34980;outline-offset:2px}
+html.night .mp-failure{background:#302536;border-color:#b386a8}html.night .mp-failure-copy{color:#f6deed}html.night .mp-error-action{background:#38293f;color:#f8e8f3;border-color:#c38db3}html.night .mp-error-action:hover{background:#4d3654}html.night .mp-error-action:focus-visible{outline-color:#edb2da}
+
+/* Shared Moments action, also used without UI-02. */
+html:is(.night,[data-theme="night"]) #about .soft-btn[href="#moments"]{background:#392b42;color:#fbe8f5;border-color:#bd8cb2}
+html:is(.night,[data-theme="night"]) #about .soft-btn[href="#moments"]:hover{background:#4b3653;color:#fff2fb}
+html:is(.night,[data-theme="night"]) #about .soft-btn[href="#moments"]:focus-visible{outline-color:#edb2da;outline-offset:3px}
+
+/* Adjacent Settings copy, measured with its real glass background. */
+html:not(.night):not([data-theme="night"]) .settings-panel :is(.set-tab,.set-note,.theme-grid button>span:not(.swatch),.theme-grid strong,.theme-grid em){color:#35203b}
+html:is(.night,[data-theme="night"]) .settings-panel :is(.theme-grid em,.set-tab,.set-note){color:#e6d8e7}
+
+html:not(.night):not([data-theme="night"]) #about .soft-btn[href="#moments"]:focus-visible,html:not(.night):not([data-theme="night"]) .editor-page .editor-top :is(.soft-btn,.editor-back):focus-visible{outline:3px solid #964574;outline-offset:3px}
+
+html:is(.night,[data-theme="night"]) .settings-panel .set-tab.active{color:#fff1fb}
+
+/* RH-03 FU3A: on narrow screens reserve the fixed navigation touch area.
+   The lyric rail lives outside .app's stacking context: its z-index cannot
+   be compared directly with .mobile-nav inside .app. */
+@media (max-width: 820px) {
+  .mobile-nav { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  body.lyrics-on .lyricbar {
+    bottom: var(--mobile-nav-reserve, calc(98px + env(safe-area-inset-bottom, 0px)));
+    border-radius: 20px;
+    border-bottom: 1px solid rgba(255,255,255,.75);
+  }
+  body.lyrics-on #floatingPlayer {
+    bottom: calc(var(--mobile-nav-reserve, calc(98px + env(safe-area-inset-bottom, 0px))) + var(--bar-h) + 18px);
+  }
+}
+
+/* FU3C: measured light settings focus and selected-state outlines. */
+html:not(.night):not([data-theme="night"]) #settingsPanel :is(.set-tab,.theme-grid button):focus-visible{outline:3px solid #964574;outline-offset:3px}
+html:not(.night):not([data-theme="night"]) #settingsPanel .theme-grid button.active{outline:2px solid #964574;outline-offset:2px}

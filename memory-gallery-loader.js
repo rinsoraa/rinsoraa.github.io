@@ -15,8 +15,8 @@
       s.onload = resolve; s.onerror = () => reject(new Error('Memory script unavailable')); d.head.appendChild(s);
     });
   }
-  const css = d.createElement('link'); css.rel = 'stylesheet'; css.href = 'memory-gallery.css?v=ui04b2-1'; nodes.push(css);
-  const styled = new Promise((resolve, reject) => { css.onload = () => { mark('css-ready'); resolve(); }; css.onerror = () => reject(new Error('Memory style unavailable')); });
+  const css = d.createElement('link'); css.rel = 'stylesheet'; css.href = 'memory-gallery.css?v=ui04b2-1'; css.media = 'print'; nodes.push(css);
+  const styled = new Promise((resolve, reject) => { css.onload = () => { css.media = 'all'; mark('css-ready'); resolve(); }; css.onerror = () => reject(new Error('Memory style unavailable')); });
   d.head.appendChild(css);
   const data = fetch('memory-gallery-data.json', { signal: controller.signal, cache: 'no-cache', credentials: 'same-origin' }).then(async r => {
     if (!r.ok || Number(r.headers.get('content-length')) > 2097152) throw new Error('Memory data unavailable/too large');
