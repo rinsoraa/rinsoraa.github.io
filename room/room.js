@@ -18085,7 +18085,10 @@ function jp(e) {
 	let n = Math.atan2(-Dp.x, -Dp.z), r = Math.asin(V.clamp(Dp.y, -1, 1)), i = 1 - Math.exp(-hp.smoothing * Math.max(0, e)), a = n - yp;
 	for (; a > Math.PI;) a -= Math.PI * 2;
 	for (; a < -Math.PI;) a += Math.PI * 2;
-	yp = V.clamp(yp + a * i, -hp.maxYaw, hp.maxYaw), bp = V.clamp(bp + (r - bp) * i, -hp.maxPitch, hp.maxPitch), Sp && (Op.copy(Sp).invert(), Dp.applyQuaternion(Op).normalize()), kp.setFromUnitVectors(wp, Dp), Sp && kp.premultiply(Sp), xp.quaternion.slerp(kp, 1 - Math.exp(-hp.smoothing * Math.max(0, e)));
+	yp = V.clamp(yp + a * i, -hp.maxYaw, hp.maxYaw), bp = V.clamp(bp + (r - bp) * i, -hp.maxPitch, hp.maxPitch);
+	// Use the bounded angles for the applied direction, not the raw rear target.
+	Dp.set(-Math.sin(yp) * Math.cos(bp), Math.sin(bp), -Math.cos(yp) * Math.cos(bp));
+	Sp && (Op.copy(Sp).invert(), Dp.applyQuaternion(Op).normalize()), kp.setFromUnitVectors(wp, Dp), Sp && kp.premultiply(Sp), xp.quaternion.slerp(kp, 1 - Math.exp(-hp.smoothing * Math.max(0, e)));
 }
 function Mp(e, t) {
 	let n = Math.atan2(e, t);

@@ -72,7 +72,7 @@
     if (moduleAttempt && !moduleAttempt.retryable) return;
     var mod = document.createElement('script');
     var attempt = { id: ++moduleNumber, node: mod, executed: false, loaded: false, failed: false, retryable: false };
-    mod.type = 'module'; mod.src = '/room/room.js?v=rh01-1&attempt=' + attempt.id;
+    mod.type = 'module'; mod.src = '/room/room.js?v=rh-ui-hotfix-02&attempt=' + attempt.id;
     moduleAttempt = attempt; moduleState = 'loading';
     mod.addEventListener('error', function () {
       failModule(attempt, attempt.executed ? 'execution-failed' : 'resource-failed', !attempt.executed);

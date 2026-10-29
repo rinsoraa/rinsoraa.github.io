@@ -346,6 +346,27 @@ html.v4 .settings-panel {
   box-shadow: 0 34px 90px rgba(90, 48, 75, .22), inset 0 1px rgba(255, 255, 255, .58);
 }
 
+/* The drawer stays in its focus-safe final geometry. Reveal its surface
+   instead of moving the focused control outside the viewport on entry. */
+.settings-panel.open.focus-direct {
+  animation: settings-drawer-reveal .52s var(--ease) both;
+}
+@keyframes settings-drawer-reveal {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+.settings-close {
+  display: grid; place-items: center; padding: 0; flex-shrink: 0; line-height: 1;
+}
+.settings-close svg {
+  display: block; width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel.open.focus-direct { animation: none; }
+}
+body.reduce-motion .settings-panel.open.focus-direct { animation: none; }
+
 /* ---------- 房间控件：藏在 3D 场景上的一小块玻璃 ---------- */
 html.v4 #roomLight {
   position: fixed;

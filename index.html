@@ -138,7 +138,7 @@
      避免把首页的根背景、状态点、字体等一起污染。 -->
 <link rel="stylesheet" href="room-drawer.css">
 <!-- V4 视觉增强层：必须最后加载，用独立命名空间覆盖微光 / 玻璃 / 房间控件 -->
-<link rel="stylesheet" href="v4.css">
+<link rel="stylesheet" href="v4.css?v=rh-ui-hotfix-02">
 <link rel="stylesheet" href="home-hero.css">
 <!-- UI-02 is opt-in; this file only activates presentation for ?ui02=1. -->
 <script src="ui02.js?v=rh-ui-hotfix-01"></script>
@@ -668,7 +668,7 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
   <div class="settings-panel" id="settingsPanel" role="dialog" aria-modal="true" aria-label="外观设置" aria-hidden="true" tabindex="-1" inert>
     <div class="settings-head">
       <div><p>RINSORA LAB</p><h3>小窝设置</h3></div>
-      <button type="button" class="settings-close" id="settingsClose" aria-label="关闭">×</button>
+      <button type="button" class="settings-close" id="settingsClose" aria-label="关闭"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
 
     <div class="settings-tabs">
@@ -968,7 +968,7 @@ if (document.documentElement.classList.contains('cover-preview') && document.doc
 <button id="roomCloseBtn" type="button">收起房间</button>
 <div id="roomPullHint" aria-hidden="true">↑ SCROLL TO ENTER MY ROOM</div>
 <div id="roomRotateHint" aria-hidden="true"><div>请把手机横过来<small>横屏才能进入房间</small></div></div>
-<script src="room-drawer.js?v=rh02fu1-1"></script>
+<script src="room-drawer.js?v=rh-ui-hotfix-02"></script>
 <script src="home-hero.js?v=rh01-1"></script>
 <!-- V4：视觉增强 / 房间灯光控件；失败时静默降级，不影响任何既有逻辑 -->
 <script src="v4.js"></script>
